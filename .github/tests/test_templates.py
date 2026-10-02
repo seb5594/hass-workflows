@@ -72,6 +72,12 @@ class ProjectBadges(unittest.TestCase):
             for removed in ("label=stage", "label=type", "label=iot%20class", "label=discovery",
                             "label=requirements"):
                 self.assertNotIn(removed, block)
+            rows = block.splitlines()[1:-1]
+            self.assertIn("label=HACS", rows[0])
+            self.assertIn("label=home%20assistant", rows[1])
+            self.assertIn("label=version", rows[1])
+            self.assertIn("label=downloads", rows[2])
+            self.assertIn("label=stars", rows[3])
 
     def test_hacs_badge_leads_in_its_own_row(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,9 +97,10 @@ class ProjectBadges(unittest.TestCase):
             make_app(root)
             (root / "README.md").write_text("# Sample\n\nText\n")
             with self.assertRaises(ValueError):
-                readme.update(root, check=True)
-            readme.update(root)
-            readme.update(root, check=True)
+                readme.verify(root)
+            self.assertTrue(readme.update(root))
+            readme.verify(root)
+            self.assertFalse(readme.update(root))
             self.assertTrue((root / "README.md").read_text().startswith("# Sample\n\n" + readme.START))
 
     def test_ambiguous_projects_are_rejected(self):
@@ -104,6 +111,37 @@ class ProjectBadges(unittest.TestCase):
                 (root / name / "config.yaml").write_text("slug: example\n")
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 project.discover(root)
+
+
+class LiveFacts(unittest.TestCase):
+    EMPTY = {"stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0,
+             "latest_downloads": 0, "builds": 0, "metrics": set()}
+
+    def rows(self, **facts):
+        manifest = {"domain": "demo", "version": "1.0.0", "config_flow": True}
+        rows = badgekit.integration_rows(manifest, {"homeassistant": "2026.9.0"}, "seb5594/demo",
+                                         live={**self.EMPTY, **facts})
+        return badgekit.render(rows)
+
+    def test_badges_without_a_value_are_hidden(self):
+        block = self.rows()
+        for hidden in ("label=stars", "label=forks", "label=issues", "label=released", "label=downloads",
+                       "label=checks", "tests.json", "last-build.json"):
+            self.assertNotIn(hidden, block)
+        for kept in ("label=version", "label=updated", "label=HACS", "label=home%20assistant"):
+            self.assertIn(kept, block)
+
+    def test_badges_with_a_value_are_shown(self):
+        block = self.rows(stars=3, forks=1, issues=2, releases=1, downloads=5, latest_downloads=5, builds=4,
+                          metrics={"tests", "last-build", "zip-size"})
+        for shown in ("label=stars", "label=forks", "label=issues", "label=released", "label=downloads",
+                      "label=latest%20release", "label=checks", "tests.json", "zip-size.json"):
+            self.assertIn(shown, block)
+
+    def test_latest_release_downloads_hide_independently(self):
+        block = self.rows(downloads=9, latest_downloads=0)
+        self.assertIn("label=downloads", block)
+        self.assertNotIn("label=latest%20release", block)
 
 
 class BadgeLayout(unittest.TestCase):

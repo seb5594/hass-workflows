@@ -19,6 +19,11 @@ class CatalogTests(unittest.TestCase):
         patcher = patch.object(catalog, "ROOT", self.root)
         patcher.start()
         self.addCleanup(patcher.stop)
+        facts = patch.object(catalog.live, "fetch", return_value={
+            "stars": 1, "forks": 0, "issues": 0, "releases": 1, "downloads": 0, "latest_downloads": 0,
+            "builds": 1, "metrics": set()})
+        facts.start()
+        self.addCleanup(facts.stop)
         self.source = self.root / "Rsync-Local"
         app = self.source / "rsync-local"
         app.mkdir(parents=True)
@@ -91,31 +96,36 @@ class IntegrationCatalog(unittest.TestCase):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
-    def describe(self, forks):
-        repo = {"name": "hass-demo-integration", "default_branch": "main", "forks_count": forks}
+    FACTS = {"stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
+             "builds": 0, "metrics": set()}
+
+    def describe(self, **facts):
+        repo = {"name": "hass-demo-integration", "default_branch": "main"}
         manifest = '{"domain": "demo", "name": "Demo", "version": "1.0.0b1", "iot_class": "local_polling"}'
         with patch.object(catalog.remote, "head_commit", return_value="b" * 40), \
                 patch.object(catalog.remote, "project_files", return_value=[
                     "custom_components/demo/manifest.json", "hacs.json", "README.md"]), \
                 patch.object(catalog.remote, "raw", side_effect=lambda r, s, path: {
                     "custom_components/demo/manifest.json": manifest, "hacs.json": '{"homeassistant": "2026.9.0"}',
-                    "README.md": "# Demo\n\nThis is a custom component for demos.\n"}[path]):
+                    "README.md": "# Demo\n\nThis is a custom component for demos.\n"}[path]), \
+                patch.object(catalog.live, "fetch", return_value={**self.FACTS, **facts}):
             return catalog.describe_repository(repo, 500)
 
     def test_description_comes_from_the_readme_and_nothing_is_cloned(self):
-        entry = self.describe(0)
+        entry = self.describe()
         self.assertEqual(entry["excerpt"], "This is a custom component for demos.")
         self.assertEqual(entry["items"][0]["description"], entry["excerpt"])
         self.assertEqual(entry["commit"], "b" * 40)
 
-    def test_forks_badge_appears_only_after_the_first_fork(self):
-        without = catalog.render_readme([self.describe(0)])
-        with_fork = catalog.render_readme([self.describe(2)])
-        self.assertNotIn("label=forks", without)
-        self.assertIn("label=forks", with_fork)
-        for item in ("message=1.0.0b1", "label=downloads", "label=integrations", "message=%E2%89%A5%202026.9.0"):
-            self.assertIn(item, without)
-        self.assertNotIn("hacs_repository", without)
+    def test_entries_without_values_hide_their_badges(self):
+        quiet = catalog.render_readme([self.describe()], own=dict(self.FACTS))
+        busy = catalog.render_readme([self.describe(stars=2, forks=1, downloads=3, builds=1)], own={
+            **self.FACTS, "stars": 5, "forks": 1, "builds": 2})
+        for hidden in ("label=stars", "label=forks", "label=downloads", "label=catalog%20sync"):
+            self.assertNotIn(hidden, quiet)
+        for shown in ("label=stars", "label=forks", "label=downloads", "label=catalog%20sync"):
+            self.assertIn(shown, busy)
+        self.assertIn("message=%E2%89%A5%202026.9.0", quiet)
 
 
 if __name__ == "__main__":

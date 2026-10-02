@@ -1,4 +1,5 @@
 """Constants and helpers shared by the engine scripts."""
+import base64
 import json
 import os
 import subprocess
@@ -56,3 +57,11 @@ def notify_catalog(catalog_repository, event_type, source_repository):
     subprocess.run(["gh", "api", f"repos/{catalog_repository}/dispatches", "--input", "-"],
                    input=json.dumps(payload), text=True, check=True,
                    env=dict(os.environ, GH_TOKEN=token))
+
+
+def authenticated_git(token):
+    """`git` command prefix that authenticates github.com requests without storing credentials."""
+    credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["git", "-c", f"http.https://github.com/.extraheader=AUTHORIZATION: basic {credentials}",
+            "-c", "user.name=github-actions[bot]",
+            "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com"]

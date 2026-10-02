@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import tomllib
@@ -9,9 +10,10 @@ from pathlib import Path
 
 import yaml
 
+import live
 import metrics
 import readme
-from common import PLATFORMS, run, run_captured
+from common import PLATFORMS, authenticated_git, run, run_captured
 
 ENGINE = Path(__file__).resolve().parents[1]
 YAMLLINT_RULES = "{extends: relaxed, rules: {line-length: disable, truthy: disable}}"
@@ -36,6 +38,34 @@ def should_publish(env=os.environ):
         return False
     ref = env.get("REF", "")
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
+
+
+def refresh_readme(env=os.environ):
+    """Rewrite the README badge block with live values and push it when it changed.
+
+    Badges without a value (no releases yet, zero stars, unpublished metrics) are left out, so
+    the block depends on live data and is regenerated here instead of being compared in CI.
+    Pushes by GITHUB_TOKEN do not start another workflow run.
+    """
+    branch = env.get("DEFAULT_BRANCH")
+    if env.get("REF") != f"refs/heads/{branch}":
+        print("README badges are refreshed from the default branch only.")
+        return
+    try:
+        facts = live.fetch(readme.repository())
+        changed = readme.update(live=facts)
+    except RuntimeError as error:
+        print(f"::warning::README badges were not refreshed: {error}")
+        return
+    if not changed:
+        print("README badges are up to date.")
+        return
+    git = authenticated_git(env["GH_TOKEN"])
+    run(*git, "add", "README.md")
+    run(*git, "commit", "-q", "-m", "docs: refresh README badges")
+    pushed = subprocess.run([*git, "push", "-q", "origin", f"HEAD:refs/heads/{branch}"])
+    if pushed.returncode:
+        print("::warning::The README refresh could not be pushed; the next run will retry.")
 
 
 def check_caller_workflow(kind):
@@ -89,7 +119,7 @@ def run_integration_tests(directory):
 
 
 def validate(kind, folder):
-    readme.update(check=True)
+    readme.verify()
     check_caller_workflow(kind)
     run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
     if Path(".github/renovate.json").exists():
@@ -134,6 +164,8 @@ def main(command):
         script = "release_app.py" if kind == "app" else "package_integration.py"
         args = [str(folder)] if kind == "app" else ["--release"]
         run(sys.executable, str(ENGINE / ".scripts" / script), *args)
+    elif command == "refresh-readme":
+        refresh_readme()
     elif command in {"render-metrics", "publish-metrics"}:
         run(sys.executable, str(ENGINE / ".scripts/metrics.py"), command.split("-")[0], kind,
             str(metadata.get("slug", "")))

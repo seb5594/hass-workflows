@@ -6,6 +6,7 @@ from support import ENGINE  # noqa: F401
 
 import excerpt
 import hub
+import live
 import remote
 
 GITMODULES = '[submodule "x"]\n\t# Replaced: path = .sources/Demo\n\tpath = Demo\n\turl = https://github.com/seb5594/Home-Assistant-Demo-Addon.git\n'
@@ -57,6 +58,11 @@ class ExcerptTests(unittest.TestCase):
 
 class HubTests(unittest.TestCase):
     def setUp(self):
+        facts = patch.object(live, "fetch", return_value={
+            "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
+            "builds": 0, "metrics": set()})
+        facts.start()
+        self.addCleanup(facts.stop)
         for name, fake in (("fetch_json", fake_fetch_json), ("fetch_text", fake_fetch_text)):
             patcher = patch.object(remote, name, fake)
             patcher.start()
@@ -90,6 +96,12 @@ class HubTests(unittest.TestCase):
                      "≥ 2026.9.0", "A \\| piped description", "label=apps&message=1", "label=integrations&message=1"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
+
+    def test_status_badges_without_values_are_hidden(self):
+        readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"), own=dict(live.fetch()))
+        for hidden in ("label=build", "label=stars", "label=downloads", "label=hub%20sync"):
+            self.assertNotIn(hidden, readme)
+        self.assertIn("label=version", readme)
 
     def test_title_without_description_has_no_empty_line_break(self):
         self.assertEqual(hub.title_cell("Demo", "https://x", ""), "**[Demo](https://x)**")

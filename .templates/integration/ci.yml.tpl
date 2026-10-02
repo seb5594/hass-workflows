@@ -5,6 +5,8 @@ on:
     branches: [main, dev]
     tags: ['v*']
   pull_request:
+  schedule:
+    - cron: '23 4 * * 1' # Weekly: refreshes badge metrics and README values.
   workflow_dispatch:
     inputs:
       draft:
