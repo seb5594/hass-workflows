@@ -1,0 +1,64 @@
+name: Verify engine against maintained projects
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  apps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        project:
+          - {repository: Home-Assistant-Rsync-Local-Addon, app: rsync-local}
+          - {repository: Home-Assistant-git-exporter-Addon, app: git-exporter}
+        target:
+          - {arch: amd64, platform: linux/amd64}
+          - {arch: aarch64, platform: linux/arm64}
+          - {arch: armv7, platform: linux/arm/v7}
+          - {arch: armhf, platform: linux/arm/v6}
+          - {arch: i386, platform: linux/386}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: seb5594/${{ matrix.project.repository }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: .engine
+          persist-credentials: false
+      - uses: ./.engine/.actions/app-ci
+        with:
+          app: ${{ matrix.project.app }}
+          arch: ${{ matrix.target.arch }}
+          platform: ${{ matrix.target.platform }}
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: seb5594/hass-pulseaudio_loopback_extended-integration
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          path: .engine
+          persist-credentials: false
+      - uses: ./.engine/.actions/integration-ci
+        with:
+          repository: seb5594/hass-pulseaudio_loopback_extended-integration
+      - name: Verify ZIP contents and checksums
+        run: python .engine/.scripts/package_integration.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: integration-release-zips
+          path: dist/
