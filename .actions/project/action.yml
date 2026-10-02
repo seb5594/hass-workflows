@@ -4,8 +4,11 @@ inputs:
   publish:
     description: Publish on the default branch or matching version tag
     default: 'true'
+  draft:
+    description: Create GitHub releases as drafts for review
+    default: 'false'
   token:
-    description: Token for the caller's releases and packages
+    description: Token for the caller's releases, packages and badge branch
     required: true
   catalog-token:
     description: Optional token for the app catalog notification
@@ -27,8 +30,12 @@ runs:
       shell: bash
       env:
         ENGINE: ${{ github.action_path }}/../..
+        PUBLISH: ${{ inputs.publish }}
+        EVENT_NAME: ${{ github.event_name }}
+        REF: ${{ github.ref }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       run: python "$ENGINE/.scripts/project.py" inspect >> "$GITHUB_OUTPUT"
-    - name: Validate metadata, documentation, Python, YAML, and shell
+    - name: Validate metadata, documentation, code, and tests
       shell: bash
       env:
         ENGINE: ${{ github.action_path }}/../..
@@ -74,17 +81,26 @@ runs:
         name: integration-zips
         path: dist/
     - uses: docker/login-action@v3
-      if: inputs.publish == 'true' && steps.project.outputs.kind == 'app' && github.event_name != 'pull_request' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
+      if: steps.project.outputs.publish == 'true' && steps.project.outputs.kind == 'app'
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ inputs.token }}
     - name: Publish images or ZIP release after all checks pass
-      if: inputs.publish == 'true' && github.event_name != 'pull_request' && (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || startsWith(github.ref, 'refs/tags/v'))
+      if: steps.project.outputs.publish == 'true'
       shell: bash
       env:
         ENGINE: ${{ github.action_path }}/../..
         GH_TOKEN: ${{ inputs.token }}
         ORCHESTRATION_TOKEN: ${{ inputs.catalog-token }}
+        RELEASE_DRAFT: ${{ inputs.draft }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/project.py" release
+    - name: Publish pipeline metrics as README badges
+      if: steps.project.outputs.publish == 'true'
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        GH_TOKEN: ${{ inputs.token }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python "$ENGINE/.scripts/project.py" publish-metrics

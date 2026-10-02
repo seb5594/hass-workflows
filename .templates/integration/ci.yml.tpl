@@ -6,6 +6,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      draft:
+        description: Create the release as a draft for review
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,3 +35,4 @@ jobs:
       - uses: ./.engine/.actions/project
         with:
           token: ${{ github.token }}
+          draft: ${{ inputs.draft }}
