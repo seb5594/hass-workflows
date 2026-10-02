@@ -111,6 +111,9 @@ class PublishDecision(unittest.TestCase):
         self.assertFalse(project.should_publish({**self.base, "EVENT_NAME": "pull_request"}))
         self.assertFalse(project.should_publish({**self.base, "PUBLISH": "false"}))
 
+    def test_template_repositories_never_publish(self):
+        self.assertFalse(project.should_publish({**self.base, "IS_TEMPLATE": "true"}))
+
 
 class CallerTemplates(unittest.TestCase):
     def test_templates_pin_one_engine_commit_and_pass_secrets(self):

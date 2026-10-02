@@ -29,8 +29,10 @@ def discover(root=Path(".")):
 
 
 def should_publish(env=os.environ):
-    """Publish from the default branch or a version tag, never from pull requests."""
+    """Publish from the default branch or a version tag, never from pull requests or templates."""
     if env.get("PUBLISH", "true") != "true" or env.get("EVENT_NAME") == "pull_request":
+        return False
+    if env.get("IS_TEMPLATE") == "true":
         return False
     ref = env.get("REF", "")
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")

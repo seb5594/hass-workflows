@@ -2,7 +2,7 @@ name: Validate, build, and publish a Home Assistant project
 description: Shared pipeline for apps and HACS integrations
 inputs:
   publish:
-    description: Publish on the default branch or matching version tag
+    description: Publish on the default branch or matching version tag (never from template repositories)
     default: 'true'
   draft:
     description: Create GitHub releases as drafts for review
@@ -34,6 +34,7 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         REF: ${{ github.ref }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        IS_TEMPLATE: ${{ github.event.repository.is_template }}
       run: python "$ENGINE/.scripts/project.py" inspect >> "$GITHUB_OUTPUT"
     - name: Validate metadata, documentation, code, and tests
       shell: bash
