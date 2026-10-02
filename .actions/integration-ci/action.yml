@@ -24,5 +24,6 @@ runs:
       with:
         category: integration
         repository: ${{ inputs.repository }}
-        ignore: brands
+        # Custom repositories do not need HACS catalog topics or a brands entry.
+        ignore: brands topics
         comment: 'false'
