@@ -18,18 +18,19 @@ from pathlib import Path
 import yaml
 
 import badgekit
+import config
 import excerpt
 import github_api
 import live
 import remote
+import templating
 
-ENGINE = Path(__file__).resolve().parents[1]
+ENGINE = config.ENGINE_ROOT
 KIND = os.environ.get("CATALOG_KIND", "apps")
 TEMPLATES = ENGINE / ".templates/catalog" / KIND
 ROOT = Path(os.environ.get("CATALOG_ROOT", ".")).resolve()
-OWNER = "seb5594"
-CATALOG_REPOSITORY = f"{OWNER}/" + {"apps": "Home-Assistant-Apps",
-                                    "integrations": "Home-Assistant-Integrations"}[KIND]
+OWNER = config.OWNER
+CATALOG_REPOSITORY = config.CATALOGS[KIND]
 EXCLUDED_REPOSITORIES = set()
 EXCERPT_MAX_CHARS = 500
 NAME_PATTERNS = {
@@ -37,7 +38,6 @@ NAME_PATTERNS = {
     "integrations": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?i:integration)$",
 }
 NAME_PATTERN = re.compile(NAME_PATTERNS[KIND])
-ARCHITECTURES = {"aarch64", "amd64", "armhf", "armv7", "i386"}
 CONFIG_NAMES = {"config.yaml", "config.yml", "config.json"}
 
 
@@ -49,16 +49,12 @@ def git(*args, cwd=None):
     ).stdout.strip()
 
 
-def fetch_json(url):
-    return github_api.fetch_json(url, f"{OWNER}-catalog")
-
-
 def discover_repositories(excluded):
     """Walk every API page instead of relying on search indexing."""
     repositories, page = [], 1
     while True:
-        batch = fetch_json(f"https://api.github.com/users/{OWNER}/repos"
-                           f"?type=owner&sort=full_name&per_page=100&page={page}")
+        batch = github_api.fetch_json(f"https://api.github.com/users/{OWNER}/repos"
+                                      f"?type=owner&sort=full_name&per_page=100&page={page}")
         if not isinstance(batch, list):
             raise ValueError("Expected a repository list from GitHub.")
         repositories.extend(
@@ -83,23 +79,23 @@ def readme_excerpt(folder, fallback, limit):
 def app_metadata(folder):
     """Check the catalog fields; Supervisor still validates the complete app schema."""
     apps = []
-    for config in sorted(folder.rglob("config.*")):
-        parts = config.relative_to(folder).parts
-        if config.name not in CONFIG_NAMES or any(p.startswith(".") or p == "rootfs" for p in parts):
+    for config_file in sorted(folder.rglob("config.*")):
+        parts = config_file.relative_to(folder).parts
+        if config_file.name not in CONFIG_NAMES or any(p.startswith(".") or p == "rootfs" for p in parts):
             continue
-        if config.is_symlink():
-            raise ValueError(f"App configurations must not be symlinks: {config}")
-        data = yaml.safe_load(config.read_text(encoding="utf-8"))
+        if config_file.is_symlink():
+            raise ValueError(f"App configurations must not be symlinks: {config_file}")
+        data = yaml.safe_load(config_file.read_text(encoding="utf-8"))
         if not isinstance(data, dict) or "slug" not in data:
             continue
         for key in ("name", "version", "slug", "description"):
             if not isinstance(data.get(key), str) or not data[key].strip():
-                raise ValueError(f"Missing or invalid {key!r} in {config}")
+                raise ValueError(f"Missing or invalid {key!r} in {config_file}")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", data["slug"]):
-            raise ValueError(f"Invalid app slug in {config}")
-        if not isinstance(data.get("arch"), list) or not data["arch"] or not set(data["arch"]) <= ARCHITECTURES:
-            raise ValueError(f"Invalid architectures in {config}")
-        apps.append({**data, "path": config.parent.relative_to(folder).as_posix()})
+            raise ValueError(f"Invalid app slug in {config_file}")
+        if not isinstance(data.get("arch"), list) or not data["arch"] or not set(data["arch"]) <= set(config.PLATFORMS):
+            raise ValueError(f"Invalid architectures in {config_file}")
+        apps.append({**data, "path": config_file.parent.relative_to(folder).as_posix()})
     if not apps:
         raise ValueError(f"No Home Assistant app configuration found in {folder.name}.")
     return apps
@@ -143,7 +139,7 @@ def sync_repository(repo, modules, limit):
     name, branch = repo["name"], repo["default_branch"]
     path = project_path(name)
     folder = ROOT / path
-    url = f"https://github.com/{OWNER}/{name}.git"
+    url = f"{config.github_url(OWNER + '/' + name)}.git"
     existing = [old for old, module in managed_submodules(modules).items() if module["url"] == url]
     if len(existing) > 1:
         raise ValueError(f"Multiple managed submodules reference {name}.")
@@ -168,7 +164,7 @@ def sync_repository(repo, modules, limit):
     git("submodule", "update", "--init", "--recursive", cwd=folder)
     items = app_metadata(folder)
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
-            "url": f"https://github.com/{OWNER}/{name}", "live": live.fetch(f"{OWNER}/{name}"),
+            "url": config.github_url(f"{OWNER}/{name}"), "live": live.fetch(f"{OWNER}/{name}"),
             "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
             "items": items}
 
@@ -177,23 +173,18 @@ def describe_repository(repo, limit):
     """Integrations are read remotely at the current head commit; nothing is cloned or pinned."""
     name, repository = repo["name"], f"{OWNER}/{repo['name']}"
     sha = remote.head_commit(repository, repo["default_branch"])
-    files = remote.project_files(repository, sha)
-    items = remote.load_integrations(repository, sha, files)
+    items, summary = remote.describe(repository, sha, KIND, limit, repo.get("description") or "")
     if not items:
         raise ValueError(f"No Home Assistant integration found in {name}.")
-    summary = excerpt.first_paragraph(remote.readme(repository, sha, files), limit,
-                                      repo.get("description") or "")
-    for item in items:
-        item.setdefault("description", summary)
     return {"repository": repository, "path": project_path(name), "branch": repo["default_branch"],
-            "commit": sha, "url": f"https://github.com/{repository}", "live": live.fetch(repository),
+            "commit": sha, "url": config.github_url(repository), "live": live.fetch(repository),
             "excerpt": summary, "items": items}
 
 
 def render_header(entries, own=None):
     """Header badges; `own` holds live facts about the catalog repository (None keeps everything)."""
     items = [item for entry in entries for item in entry["items"]]
-    link = f"https://github.com/{CATALOG_REPOSITORY}"
+    link = config.github_url(CATALOG_REPOSITORY)
     context = {"repo": CATALOG_REPOSITORY, "data": {}, "forks": 0, "live": own}
     status = badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
         CATALOG_REPOSITORY, "update.yml", "catalog sync", f"{link}/actions/workflows/update.yml")])
@@ -218,17 +209,35 @@ def item_rows(item, entry):
                              with_install=False, live=entry.get("live"))
 
 
+def entry_heading(entry):
+    """Project name with the version currently on the default branch in parentheses."""
+    items = entry["items"]
+    version = (str(items[0]["version"]) if len(items) == 1
+               else ", ".join(f"{item['slug']} {item['version']}" for item in items))
+    return f"### [{entry['path']}]({entry['url']}) ({version})"
+
+
+def changelog_link(entry, item):
+    folder = "" if KIND == "integrations" else f"{item['path']}/"
+    return f"[Changelog]({entry['url']}/blob/main/{folder}CHANGELOG.md)"
+
+
+def render_item(entry, item):
+    """The changelog link starts the badge paragraph; several items per repository keep their names."""
+    label = changelog_link(entry, item)
+    if len(entry["items"]) > 1:
+        label = f"**{item['name']}** · {label}"
+    return f"{label}<br>\n{badgekit.render(item_rows(item, entry))}"
+
+
 def render_catalog(entries):
     sections = []
     for entry in entries:
-        sections.extend([f"### [{entry['path']}]({entry['url']})", "", f"> {entry['excerpt']}", ""])
+        sections += [entry_heading(entry), "", f"> {entry['excerpt']}", ""]
         for item in entry["items"]:
-            changelog_folder = "" if KIND == "integrations" else f"{item['path']}/"
-            changelog = f"{entry['url']}/blob/main/{changelog_folder}CHANGELOG.md"
-            sections.extend([f"**{item['name']}** · [Changelog]({changelog})<br>",
-                             badgekit.render(item_rows(item, entry)), ""])
-        sections.extend([f"[Source & documentation]({entry['url']}) · "
-                         f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""])
+            sections += [render_item(entry, item), ""]
+        sections += [f"[Source & documentation]({entry['url']}) · "
+                     f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""]
     return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
@@ -245,13 +254,10 @@ def license_note(entries):
 
 def render_readme(entries, own=None):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
-    for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}", "{{SUPPORT}}", "{{LICENSE_NOTE}}"):
-        if template.count(placeholder) != 1:
-            raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
-    return (template.replace("{{BADGES}}", render_header(entries, own))
-            .replace("{{APP_CATALOG}}", render_catalog(entries))
-            .replace("{{SUPPORT}}", badgekit.support_section())
-            .replace("{{LICENSE_NOTE}}", license_note(entries)).rstrip("\n") + "\n")
+    text = templating.fill(template, {
+        "BADGES": render_header(entries, own), "APP_CATALOG": render_catalog(entries),
+        "SUPPORT": badgekit.support_section(), "LICENSE_NOTE": license_note(entries)})
+    return text.rstrip("\n") + "\n"
 
 
 def repository_yaml():

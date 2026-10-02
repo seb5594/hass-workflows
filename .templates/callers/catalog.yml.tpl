@@ -1,11 +1,11 @@
-name: Synchronize app catalog
+name: Synchronize __TITLE__ catalog
 
 on:
   schedule:
     - cron: '17 * * * *' # Every hour at minute 17 (UTC).
   workflow_dispatch:
   repository_dispatch:
-    types: [update-addons] # Sent by the app repositories after a release.
+    types: [__EVENT__] # Sent by the __TITLE__ repositories after a release.
   push:
     branches: [main]
     paths: ['.github/workflows/update.yml']
@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: synchronize-app-catalog
+  group: synchronize-__TITLE__-catalog
   cancel-in-progress: false # Serialize writes; never cancel a running synchronization.
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
           fetch-depth: 1
       - uses: actions/checkout@v7
         with:
-          repository: seb5594/hass-workflows
+          repository: __ENGINE_REPOSITORY__
           ref: __ENGINE_SHA__
           token: ${{ secrets.ORCHESTRATION_PAT }}
           path: .engine
           persist-credentials: false
       - uses: ./.engine/.actions/catalog
         with:
-          kind: apps
+          kind: __KIND__
           token: ${{ github.token }}
           hub-token: ${{ secrets.ORCHESTRATION_PAT }}

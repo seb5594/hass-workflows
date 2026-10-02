@@ -14,15 +14,15 @@ from pathlib import Path
 import yaml
 
 import badgekit
-import excerpt
+import config
 import live
 import remote
+import templating
 
-ENGINE = Path(__file__).resolve().parents[1]
+ENGINE = config.ENGINE_ROOT
 ROOT = Path(os.environ.get("HUB_ROOT", ".")).resolve()
-OWNER = "seb5594"
-HUB_REPOSITORY = f"{OWNER}/Home-Assistant-Hub"
-CATALOGS = {"apps": f"{OWNER}/Home-Assistant-Apps", "integrations": f"{OWNER}/Home-Assistant-Integrations"}
+HUB_REPOSITORY = config.HUB_REPOSITORY
+CATALOGS = config.CATALOGS
 
 
 def parse_modules(text):
@@ -63,14 +63,7 @@ def listed_projects(catalog):
 def collect(kind):
     entries = []
     for repository, sha in listed_projects(CATALOGS[kind]):
-        files = remote.project_files(repository, sha)
-        if kind == "apps":
-            items = remote.load_apps(repository, sha, files)
-        else:
-            items = remote.load_integrations(repository, sha, files)
-            summary = excerpt.first_paragraph(remote.readme(repository, sha, files), 160)
-            for item in items:
-                item.setdefault("description", summary)
+        items, _ = remote.describe(repository, sha, kind, 160)
         if items:
             entries.append({"repository": repository, "sha": sha, "items": items,
                             "live": live.fetch(repository)})
@@ -88,7 +81,7 @@ def title_cell(name, link, description):
 
 
 def project_link(entry):
-    return f"https://github.com/{entry['repository']}"
+    return config.github_url(entry["repository"])
 
 
 def app_table(entries):
@@ -127,17 +120,17 @@ def integration_table(entries):
 
 
 def render_header(apps, integrations, own=None):
-    hub = f"https://github.com/{HUB_REPOSITORY}"
+    hub = config.github_url(HUB_REPOSITORY)
     projects = len(apps) + len(integrations)
     context = {"live": own}
     return badgekit.render([
         [badgekit.install_badge()]
-        + [badgekit.static("HACS", "browse integrations", "info", f"https://github.com/{CATALOGS['integrations']}")],
+        + [badgekit.static("HACS", "browse integrations", "info", config.github_url(CATALOGS["integrations"]))],
         badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
             HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml")])
-        + [badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", f"https://github.com/{CATALOGS['apps']}"),
+        + [badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", config.github_url(CATALOGS["apps"])),
            badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
-                           f"https://github.com/{CATALOGS['integrations']}"),
+                           config.github_url(CATALOGS["integrations"])),
            badgekit.static("repositories", str(projects), "muted")],
         badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
             "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
@@ -146,15 +139,12 @@ def render_header(apps, integrations, own=None):
 
 
 def render_readme(apps, integrations, own=None):
-    template = (ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8")
-    for placeholder in ("{{BADGES}}", "{{APPS}}", "{{INTEGRATIONS}}", "{{SUPPORT}}"):
-        if template.count(placeholder) != 1:
-            raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
-    return (template.replace("{{BADGES}}", render_header(apps, integrations, own))
-            .replace("{{SUPPORT}}", badgekit.support_section())
-            .replace("{{APPS}}", app_table(apps) if apps else "_No apps are published yet._")
-            .replace("{{INTEGRATIONS}}", integration_table(integrations) if integrations
-                     else "_No integrations are published yet._"))
+    text = templating.fill((ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8"), {
+        "BADGES": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
+        "APPS": app_table(apps) if apps else "_No apps are published yet._",
+        "INTEGRATIONS": (integration_table(integrations) if integrations
+                         else "_No integrations are published yet._")})
+    return text.rstrip("\n") + "\n"
 
 
 def main():

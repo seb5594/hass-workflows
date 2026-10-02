@@ -16,13 +16,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-python@v6
+    - uses: ./.engine/.actions/setup-python
       with:
-        python-version: '3.12'
-    - name: Install shared validation tools
+        packages: flake8==7.3.0
+    - name: Install shell and YAML linters
       shell: bash
       run: |
-        python -m pip install --disable-pip-version-check PyYAML==6.0.3 flake8==7.3.0
         sudo apt-get update -qq
         sudo apt-get install -y shellcheck yamllint
     - name: Detect project from its own metadata

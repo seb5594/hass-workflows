@@ -62,7 +62,7 @@ class CatalogTests(unittest.TestCase):
                  "repository": f"seb5594/{REPOSITORY}", "excerpt": "USB backups", "commit": "a" * 40,
                  "items": catalog.app_metadata(self.source)}
         readme = catalog.render_readme([entry])
-        for item in ("message=1.74.1", "label=read-only", "label=local%20disks", "Pinned commit",
+        for item in ("message=1.74.1", "label=mounts%20%28read-only%29", "label=local%20disks", "Pinned commit",
                      "label=apps"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
@@ -92,7 +92,7 @@ class IntegrationCatalog(unittest.TestCase):
         public = {"name": "hass-a-integration", "owner": {"login": "seb5594"}}
         hidden = [{**public, "name": "hass-b-integration", "private": True},
                   {**public, "name": "hass-c-integration", "archived": True}]
-        with patch.object(catalog, "fetch_json", return_value=[public, *hidden]):
+        with patch.object(catalog.github_api, "fetch_json", return_value=[public, *hidden]):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
@@ -116,6 +116,12 @@ class IntegrationCatalog(unittest.TestCase):
         self.assertEqual(entry["excerpt"], "This is a custom component for demos.")
         self.assertEqual(entry["items"][0]["description"], entry["excerpt"])
         self.assertEqual(entry["commit"], "b" * 40)
+
+    def test_entry_shows_the_version_in_the_heading_and_only_a_changelog_link(self):
+        readme = catalog.render_readme([self.describe()], own=dict(self.FACTS))
+        self.assertIn("### [demo](https://github.com/seb5594/hass-demo-integration) (1.0.0b1)", readme)
+        self.assertIn("> This is a custom component for demos.\n\n[Changelog](", readme)
+        self.assertNotIn("**Demo**", readme)
 
     def test_support_section_and_license_note(self):
         unlicensed = catalog.render_readme([self.describe()], own=dict(self.FACTS))

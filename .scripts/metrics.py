@@ -15,7 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import badgekit
-from common import authenticated_git, run
+import gitops
+from common import run
 
 STORE = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hass-metrics.json"
 OUTPUT = STORE.with_name("hass-badges")
@@ -82,7 +83,7 @@ def render(slug=None, owner=None):
 
 def publish(repository, token):
     """Replace the badges branch with a single fresh commit; history is not needed."""
-    git = authenticated_git(token)
+    git = gitops.git_command(token)
     with tempfile.TemporaryDirectory() as work:
         run(*git[:1], "init", "-q", "-b", "badges", work)
         for path in OUTPUT.iterdir():

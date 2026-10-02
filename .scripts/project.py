@@ -10,14 +10,17 @@ from pathlib import Path
 
 import yaml
 
+import callers
+import config
+import gitops
 import live
 import metrics
 import readme
-from common import PLATFORMS, authenticated_git, run, run_captured
+from common import run, run_captured
+from config import PLATFORMS
 
-ENGINE = Path(__file__).resolve().parents[1]
+ENGINE = config.ENGINE_ROOT
 YAMLLINT_RULES = "{extends: relaxed, rules: {line-length: disable, truthy: disable}}"
-CALLER_REF = re.compile(r"ref: ([0-9a-f]{40})")
 
 
 def discover(root=Path(".")):
@@ -60,23 +63,10 @@ def refresh_readme(env=os.environ):
     if not changed:
         print("README badges are up to date.")
         return
-    git = authenticated_git(env["GH_TOKEN"])
-    run(*git, "add", "README.md")
-    run(*git, "commit", "-q", "-m", "docs: refresh README badges")
-    pushed = subprocess.run([*git, "push", "-q", "origin", f"HEAD:refs/heads/{branch}"])
-    if pushed.returncode:
+    try:
+        gitops.commit_and_push("docs: refresh README badges", branch, env["GH_TOKEN"], paths=["README.md"])
+    except subprocess.CalledProcessError:
         print("::warning::The README refresh could not be pushed; the next run will retry.")
-
-
-def check_caller_workflow(kind):
-    """The caller workflow must equal the shared template for the engine commit it pins."""
-    workflow = Path(".github/workflows/ci.yml")
-    pinned = CALLER_REF.search(workflow.read_text())
-    if not pinned:
-        raise ValueError(f"{workflow} must pin hass-workflows to a commit SHA")
-    template = (ENGINE / f".templates/{kind}/ci.yml.tpl").read_text()
-    if workflow.read_text() != template.replace("__ENGINE_SHA__", pinned.group(1)):
-        raise ValueError(f"{workflow} differs from .templates/{kind}/ci.yml.tpl")
 
 
 def run_project_checks():
@@ -127,7 +117,7 @@ def run_integration_tests(directory):
 
 def validate(kind, folder):
     readme.verify()
-    check_caller_workflow(kind)
+    callers.check(kind)
     run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
     if Path(".github/renovate.json").exists():
         run("cmp", str(ENGINE / ".templates/renovate/renovate.json"), ".github/renovate.json")

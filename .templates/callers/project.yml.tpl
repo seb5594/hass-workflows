@@ -1,4 +1,4 @@
-name: Validate and release integration
+name: Validate and release __KIND__
 
 on:
   push:
@@ -17,20 +17,21 @@ on:
 permissions:
   actions: read # Lets the README refresh see whether the workflow has run.
   contents: write
+__PACKAGES__
 
 jobs:
   pipeline:
     # Repository secrets are not passed to untrusted fork pull requests.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: __TIMEOUT__
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/checkout@v7
         with:
-          repository: seb5594/hass-workflows
+          repository: __ENGINE_REPOSITORY__
           ref: __ENGINE_SHA__
           token: ${{ secrets.ORCHESTRATION_PAT }}
           path: .engine

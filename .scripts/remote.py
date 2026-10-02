@@ -4,19 +4,15 @@ import re
 
 import yaml
 
+import excerpt
 import github_api
 
 RAW = "https://raw.githubusercontent.com"
 API = "https://api.github.com"
-USER_AGENT = "seb5594-hass-workflows"
 
 
-def fetch_json(url):
-    return github_api.fetch_json(url, USER_AGENT)
-
-
-def fetch_text(url):
-    return github_api.fetch_text(url, USER_AGENT)
+fetch_json = github_api.fetch_json
+fetch_text = github_api.fetch_text
 
 
 def head_commit(repository, branch):
@@ -57,3 +53,15 @@ def load_integrations(repository, sha, files):
         manifest = json.loads(raw(repository, sha, path))
         items.append({**manifest, "slug": manifest["domain"], "hacs": hacs, "path": path.rsplit("/", 1)[0]})
     return items
+
+
+def describe(repository, sha, kind, limit=500, fallback=""):
+    """(items, summary) for the project at `sha`; integrations without a description get the README intro."""
+    files = project_files(repository, sha)
+    if kind == "apps":
+        return load_apps(repository, sha, files), ""
+    items = load_integrations(repository, sha, files)
+    summary = excerpt.first_paragraph(readme(repository, sha, files), limit, fallback)
+    for item in items:
+        item.setdefault("description", summary)
+    return items, summary
