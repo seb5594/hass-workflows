@@ -24,4 +24,6 @@ Questions or problems? Open an issue on GitHub, but in the repository of the int
 concerned: every integration lives in its own repository, linked in its entry above. Issues opened
 here cannot be handled.
 
+{{SUPPORT}}
+
 {{LICENSE_NOTE}}

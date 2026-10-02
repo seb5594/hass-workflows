@@ -9,6 +9,8 @@ import badgekit
 
 START = "<!-- badges:begin (generated from project metadata) -->"
 END = "<!-- badges:end -->"
+SUPPORT_START = "<!-- support:begin (generated, shared text) -->"
+SUPPORT_END = "<!-- support:end -->"
 
 
 def repository_of(url):
@@ -48,21 +50,31 @@ def verify(root=Path(".")):
         raise ValueError("README needs exactly one generated badge block; run .scripts/readme.py")
 
 
+def replace_block(source, start_marker, end_marker, block):
+    start, end = source.index(start_marker), source.index(end_marker) + len(end_marker)
+    return source[:start] + block + source[end:]
+
+
 def update(root=Path("."), live=None):
-    """Write the badge block; returns True when README.md changed."""
+    """Write the badge block and the shared support block; returns True when README.md changed."""
     readme = root / "README.md"
-    source = readme.read_text()
+    source = original = readme.read_text()
     block = render(root, live)
     if START not in source:
         # First run: place the block directly below the main heading.
         head, _, rest = source.partition("\n")
-        readme.write_text(f"{head}\n\n{block}\n{rest}")
-        return True
-    verify(root)
-    start, end = source.index(START), source.index(END) + len(END)
-    if source[start:end] == block:
+        source = f"{head}\n\n{block}\n{rest}"
+    else:
+        verify(root)
+        source = replace_block(source, START, END, block)
+    support = f"{SUPPORT_START}\n{badgekit.support_section()}\n{SUPPORT_END}"
+    if SUPPORT_START in source:
+        source = replace_block(source, SUPPORT_START, SUPPORT_END, support)
+    else:
+        source = source.rstrip("\n") + f"\n\n{support}\n"
+    if source == original:
         return False
-    readme.write_text(source[:start] + block + source[end:])
+    readme.write_text(source)
     return True
 
 

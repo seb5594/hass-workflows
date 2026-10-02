@@ -28,6 +28,8 @@ options and documentation are in each app's repository.
 Integrations install through HACS and are configured under **Settings → Devices & services**.
 Only public projects are listed.
 
+{{SUPPORT}}
+
 ## How this works
 
 Each app or integration lives in its own repository and ships through one shared pipeline. The

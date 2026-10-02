@@ -22,4 +22,6 @@ The catalog follows each source repository's current default branch and pins tha
 Questions or problems? Open an issue on GitHub, but in the repository of the app concerned: every
 app lives in its own repository, linked in its entry above. Issues opened here cannot be handled.
 
+{{SUPPORT}}
+
 {{LICENSE_NOTE}}
