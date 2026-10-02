@@ -38,4 +38,5 @@ jobs:
           persist-credentials: false
       - uses: ./.engine/.actions/hub
         with:
-          token: ${{ github.token }}
+          # Reads the catalogs even while they are private; only public projects end up listed.
+          token: ${{ secrets.ORCHESTRATION_PAT }}

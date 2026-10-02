@@ -21,8 +21,6 @@ ROOT = Path(os.environ.get("HUB_ROOT", ".")).resolve()
 OWNER = "seb5594"
 HUB_REPOSITORY = f"{OWNER}/Home-Assistant-Hub"
 CATALOGS = {"apps": f"{OWNER}/Home-Assistant-Apps", "integrations": f"{OWNER}/Home-Assistant-Integrations"}
-MODULE = re.compile(r'\[submodule "[^"]+"\]\s+path = (?P<path>\S+)\s+url = https://github.com/(?P<repo>[^\s.]+/[^\s]+?)(?:\.git)?\s*$',
-                    re.M)
 RAW = "https://raw.githubusercontent.com"
 API = "https://api.github.com"
 
@@ -35,6 +33,25 @@ def fetch_text(url):
     return github_api.fetch_text(url, f"{OWNER}-hub")
 
 
+def parse_modules(text):
+    """(path, owner/name) for every submodule; comments and key order do not matter."""
+    modules, current = [], {}
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("[submodule"):
+            current = {}
+            modules.append(current)
+        elif "=" in line and not line.startswith(("#", ";")):
+            key, value = (part.strip() for part in line.split("=", 1))
+            current[key] = value
+    found = []
+    for module in modules:
+        match = re.fullmatch(r"https://github\.com/([^/]+/[^/]+?)(?:\.git)?", module.get("url", ""))
+        if match and "path" in module:
+            found.append((module["path"], match.group(1)))
+    return found
+
+
 def listed_projects(catalog):
     """(source repository, pinned commit) for every submodule of a catalog."""
     try:
@@ -42,9 +59,9 @@ def listed_projects(catalog):
     except RuntimeError:
         return []
     projects = []
-    for match in MODULE.finditer(modules):
-        pinned = fetch_json(f"{API}/repos/{catalog}/contents/{match['path']}")
-        projects.append((match["repo"], pinned["sha"]))
+    for path, repository in parse_modules(modules):
+        pinned = fetch_json(f"{API}/repos/{catalog}/contents/{path}")
+        projects.append((repository, pinned["sha"]))
     return projects
 
 

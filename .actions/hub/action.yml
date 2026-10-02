@@ -2,7 +2,7 @@ name: Update the Home Assistant hub
 description: Render the hub README from the app and integration catalogs and commit it when it changed
 inputs:
   token:
-    description: Token with read access to the catalog repositories
+    description: Token with read access to the catalogs and the projects they pin
     required: true
 runs:
   using: composite
