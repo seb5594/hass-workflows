@@ -46,7 +46,8 @@ runs:
       uses: hadolint/hadolint-action@v3.1.0
       with:
         dockerfile: ${{ steps.project.outputs.directory }}/Dockerfile
-        ignore: DL3008
+        # FROM ${BUILD_FROM} looks untagged to hadolint; validate_app.py checks the tag of its default.
+        ignore: DL3006,DL3008
     # HACS reads the repository through the public API, so private repositories cannot be checked.
     - name: Validate HACS repository
       if: steps.project.outputs.kind == 'integration' && github.repository != 'seb5594/hass-workflows' && github.event.repository.is_template != true && github.event.repository.private != true

@@ -69,6 +69,20 @@ def refresh_readme(env=os.environ):
         print("::warning::The README refresh could not be pushed; the next run will retry.")
 
 
+def shell_scripts(directories):
+    """Shell files by extension or shebang, so extensionless s6 `run` and `finish` scripts are linted too."""
+    found = []
+    for directory in directories:
+        for path in sorted(directory.rglob("*")) if directory.exists() else []:
+            if not path.is_file() or path.is_symlink():
+                continue
+            with path.open("rb") as handle:
+                first = handle.readline(200)
+            if path.suffix == ".sh" or (first.startswith(b"#!") and (b"sh" in first or b"bash" in first)):
+                found.append(str(path))
+    return found
+
+
 def run_project_checks():
     """Project-specific rules live next to the project in .github/checks/*.py."""
     for check in sorted(Path(".github/checks").glob("*.py")):
@@ -123,11 +137,10 @@ def validate(kind, folder):
         run("cmp", str(ENGINE / ".templates/renovate/renovate.json"), ".github/renovate.json")
     if kind == "app":
         run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
-        run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
+        if (folder / "entrypoint.sh").exists():
+            run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
         run("yamllint", "-d", YAMLLINT_RULES, ".github/workflows", str(folder / "config.yaml"))
-        scripts = sorted(str(path) for directory in [folder, Path(".github/tests")]
-                         if directory.exists() for path in directory.rglob("*.sh"))
-        if scripts:
+        if scripts := shell_scripts([folder, Path(".github/tests")]):
             run("shellcheck", "-x", *scripts)
         return
     run("flake8", "custom_components", "--count", "--select=E9,F63,F7,F82",
