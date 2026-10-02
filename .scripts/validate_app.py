@@ -32,6 +32,27 @@ def unpinned_packages(dockerfile):
     return missing
 
 
+def s6_services(app):
+    """Service names below rootfs/etc/s6-overlay/s6-rc.d (apps that use the base image's s6-overlay)."""
+    root = app / "rootfs/etc/s6-overlay/s6-rc.d"
+    return sorted(p.name for p in root.iterdir() if p.is_dir() and p.name != "user") if root.is_dir() else []
+
+
+def check_startup_style(app, config):
+    """Apps either bring their own entrypoint.sh or run as s6 services, never a mix."""
+    services = s6_services(app)
+    if not services:
+        assert (app / "entrypoint.sh").is_file(), "Provide entrypoint.sh or s6 services under rootfs/etc/s6-overlay"
+        return
+    assert not (app / "entrypoint.sh").exists(), "s6 apps start through /init; remove entrypoint.sh"
+    assert config.get("init") is False, "s6 apps need `init: false` in config.yaml"
+    root = app / "rootfs/etc/s6-overlay/s6-rc.d"
+    for name in services:
+        assert (root / name / "type").is_file(), f"Service {name} needs a `type` file"
+        assert (root / name / "run").is_file(), f"Service {name} needs a `run` script"
+        assert (root / "user/contents.d" / name).is_file(), f"Register service {name} in user/contents.d"
+
+
 def check_static_versions(dockerfile):
     base = re.search(r"^ARG BUILD_FROM=(\S+)", dockerfile, re.M)
     assert base, "Dockerfile must declare a default base image: ARG BUILD_FROM=<image>:<tag>"
@@ -47,7 +68,7 @@ def main(folder):
     assert re.fullmatch(r"\d+\.\d+(?:\.\d+)?", str(config["version"])), "Use a stable numeric version"
     assert "(dev)" not in config["name"], "Release app names must not contain (dev)"
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
-    assert (app / "entrypoint.sh").is_file()
+    check_startup_style(app, config)
     check_static_versions((app / "Dockerfile").read_text())
     print(f"Validated {config['name']} {config['version']}")
 

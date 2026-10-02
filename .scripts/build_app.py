@@ -7,9 +7,13 @@ from pathlib import Path
 import yaml
 
 import metrics
+import validate_app
 from common import run, run_captured
 
-SMOKE_TEST = "bash -n /entrypoint.sh /run.sh && test -x /run.sh"
+ENTRYPOINT_SMOKE_TEST = "bash -n /entrypoint.sh /run.sh && test -x /run.sh"
+# Every s6 run/finish script must parse and be executable.
+S6_SMOKE_TEST = ("find /etc/s6-overlay/s6-rc.d -type f \\( -name run -o -name finish \\) "
+                 "-exec bash -n {} \\; -exec test -x {} \\;")
 UTILS_TEST = (
     "printf '%s' '{\"data\":{\"title\":\"CI\"}}' > /tmp/sample.json; "
     "/utils/jsonToYaml.py /tmp/sample.json data; grep -q 'title: CI' /tmp/sample.yaml; "
@@ -37,7 +41,7 @@ def main(app, arch, platform):
         args += ["--build-arg", f"BUILD_FROM={base}"]
     run(*args, app)
     run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image,
-        "-c", SMOKE_TEST)
+        "-c", S6_SMOKE_TEST if validate_app.s6_services(folder) else ENTRYPOINT_SMOKE_TEST)
     metrics.record(f"image_size.{arch}", image_size(image))
     if arch != "amd64":
         return
