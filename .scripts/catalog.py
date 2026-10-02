@@ -195,9 +195,6 @@ def render_header(entries, forks=0):
     status = [badgekit.workflow(CATALOG_REPOSITORY, "update.yml", "catalog sync",
                                 f"{link}/actions/workflows/update.yml"),
               badgekit.static(KIND, str(len(items)), "info")]
-    if KIND == "apps":
-        architectures = sorted({arch for item in items for arch in item["arch"]})
-        status.append(badgekit.static("architectures", " · ".join(architectures), "ok"))
     return badgekit.render([
         [badgekit.install_badge()] if KIND == "apps" else [],
         status,
@@ -223,7 +220,7 @@ def render_catalog(entries):
         for item in entry["items"]:
             changelog_folder = "" if KIND == "integrations" else f"{item['path']}/"
             changelog = f"{entry['url']}/blob/main/{changelog_folder}CHANGELOG.md"
-            sections.extend([f"**{item['name']}** · [Changelog]({changelog})", "",
+            sections.extend([f"**{item['name']}** · [Changelog]({changelog})<br>",
                              badgekit.render(item_rows(item, entry)), ""])
         sections.extend([f"[Source & documentation]({entry['url']}) · "
                          f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""])

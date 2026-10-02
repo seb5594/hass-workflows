@@ -136,7 +136,7 @@ def app_rows(data, repo, folder, with_install=True, forks=0):
          github("release-date-pre", repo, "released", f"{link}/releases"),
          workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")],
         community_row(repo, forks) + [endpoint(repo, "image-pulls", "image pulls")],
-        [static("arch", arch, "ok") for arch in data["arch"]],
+        [static("arch", " · ".join(data["arch"]), "ok")],
         mount_badges(data),
         capabilities,
         [endpoint(repo, "image-size", "image size"), endpoint(repo, "runtime-tests", "runtime tests"),
