@@ -84,6 +84,21 @@ class ProjectBadges(unittest.TestCase):
                 project.discover(root)
 
 
+class StyleOptions(unittest.TestCase):
+    def test_options_come_from_pyproject(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = Path.cwd()
+            try:
+                os.chdir(tmp)
+                self.assertIsNone(project.pycodestyle_options())
+                Path("pyproject.toml").write_text(
+                    '[tool.pycodestyle]\nmax-line-length = 100\nignore = ["E501", "W503"]\n')
+                self.assertEqual(project.pycodestyle_options(),
+                                 ["--max-line-length=100", "--ignore=E501,W503"])
+            finally:
+                os.chdir(previous)
+
+
 class PublishDecision(unittest.TestCase):
     base = {"PUBLISH": "true", "EVENT_NAME": "push", "REF": "refs/heads/main", "DEFAULT_BRANCH": "main"}
 
