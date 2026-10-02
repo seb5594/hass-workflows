@@ -168,7 +168,7 @@ def stage_of(version):
     return STAGES[match.group(1)] if match else "stable"
 
 
-def integration_rows(manifest, hacs, repo):
+def integration_rows(manifest, hacs, repo, with_install=True):
     link = f"https://github.com/{repo}"
     owner, name = repo.split("/")
     platform = [static("home assistant", f"≥ {hacs['homeassistant']}", "info")] \
@@ -203,7 +203,7 @@ def integration_rows(manifest, hacs, repo):
         platform,
         [endpoint(repo, "tests", "tests"), endpoint(repo, "zip-size", "HACS zip"),
          endpoint(repo, "last-build", "last build")],
-        [hacs_button] + support_badges(),
+        ([hacs_button] + support_badges()) if with_install else [],
     ]
 
 

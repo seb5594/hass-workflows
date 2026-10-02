@@ -11,7 +11,7 @@
 | Building block | Purpose |
 | --- | --- |
 | [Project action](.actions/project/action.yml) | Single CI and publishing entry point; detects the project type |
-| [Catalog action](.actions/catalog/action.yml) | Hourly sync of the [app catalog](docs/CATALOG.md) |
+| [Catalog action](.actions/catalog/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) |
 | [Scripts](.scripts/) | Validation, builds, releases, README badges, metrics and catalog logic |
 | [Renovate preset](default.json) | Shared dependency rules, see [Renovate preparation](docs/RENOVATE.md) |
 | [Caller templates](.templates/) | Workflows copied into projects, plus catalog text, Dependabot config and entrypoint |

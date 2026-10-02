@@ -39,4 +39,5 @@ jobs:
           persist-credentials: false
       - uses: ./.engine/.actions/catalog
         with:
+          kind: apps
           token: ${{ github.token }}

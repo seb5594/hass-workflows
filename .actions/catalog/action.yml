@@ -1,6 +1,9 @@
 name: Synchronize the Home Assistant app catalog
 description: Pin every matching app repository as a submodule and regenerate the catalog README
 inputs:
+  kind:
+    description: Catalog type, apps or integrations
+    default: apps
   token:
     description: Token with read access to the owner's repositories
     required: true
@@ -18,6 +21,7 @@ runs:
       env:
         ENGINE: ${{ github.action_path }}/../..
         GH_TOKEN: ${{ inputs.token }}
+        CATALOG_KIND: ${{ inputs.kind }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/catalog.py"
     - name: Commit and push only when something changed
