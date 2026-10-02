@@ -35,10 +35,11 @@ def _wrap(alt, url, link):
     return f"[{image}]({link})" if link else image
 
 
-def static(label, message, color="ok", link=None):
-    url = _url("static/v1", label=label, message=message,
-               color=COLORS.get(color, color), style=STYLE)
-    return _wrap(label, url, link)
+def static(label, message, color="ok", link=None, logo=None):
+    params = {"label": label, "message": message, "color": COLORS.get(color, color), "style": STYLE}
+    if logo:
+        params.update(logo=logo, logoColor="white")
+    return _wrap(label, _url("static/v1", **params), link)
 
 
 def github(metric, repo, label, link=None, suffix=""):
@@ -120,15 +121,25 @@ def option_count(options):
 
 
 def install_row():
-    """Catalog button plus the donation links shown at the end of a project README."""
-    button = _wrap("Add to Home Assistant",
-                   "https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg",
-                   "https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?"
-                   + urlencode({"repository_url": CATALOG_URL}, quote_via=quote))
-    return [button] + support_badges()
+    """Add-repository badge plus the donation links shown at the end of a project README."""
+    redirect = ("https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?"
+                + urlencode({"repository_url": CATALOG_URL}, quote_via=quote))
+    return [static("Home Assistant", "Add app repository", "18BCF2", redirect, "homeassistant")] \
+        + support_badges()
 
 
-def app_rows(data, repo, folder, with_install=True):
+def community_row(repo, forks=0):
+    """Stars, forks (only once somebody forked), issues and activity."""
+    link = f"https://github.com/{repo}"
+    row = [github("stars", repo, "stars", f"{link}/stargazers")]
+    if forks:
+        row.append(github("forks", repo, "forks", f"{link}/forks"))
+    row += [github("issues", repo, "issues", f"{link}/issues"),
+            github("last-commit", repo, "updated", f"{link}/commits/main")]
+    return row
+
+
+def app_rows(data, repo, folder, with_install=True, forks=0):
     link = f"https://github.com/{repo}"
     capabilities = [static("stage", data.get("stage", "stable"), "stable"),
                     static("startup", data.get("startup", "application"), "muted"),
@@ -149,11 +160,7 @@ def app_rows(data, repo, folder, with_install=True):
         [static("version", str(data["version"]), "info", f"{link}/releases"),
          github("release-date-pre", repo, "released", f"{link}/releases"),
          workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")],
-        [github("stars", repo, "stars", f"{link}/stargazers"),
-         github("forks", repo, "forks", f"{link}/forks"),
-         github("issues", repo, "issues", f"{link}/issues"),
-         github("last-commit", repo, "updated", f"{link}/commits/main"),
-         endpoint(repo, "image-pulls", "image pulls")],
+        community_row(repo, forks) + [endpoint(repo, "image-pulls", "image pulls")],
         [static("arch", arch, "ok") for arch in data["arch"]],
         mount_badges(data),
         capabilities,
@@ -168,7 +175,7 @@ def stage_of(version):
     return STAGES[match.group(1)] if match else "stable"
 
 
-def integration_rows(manifest, hacs, repo, with_install=True):
+def integration_rows(manifest, hacs, repo, with_install=True, forks=0):
     link = f"https://github.com/{repo}"
     owner, name = repo.split("/")
     platform = [static("home assistant", f"≥ {hacs['homeassistant']}", "info")] \
@@ -186,18 +193,15 @@ def integration_rows(manifest, hacs, repo, with_install=True):
     platform.append(static("requirements", str(len(manifest.get("requirements", []))), "info"))
     if manifest.get("quality_scale"):
         platform.append(static("quality scale", manifest["quality_scale"], "ok"))
-    hacs_button = _wrap("Add to HACS", "https://my.home-assistant.io/badges/hacs_repository.svg",
-                        "https://my.home-assistant.io/redirect/hacs_repository/?"
-                        + urlencode({"owner": owner, "repository": name, "category": "integration"},
-                                    quote_via=quote))
+    hacs_button = static("HACS", "Add integration", "41BDF5",
+                         "https://my.home-assistant.io/redirect/hacs_repository/?"
+                         + urlencode({"owner": owner, "repository": name, "category": "integration"},
+                                     quote_via=quote), "homeassistantcommunitystore")
     return [
         [static("version", str(manifest["version"]), "info", f"{link}/releases"),
          github("release-date-pre", repo, "released", f"{link}/releases"),
          workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")],
-        [github("stars", repo, "stars", f"{link}/stargazers"),
-         github("forks", repo, "forks", f"{link}/forks"),
-         github("issues", repo, "issues", f"{link}/issues"),
-         github("last-commit", repo, "updated", f"{link}/commits/main")],
+        community_row(repo, forks),
         [github("downloads", repo, "downloads", f"{link}/releases", "/total"),
          github("downloads", repo, "latest release", f"{link}/releases/latest", "/latest/total")],
         platform,

@@ -69,17 +69,10 @@ class CatalogTests(unittest.TestCase):
 
 class IntegrationCatalog(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
-        folder = self.root / "ninebot" / "custom_components/demo"
-        folder.mkdir(parents=True)
-        (folder / "manifest.json").write_text(
-            '{"domain": "demo", "name": "Demo", "version": "1.0.0b1", "iot_class": "local_polling"}')
-        (self.root / "ninebot/hacs.json").write_text('{"homeassistant": "2026.9.0"}')
         for name, value in (("KIND", "integrations"), ("NAME_PATTERN", catalog.re.compile(
-                catalog.NAME_PATTERNS["integrations"])), ("TEMPLATES", catalog.ENGINE / ".templates/catalog/integrations"),
-                            ("CATALOG_REPOSITORY", "seb5594/Home-Assistant-Integrations"), ("ROOT", self.root)):
+                catalog.NAME_PATTERNS["integrations"])),
+                            ("TEMPLATES", catalog.ENGINE / ".templates/catalog/integrations"),
+                            ("CATALOG_REPOSITORY", "seb5594/Home-Assistant-Integrations")):
             patcher = patch.object(catalog, name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -98,15 +91,31 @@ class IntegrationCatalog(unittest.TestCase):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
-    def test_catalog_renders_integration_rows(self):
-        items = catalog.integration_metadata(self.root / "ninebot")
-        entry = {"path": "ninebot", "url": "https://github.com/seb5594/hass-demo-integration",
-                 "repository": "seb5594/hass-demo-integration", "excerpt": "Demo", "commit": "b" * 40,
-                 "items": items}
-        readme = catalog.render_readme([entry])
+    def describe(self, forks):
+        repo = {"name": "hass-demo-integration", "default_branch": "main", "forks_count": forks}
+        manifest = '{"domain": "demo", "name": "Demo", "version": "1.0.0b1", "iot_class": "local_polling"}'
+        with patch.object(catalog.remote, "head_commit", return_value="b" * 40), \
+                patch.object(catalog.remote, "project_files", return_value=[
+                    "custom_components/demo/manifest.json", "hacs.json", "README.md"]), \
+                patch.object(catalog.remote, "raw", side_effect=lambda r, s, path: {
+                    "custom_components/demo/manifest.json": manifest, "hacs.json": '{"homeassistant": "2026.9.0"}',
+                    "README.md": "# Demo\n\nThis is a custom component for demos.\n"}[path]):
+            return catalog.describe_repository(repo, 500)
+
+    def test_description_comes_from_the_readme_and_nothing_is_cloned(self):
+        entry = self.describe(0)
+        self.assertEqual(entry["excerpt"], "This is a custom component for demos.")
+        self.assertEqual(entry["items"][0]["description"], entry["excerpt"])
+        self.assertEqual(entry["commit"], "b" * 40)
+
+    def test_forks_badge_appears_only_after_the_first_fork(self):
+        without = catalog.render_readme([self.describe(0)])
+        with_fork = catalog.render_readme([self.describe(2)])
+        self.assertNotIn("label=forks", without)
+        self.assertIn("label=forks", with_fork)
         for item in ("message=1.0.0b1", "message=beta", "label=downloads", "label=integrations"):
-            self.assertIn(item, readme)
-        self.assertNotIn("hacs_repository.svg", readme)
+            self.assertIn(item, without)
+        self.assertNotIn("hacs_repository", without)
 
 
 if __name__ == "__main__":

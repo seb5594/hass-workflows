@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Discover seb5594's public apps or integrations, pin them as submodules and render the catalog.
+"""Discover seb5594's public apps or integrations and render the catalog.
 
 Runs inside a checkout of the catalog repository (the working directory, or CATALOG_ROOT).
 CATALOG_KIND selects `apps` (default) or `integrations`; static text and metadata come from
-.templates/catalog/<kind> of this engine. Private, archived and disabled repositories are never
-listed or pinned, so a public catalog does not reveal that they exist.
+.templates/catalog/<kind> of this engine. Apps are pinned as Git submodules because the Supervisor
+installs from the repository tree; integrations are only described, so nothing is cloned. Both
+record their pins in .github/catalog.json for the hub. Private, archived and disabled repositories
+are never listed or pinned, so a public catalog does not reveal that they exist.
 """
-import html
 import json
 import os
 import re
@@ -17,7 +18,9 @@ from pathlib import Path
 import yaml
 
 import badgekit
+import excerpt
 import github_api
+import remote
 
 ENGINE = Path(__file__).resolve().parents[1]
 KIND = os.environ.get("CATALOG_KIND", "apps")
@@ -73,51 +76,7 @@ def readme_excerpt(folder, fallback, limit):
     """First prose paragraph of the README, without headings, badges or code."""
     readme = next((p for p in sorted(folder.iterdir())
                    if p.is_file() and p.name.casefold() == "readme.md"), None)
-    paragraph, in_code, in_comment = [], False, False
-    for line in (readme.read_text(encoding="utf-8").splitlines() if readme else []):
-        line = line.strip()
-        in_comment = in_comment or "<!--" in line
-        if in_comment:
-            in_comment = "-->" not in line
-            continue
-        if line.startswith(("```", "~~~")):
-            in_code = not in_code
-            if paragraph:
-                break
-            continue
-        if in_code:
-            continue
-        if not line or line.startswith(("#", "[", "!", "<", "|", "---", "* ", "- ", ">")):
-            if paragraph:
-                break
-            continue
-        paragraph.append(line)
-    text = " ".join(paragraph) or fallback or "See the source repository for details."
-    # Plain text keeps relative links and unresolved badge references out of the catalog.
-    text = re.sub(r"!?\[([^\]]+)\]\([^)]*\)", r"\1", text)
-    text = re.sub(r"<[^>]*>", "", text)
-    text = re.sub(r"\s+", " ", html.unescape(text)).strip()
-    if len(text) > limit:
-        text = text[:limit - 1].rsplit(" ", 1)[0] + "…"
-    return html.escape(text, quote=False)
-
-
-def integration_metadata(folder):
-    """Every integration in the repository: manifest plus the HACS settings next to it."""
-    hacs_file = folder / "hacs.json"
-    hacs = json.loads(hacs_file.read_text(encoding="utf-8")) if hacs_file.is_file() else {}
-    items = []
-    for manifest_file in sorted(folder.glob("custom_components/*/manifest.json")):
-        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
-        for key in ("domain", "name", "version"):
-            if not isinstance(manifest.get(key), str) or not manifest[key].strip():
-                raise ValueError(f"Missing or invalid {key!r} in {manifest_file}")
-        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs,
-                      "description": manifest.get("description", manifest["name"]),
-                      "path": manifest_file.parent.relative_to(folder).as_posix()})
-    if not items:
-        raise ValueError(f"No Home Assistant integration found in {folder.name}.")
-    return items
+    return excerpt.first_paragraph(readme.read_text(encoding="utf-8") if readme else "", limit, fallback)
 
 
 def app_metadata(folder):
@@ -206,18 +165,31 @@ def sync_repository(repo, modules, limit):
     sha = git("rev-parse", "FETCH_HEAD", cwd=folder)
     git("checkout", "--detach", sha, cwd=folder)
     git("submodule", "update", "--init", "--recursive", cwd=folder)
-    items = collect(folder)
+    items = app_metadata(folder)
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
-            "url": f"https://github.com/{OWNER}/{name}",
+            "url": f"https://github.com/{OWNER}/{name}", "forks": repo.get("forks_count", 0),
             "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
             "items": items}
 
 
-def collect(folder):
-    return integration_metadata(folder) if KIND == "integrations" else app_metadata(folder)
+def describe_repository(repo, limit):
+    """Integrations are read remotely at the current head commit; nothing is cloned or pinned."""
+    name, repository = repo["name"], f"{OWNER}/{repo['name']}"
+    sha = remote.head_commit(repository, repo["default_branch"])
+    files = remote.project_files(repository, sha)
+    items = remote.load_integrations(repository, sha, files)
+    if not items:
+        raise ValueError(f"No Home Assistant integration found in {name}.")
+    summary = excerpt.first_paragraph(remote.readme(repository, sha, files), limit,
+                                      repo.get("description") or "")
+    for item in items:
+        item.setdefault("description", summary)
+    return {"repository": repository, "path": project_path(name), "branch": repo["default_branch"],
+            "commit": sha, "url": f"https://github.com/{repository}", "forks": repo.get("forks_count", 0),
+            "excerpt": summary, "items": items}
 
 
-def render_header(entries):
+def render_header(entries, forks=0):
     items = [item for entry in entries for item in entry["items"]]
     link = f"https://github.com/{CATALOG_REPOSITORY}"
     status = [badgekit.workflow(CATALOG_REPOSITORY, "update.yml", "catalog sync",
@@ -229,18 +201,19 @@ def render_header(entries):
     return badgekit.render([
         badgekit.install_row()[:1] if KIND == "apps" else [],
         status,
-        [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers"),
-         badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks"),
-         badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main")],
+        [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers")]
+        + ([badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks")] if forks else [])
+        + [badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main")],
         badgekit.install_row()[1:] if KIND == "apps" else badgekit.support_badges(),
     ])
 
 
 def item_rows(item, entry):
     if KIND == "integrations":
-        return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False)
+        return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False,
+                                         forks=entry.get("forks", 0))
     return badgekit.app_rows(item, entry["repository"], ROOT / entry["path"] / item["path"],
-                             with_install=False)
+                             with_install=False, forks=entry.get("forks", 0))
 
 
 def render_catalog(entries):
@@ -257,12 +230,12 @@ def render_catalog(entries):
     return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
-def render_readme(entries):
+def render_readme(entries, forks=0):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
     for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
-    return (template.replace("{{BADGES}}", render_header(entries))
+    return (template.replace("{{BADGES}}", render_header(entries, forks))
             .replace("{{APP_CATALOG}}", render_catalog(entries)))
 
 
@@ -275,6 +248,14 @@ def repository_yaml():
     return yaml.safe_dump(metadata, sort_keys=False, allow_unicode=True)
 
 
+def write_listing(entries):
+    """Pins for the hub, kept out of the repository root."""
+    listing = [{"repository": entry["repository"], "commit": entry["commit"]} for entry in entries]
+    target = ROOT / ".github/catalog.json"
+    target.parent.mkdir(exist_ok=True)
+    target.write_text(json.dumps(listing, indent=2) + "\n", encoding="utf-8")
+
+
 def main():
     metadata = repository_yaml() if KIND == "apps" else None
     repositories = discover_repositories(EXCLUDED_REPOSITORIES)
@@ -283,24 +264,31 @@ def main():
         raise ValueError("Refusing to remove the whole catalog; check the API and exclusions.")
     paths = [project_path(repo["name"]).casefold() for repo in repositories]
     if len(paths) != len(set(paths)):
-        raise ValueError("Multiple source repositories resolve to the same app folder.")
-    entries = [sync_repository(repo, modules, EXCERPT_MAX_CHARS) for repo in repositories]
+        raise ValueError("Multiple source repositories resolve to the same folder.")
+    if KIND == "apps":
+        entries = [sync_repository(repo, modules, EXCERPT_MAX_CHARS) for repo in repositories]
+    else:
+        entries = [describe_repository(repo, EXCERPT_MAX_CHARS) for repo in repositories]
     slugs = [item["slug"] for entry in entries for item in entry["items"]]
     if len(slugs) != len(set(slugs)):
         raise ValueError("Duplicate slugs would collide in Home Assistant.")
-    wanted = {entry["path"] for entry in entries}
-    # Remove managed submodules only after every current source validated.
+    # Submodules left over from earlier runs go only after every current source validated.
+    wanted = {entry["path"] for entry in entries} if KIND == "apps" else set()
     for path in managed_submodules(current_submodules()):
         if path not in wanted:
             git("rm", "--force", "--", path)
-    readme = render_readme(entries)
-    (ROOT / "README.md").write_text(readme, encoding="utf-8")
+    gitmodules = ROOT / ".gitmodules"
+    if gitmodules.exists() and not gitmodules.read_text().strip():
+        gitmodules.unlink()
+    forks = fetch_json(f"https://api.github.com/repos/{CATALOG_REPOSITORY}").get("forks_count", 0)
+    (ROOT / "README.md").write_text(render_readme(entries, forks), encoding="utf-8")
     if metadata:
         (ROOT / "repository.yaml").write_text(metadata, encoding="utf-8")
+    write_listing(entries)
     print(f"Synchronized {len(entries)} repositories and {len(slugs)} {KIND}.")
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary, "a", encoding="utf-8") as stream:
-            stream.write(f"## App catalog\n\n{render_catalog(entries)}\n")
+            stream.write(f"## Catalog\n\n{render_catalog(entries)}\n")
 
 
 if __name__ == "__main__":

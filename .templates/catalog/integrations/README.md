@@ -9,8 +9,8 @@ results and release downloads.
 ## Install
 
 Add the repository of the integration you want as a **custom repository** in HACS
-(**HACS → ⋮ → Custom repositories**, category **Integration**), or use the *Add to HACS*
-button in that integration's README. Download it, restart Home Assistant and add the integration
+(**HACS → ⋮ → Custom repositories**, category **Integration**), or use the *HACS* badge
+in that integration's README. Download it, restart Home Assistant and add the integration
 under **Settings → Devices & services**.
 
 ## Available integrations

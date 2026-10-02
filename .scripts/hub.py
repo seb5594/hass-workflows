@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Render the Home Assistant Hub README from the app and integration catalogs.
 
-The hub reads each catalog's `.gitmodules` and pinned commits, then the metadata of every listed
-project at exactly that commit, so it always agrees with what the catalogs show. Run inside a
-checkout of the hub repository (the working directory, or HUB_ROOT).
+The hub reads which projects each catalog lists and the commit it pins (`.github/catalog.json`),
+then the metadata of every project at exactly that commit, so it always agrees with the catalogs.
+Run inside a checkout of the hub repository (the working directory, or HUB_ROOT).
 """
 import json
 import os
@@ -14,23 +14,14 @@ from pathlib import Path
 import yaml
 
 import badgekit
-import github_api
+import excerpt
+import remote
 
 ENGINE = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get("HUB_ROOT", ".")).resolve()
 OWNER = "seb5594"
 HUB_REPOSITORY = f"{OWNER}/Home-Assistant-Hub"
 CATALOGS = {"apps": f"{OWNER}/Home-Assistant-Apps", "integrations": f"{OWNER}/Home-Assistant-Integrations"}
-RAW = "https://raw.githubusercontent.com"
-API = "https://api.github.com"
-
-
-def fetch_json(url):
-    return github_api.fetch_json(url, f"{OWNER}-hub")
-
-
-def fetch_text(url):
-    return github_api.fetch_text(url, f"{OWNER}-hub")
 
 
 def parse_modules(text):
@@ -53,51 +44,32 @@ def parse_modules(text):
 
 
 def listed_projects(catalog):
-    """(source repository, pinned commit) for every submodule of a catalog."""
+    """(source repository, pinned commit) for everything a catalog lists."""
     try:
-        modules = fetch_text(f"{RAW}/{catalog}/main/.gitmodules")
+        listing = json.loads(remote.fetch_text(f"{remote.RAW}/{catalog}/main/.github/catalog.json"))
+        return [(entry["repository"], entry["commit"]) for entry in listing]
+    except RuntimeError:
+        pass
+    # Catalogs created before catalog.json existed only record their pins as submodules.
+    try:
+        modules = remote.fetch_text(f"{remote.RAW}/{catalog}/main/.gitmodules")
     except RuntimeError:
         return []
-    projects = []
-    for path, repository in parse_modules(modules):
-        pinned = fetch_json(f"{API}/repos/{catalog}/contents/{path}")
-        projects.append((repository, pinned["sha"]))
-    return projects
-
-
-def project_files(repository, sha):
-    tree = fetch_json(f"{API}/repos/{repository}/git/trees/{sha}?recursive=1")
-    return [entry["path"] for entry in tree["tree"] if entry["type"] == "blob"]
-
-
-def raw(repository, sha, path):
-    return fetch_text(f"{RAW}/{repository}/{sha}/{path}")
-
-
-def load_apps(repository, files, sha):
-    apps = []
-    for path in sorted(files):
-        parts = path.split("/")
-        if parts[-1] not in {"config.yaml", "config.yml"} or any(p.startswith(".") for p in parts):
-            continue
-        data = yaml.safe_load(raw(repository, sha, path))
-        if isinstance(data, dict) and "slug" in data:
-            apps.append(data)
-    return apps
-
-
-def load_integrations(repository, files, sha):
-    hacs = json.loads(raw(repository, sha, "hacs.json")) if "hacs.json" in files else {}
-    manifests = [p for p in sorted(files) if re.fullmatch(r"custom_components/[^/]+/manifest\.json", p)]
-    return [{**json.loads(raw(repository, sha, path)), "hacs": hacs} for path in manifests]
+    return [(repository, remote.fetch_json(f"{remote.API}/repos/{catalog}/contents/{path}")["sha"])
+            for path, repository in parse_modules(modules)]
 
 
 def collect(kind):
     entries = []
-    loader = load_apps if kind == "apps" else load_integrations
     for repository, sha in listed_projects(CATALOGS[kind]):
-        files = project_files(repository, sha)
-        items = loader(repository, files, sha)
+        files = remote.project_files(repository, sha)
+        if kind == "apps":
+            items = remote.load_apps(repository, sha, files)
+        else:
+            items = remote.load_integrations(repository, sha, files)
+            summary = excerpt.first_paragraph(remote.readme(repository, sha, files), 160)
+            for item in items:
+                item.setdefault("description", summary)
         if items:
             entries.append({"repository": repository, "sha": sha, "items": items})
     return entries
