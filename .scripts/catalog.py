@@ -233,13 +233,25 @@ def render_catalog(entries):
     return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
+LICENSE_NOTE = """## License
+
+Every project listed here is licensed on its own. The license badge and the `LICENSE` file in each
+repository state which terms apply."""
+
+
+def license_note(entries):
+    """Appears only once at least one listed project has a license."""
+    return LICENSE_NOTE if any((entry.get("live") or {}).get("license") for entry in entries) else ""
+
+
 def render_readme(entries, own=None):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
-    for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}"):
+    for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}", "{{LICENSE_NOTE}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
     return (template.replace("{{BADGES}}", render_header(entries, own))
-            .replace("{{APP_CATALOG}}", render_catalog(entries)))
+            .replace("{{APP_CATALOG}}", render_catalog(entries))
+            .replace("{{LICENSE_NOTE}}", license_note(entries)).rstrip("\n") + "\n")
 
 
 def repository_yaml():

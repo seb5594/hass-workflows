@@ -34,6 +34,7 @@ def fetch(repository, workflow="ci.yml"):
     runs = _optional(f"{API}/repos/{repository}/actions/workflows/{workflow}/runs?per_page=1", {})
     published = _optional(f"{API}/repos/{repository}/contents/?ref=badges", [])
     return {
+        "license": (info.get("license") or {}).get("spdx_id") or "",
         "stars": info.get("stargazers_count", 0),
         "forks": info.get("forks_count", 0),
         "issues": open_issues,

@@ -121,7 +121,7 @@ def hacs_badge(repo):
 # ---------------------------------------------------------------------------------------------
 APP_LAYOUT = [
     ["version", "released", "build"],
-    ["stars", "forks", "issues", "updated", "image_pulls"],
+    ["stars", "forks", "issues", "updated", "license", "image_pulls"],
     ["arch"],
     ["mounts"],
     ["stage", "ingress", "privileged", "apparmor", "options"],
@@ -133,7 +133,7 @@ INTEGRATION_LAYOUT = [
     ["install", "setup"],
     ["home_assistant", "version", "released", "checks", "quality_scale"],
     ["downloads", "latest_downloads"],
-    ["stars", "forks", "issues", "updated"],
+    ["stars", "forks", "issues", "updated", "license"],
     ["tests", "zip_size", "last_build"],
     ["support"],
 ]
@@ -160,6 +160,12 @@ def published(ctx, metric):
     return True if live is None else metric in live["metrics"]
 
 
+def licensed(ctx):
+    """A license badge needs a confirmed license, so it stays hidden when facts are unknown."""
+    live = ctx.get("live")
+    return bool(live and live.get("license"))
+
+
 def when(condition, badges):
     return badges if condition else []
 
@@ -176,6 +182,7 @@ def _common_builders():
         "issues": lambda c: when(has(c, "issues"),
                                  [github("issues", c["repo"], "issues", f"{_links(c)}/issues")]),
         "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
+        "license": lambda c: when(licensed(c), [github("license", c["repo"], "license", _links(c))]),
         "last_build": lambda c: when(published(c, "last-build"), [endpoint(c["repo"], "last-build", "last build")]),
         "support": lambda c: support_badges(),
     }
