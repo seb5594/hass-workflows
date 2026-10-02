@@ -96,7 +96,7 @@ class IntegrationCatalog(unittest.TestCase):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
-    FACTS = {"stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
+    FACTS = {"license": "", "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
              "builds": 0, "metrics": set()}
 
     def describe(self, **facts):
@@ -116,6 +116,16 @@ class IntegrationCatalog(unittest.TestCase):
         self.assertEqual(entry["excerpt"], "This is a custom component for demos.")
         self.assertEqual(entry["items"][0]["description"], entry["excerpt"])
         self.assertEqual(entry["commit"], "b" * 40)
+
+    def test_support_section_and_license_note(self):
+        unlicensed = catalog.render_readme([self.describe()], own=dict(self.FACTS))
+        licensed = catalog.render_readme([self.describe(license="Apache-2.0")], own=dict(self.FACTS))
+        self.assertTrue(unlicensed.rstrip().endswith("cannot be handled."))
+        self.assertIn("## Support", unlicensed)
+        self.assertNotIn("## License", unlicensed)
+        self.assertTrue(licensed.rstrip().endswith("terms apply."))
+        self.assertIn("label=license", licensed)
+        self.assertNotIn("label=license", unlicensed)
 
     def test_entries_without_values_hide_their_badges(self):
         quiet = catalog.render_readme([self.describe()], own=dict(self.FACTS))

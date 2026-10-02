@@ -17,3 +17,11 @@ under **Settings → Devices & services**.
 
 <!-- Generated from the source repositories by the hass-workflows catalog action. -->
 {{APP_CATALOG}}
+
+## Support
+
+Questions or problems? Open an issue on GitHub, but in the repository of the integration
+concerned: every integration lives in its own repository, linked in its entry above. Issues opened
+here cannot be handled.
+
+{{LICENSE_NOTE}}

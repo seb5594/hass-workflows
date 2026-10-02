@@ -31,6 +31,10 @@ Each project needs at least one app configuration, at its root or in a nested fo
 
 Unchanged results produce no commit. Apps created as submodules keep their pinned commit visible in the README.
 
+## Support and license sections
+
+Both catalog READMEs end with a Support section that sends questions to the repository of the project concerned. A License section follows automatically as soon as one listed project has a license on GitHub; each project also gets a license badge then.
+
 ## Changing the output
 
 - Static text and the repository metadata: `.templates/catalog/apps` and `.templates/catalog/integrations`.
