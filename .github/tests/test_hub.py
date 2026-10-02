@@ -62,6 +62,10 @@ class HubTests(unittest.TestCase):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
 
+    def test_missing_description_leaves_no_empty_line_break(self):
+        readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"))
+        self.assertIn("**[Demo Integration](https://github.com/seb5594/hass-demo-integration)** |", readme)
+
     def test_missing_catalog_file_means_empty_catalog(self):
         def failing(url):
             raise RuntimeError("HTTP 404")
