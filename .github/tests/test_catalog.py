@@ -57,7 +57,7 @@ class CatalogTests(unittest.TestCase):
                  "repository": f"seb5594/{REPOSITORY}", "excerpt": "USB backups", "commit": "a" * 40,
                  "apps": catalog.app_metadata(self.source)}
         readme = catalog.render_readme([entry])
-        for item in ("message=1.74.1", "label=config", "label=local%20disks", "Pinned commit",
+        for item in ("message=1.74.1", "label=read-only", "label=local%20disks", "Pinned commit",
                      "label=apps", "alpine%3A3.24.2"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)

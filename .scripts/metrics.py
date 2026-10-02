@@ -57,10 +57,11 @@ def package_pulls(owner, package):
 def badges(metrics, slug=None, owner=None):
     """Map badge file names to (label, message, color)."""
     result = {"last-build": ("last build", datetime.now(timezone.utc).strftime("%Y-%m-%d"), "info")}
-    for key, value in metrics.items():
-        if key.startswith("image_size."):
-            arch = key.split(".", 1)[1]
-            result[f"image-size-{arch}"] = (f"{arch} image", size(value), "ok")
+    sizes = {key.split(".", 1)[1]: value for key, value in metrics.items() if key.startswith("image_size.")}
+    if sizes:
+        # Compact one-line summary, e.g. "amd64 16.8 · aarch64 19.9 MiB".
+        parts = [f"{arch} {value / 1024 / 1024:.1f}" for arch, value in sizes.items()]
+        result["image-size"] = ("image size", " · ".join(parts) + " MiB", "ok")
     if "runtime_tests" in metrics:
         result["runtime-tests"] = ("runtime tests", f"{metrics['runtime_tests']} passed", "stable")
     if "tests" in metrics:
