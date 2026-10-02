@@ -8,9 +8,9 @@ import urllib.request
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
-def _request(url, accept, user_agent):
+def _request(url, accept, user_agent, token=None):
     headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28", "User-Agent": user_agent}
-    if token := os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
+    if token := token or os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
         headers["Authorization"] = f"Bearer {token}"
     for attempt in range(4):
         try:
@@ -25,8 +25,8 @@ def _request(url, accept, user_agent):
         time.sleep(2 ** attempt)
 
 
-def fetch_json(url, user_agent="seb5594-hass-workflows"):
-    return json.loads(_request(url, "application/vnd.github+json", user_agent))
+def fetch_json(url, user_agent="seb5594-hass-workflows", token=None):
+    return json.loads(_request(url, "application/vnd.github+json", user_agent, token))
 
 
 def fetch_text(url, user_agent="seb5594-hass-workflows"):

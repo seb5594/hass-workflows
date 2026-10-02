@@ -295,7 +295,7 @@ def main():
     gitmodules = ROOT / ".gitmodules"
     if gitmodules.exists() and not gitmodules.read_text().strip():
         gitmodules.unlink()
-    own = live.fetch(CATALOG_REPOSITORY, "update.yml")
+    own = live.fetch_own(CATALOG_REPOSITORY, "update.yml")
     (ROOT / "README.md").write_text(render_readme(entries, own), encoding="utf-8")
     if metadata:
         (ROOT / "repository.yaml").write_text(metadata, encoding="utf-8")
