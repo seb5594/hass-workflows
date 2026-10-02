@@ -5,6 +5,7 @@ from pathlib import Path
 
 from support import ENGINE  # noqa: F401
 
+import legacy
 import validate_app
 
 GOOD = """ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24-2026.08.0
@@ -29,6 +30,66 @@ class StaticVersions(unittest.TestCase):
         for base in ("ghcr.io/home-assistant/base", "alpine:latest"):
             with self.assertRaises(AssertionError):
                 validate_app.check_static_versions(GOOD.replace("ghcr.io/home-assistant/base:3.24-2026.08.0", base))
+
+
+LEGACY = """ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24-2026.08.0
+# renovate: datasource=repology depName=alpine_3_24/git
+ARG GIT_VERSION=2.54.0-r0
+# renovate: datasource=repology depName=alpine_3_22/git
+ARG GIT_VERSION_LEGACY=2.49.1-r0
+# renovate: datasource=repology depName=alpine_3_24/make
+ARG MAKE_VERSION=4.4.1-r4
+# renovate: datasource=repology depName=alpine_3_22/make
+ARG MAKE_VERSION_LEGACY=4.4.1-r3
+
+FROM ${BUILD_FROM} AS build
+ARG GIT_VERSION
+RUN apk add --no-cache git=${GIT_VERSION} && echo built
+FROM ${BUILD_FROM}
+ARG GIT_VERSION
+ARG MAKE_VERSION
+RUN apk add --no-cache git=${GIT_VERSION} \\
+    make=${MAKE_VERSION}
+"""
+
+
+class VersionArguments(unittest.TestCase):
+    ARCHES = ["amd64", "aarch64", "armv7"]
+
+    def test_pins_through_arguments_pass_with_and_without_legacy_architectures(self):
+        validate_app.check_static_versions(LEGACY, self.ARCHES)
+        validate_app.check_static_versions(LEGACY, ["amd64"])
+        self.assertEqual(validate_app.version_variables(LEGACY), ["GIT_VERSION", "GIT_VERSION", "MAKE_VERSION"])
+
+    def test_a_version_argument_needs_a_default(self):
+        with self.assertRaisesRegex(AssertionError, "default: MAKE_VERSION"):
+            validate_app.check_static_versions(LEGACY.replace("ARG MAKE_VERSION=4.4.1-r4\n", ""), ["amd64"])
+
+    def test_legacy_architectures_need_a_legacy_pin_for_every_package(self):
+        with self.assertRaisesRegex(AssertionError, "MAKE_VERSION_LEGACY"):
+            validate_app.check_static_versions(
+                LEGACY.replace("ARG MAKE_VERSION_LEGACY=4.4.1-r3\n", ""), self.ARCHES)
+
+    def test_legacy_architectures_cannot_use_literal_pins(self):
+        with self.assertRaisesRegex(AssertionError, "git=2.54.0-r0"):
+            validate_app.check_static_versions(GOOD, self.ARCHES)
+        validate_app.check_static_versions(GOOD, ["amd64", "aarch64"])
+
+
+class LegacyBuilds(unittest.TestCase):
+    def test_current_architectures_build_as_declared(self):
+        for arch in ("amd64", "aarch64"):
+            self.assertEqual(legacy.build_args(arch, LEGACY), [])
+
+    def test_legacy_architectures_swap_the_base_and_hand_over_their_pins(self):
+        args = legacy.build_args("i386", LEGACY)
+        options = dict(pair.split("=", 1) for pair in args[1::2])
+        self.assertEqual(args[::2], ["--build-arg"] * 3)
+        self.assertEqual(options, {"BUILD_FROM": "ghcr.io/home-assistant/i386-base:3.22-2025.11.1",
+                                   "GIT_VERSION": "2.49.1-r0", "MAKE_VERSION": "4.4.1-r3"})
+
+    def test_only_arguments_with_a_default_are_found(self):
+        self.assertEqual(legacy.defaults("ARG A=1\nARG B\n  ARG C=x-y\nRUN echo ARG D=4\n"), {"A": "1", "C": "x-y"})
 
 
 class StartupStyle(unittest.TestCase):

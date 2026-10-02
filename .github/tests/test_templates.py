@@ -215,10 +215,24 @@ class PublishDecision(unittest.TestCase):
 class CallerTemplates(unittest.TestCase):
     SHA = "a" * 40
 
+    def test_real_home_assistant_tests_require_the_compatibility_caller(self):
+        previous = Path.cwd()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.addCleanup(os.chdir, previous)
+            os.chdir(tmp)
+            callers.sync("integration", self.SHA)
+            project.check_callers("integration")
+            Path(".github/ha_tests").mkdir()
+            with self.assertRaises(FileNotFoundError):
+                project.check_callers("integration")
+            callers.sync("compat", self.SHA)
+            project.check_callers("integration")
+
     def test_every_caller_pins_the_engine_and_passes_secrets(self):
         for kind in callers.CALLERS:
             text = callers.render(kind, self.SHA)
-            self.assertEqual(text.count(f"ref: {self.SHA}"), 1, kind)
+            self.assertEqual(text.count(f"ref: {self.SHA}"), text.count("path: .engine"), kind)
+            self.assertGreaterEqual(text.count(f"ref: {self.SHA}"), 1, kind)
             self.assertIn("secrets.ORCHESTRATION_PAT", text, kind)
             self.assertNotIn("__", text.replace("__pycache__", ""), kind)
 
@@ -229,6 +243,13 @@ class CallerTemplates(unittest.TestCase):
         self.assertIn("timeout-minutes: 90", app)
         self.assertIn("timeout-minutes: 30", integration)
         self.assertIn("name: Validate and release integration", integration)
+
+    def test_compat_caller_tests_every_release_of_the_matrix_in_its_own_job(self):
+        text = callers.render("compat", self.SHA)
+        self.assertEqual(text.count(f"ref: {self.SHA}"), 2)
+        self.assertIn("ha_matrix.py list", text)
+        self.assertIn("fromJSON(needs.releases.outputs.releases)", text)
+        self.assertIn('ha_matrix.py run "${{ matrix.release }}"', text)
 
     def test_catalog_callers_name_their_own_event_and_kind(self):
         apps, integrations = (callers.render(kind, self.SHA) for kind in ("catalog-apps", "catalog-integrations"))

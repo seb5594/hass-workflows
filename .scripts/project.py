@@ -129,9 +129,16 @@ def run_integration_tests(directory):
         run("node", "--test", *frontend)
 
 
+def check_callers(kind):
+    """Integrations with tests against real Home Assistant also keep the compatibility caller."""
+    callers.check(kind)
+    if kind == "integration" and Path(".github/ha_tests").is_dir():
+        callers.check("compat")
+
+
 def validate(kind, folder):
     readme.verify()
-    callers.check(kind)
+    check_callers(kind)
     run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
     if Path(".github/renovate.json").exists():
         run("cmp", str(ENGINE / ".templates/renovate/renovate.json"), ".github/renovate.json")

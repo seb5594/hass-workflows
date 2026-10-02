@@ -28,6 +28,8 @@ CALLERS = {
                              {"KIND": "integrations", "TITLE": "integration",
                               "EVENT": config.EVENTS["integrations"]}),
     "hub": ("hub", ".github/workflows/update.yml", {"EVENT": config.EVENTS["hub"]}),
+    # Companion of "integration" for projects with tests in .github/ha_tests.
+    "compat": ("compat", ".github/workflows/compat.yml", {}),
 }
 
 
