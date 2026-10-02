@@ -66,7 +66,7 @@ class CatalogTests(unittest.TestCase):
                      "label=apps"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
-        self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1])
+        self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1].split("## Support")[0])
 
     def test_repository_metadata_names_the_maintainer_handle(self):
         self.assertIn("maintainer: seb5594", catalog.repository_yaml())
@@ -120,7 +120,8 @@ class IntegrationCatalog(unittest.TestCase):
     def test_support_section_and_license_note(self):
         unlicensed = catalog.render_readme([self.describe()], own=dict(self.FACTS))
         licensed = catalog.render_readme([self.describe(license="Apache-2.0")], own=dict(self.FACTS))
-        self.assertTrue(unlicensed.rstrip().endswith("cannot be handled."))
+        self.assertIn("## Say thanks", unlicensed)
+        self.assertIn("style=for-the-badge", unlicensed)
         self.assertIn("## Support", unlicensed)
         self.assertNotIn("## License", unlicensed)
         self.assertTrue(licensed.rstrip().endswith("terms apply."))

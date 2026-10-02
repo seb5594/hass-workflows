@@ -57,9 +57,24 @@ def endpoint(repo, name, label):
 
 
 def support_badges():
-    return [_wrap(label, _url("static/v1", label=left, message=right, color=color,
-                              logo=logo, logoColor=logo_color, style=STYLE), link)
+    """Donation badges in the larger `for-the-badge` style so they stand out from the rest."""
+    return [_wrap(label, _url("static/v1", label=left, message=right, color=color, logo=logo,
+                              logoColor=logo_color, style="for-the-badge"), link)
             for label, left, right, color, logo, logo_color, link in SUPPORT]
+
+
+SUPPORT_HEADING = "## Say thanks"
+SUPPORT_TEXT = (
+    "All my projects are built in my spare time, just for the fun of it. Still, they take a lot of time "
+    "and care, and many of the smart home gadgets I buy end up here because I want to make them "
+    "cloud-free and smart-home ready. Every bit of support means a lot to me.\n\n"
+    "If my work helped you or turned out to be useful, show your appreciation with a hot drink for my "
+    "next sleepless night.")
+
+
+def support_section():
+    """The shared thank-you block: heading, text and the donation badges."""
+    return f"{SUPPORT_HEADING}\n\n{SUPPORT_TEXT}\n\n" + " ".join(support_badges())
 
 
 def render(rows):
@@ -127,7 +142,6 @@ APP_LAYOUT = [
     ["stage", "ingress", "privileged", "apparmor", "options"],
     ["image_size", "runtime_tests", "last_build"],
     ["install"],
-    ["support"],
 ]
 INTEGRATION_LAYOUT = [
     ["install", "setup"],
@@ -135,10 +149,9 @@ INTEGRATION_LAYOUT = [
     ["downloads", "latest_downloads"],
     ["stars", "forks", "issues", "updated", "license"],
     ["tests", "zip_size", "last_build"],
-    ["support"],
 ]
 # Rows that only make sense on a project's own README, not in a catalog listing.
-README_ONLY = {"install", "support"}
+README_ONLY = {"install"}
 
 
 def _links(ctx):
@@ -184,7 +197,6 @@ def _common_builders():
         "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
         "license": lambda c: when(licensed(c), [github("license", c["repo"], "license", _links(c))]),
         "last_build": lambda c: when(published(c, "last-build"), [endpoint(c["repo"], "last-build", "last build")]),
-        "support": lambda c: support_badges(),
     }
 
 

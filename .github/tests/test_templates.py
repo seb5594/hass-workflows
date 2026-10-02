@@ -35,15 +35,14 @@ class ProjectBadges(unittest.TestCase):
             self.assertEqual((kind, folder, metadata["version"]), ("app", app, "2.3.4"))
             block = readme.render(root)
             for item in ("message=2.3.4", "message=amd64%20%C2%B7%20armv7", "label=read-only", "message=config",
-                         "label=read-write", "message=share", "message=enabled",
-                         "buymeacoffee.com/seb5594"):
+                         "label=read-write", "message=share", "message=enabled"):
                 self.assertIn(item, block)
             self.assertNotIn("i386", block)
             for removed in ("label=startup", "label=boot", "label=supervisor", "label=base"):
                 self.assertNotIn(removed, block)
             self.assertIn("message=2", block)  # leaf option count, not group count
 
-    def test_rows_are_tight_and_donations_stand_alone_at_the_end(self):
+    def test_rows_are_tight_and_install_is_the_last_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_app(root)
@@ -51,9 +50,23 @@ class ProjectBadges(unittest.TestCase):
             self.assertNotIn("", body)
             self.assertGreaterEqual(len(body), 6)
             self.assertTrue(all(line.endswith("<br>") for line in body[:-1]))
-            last = body[-1]
-            self.assertIn("buymeacoffee.com", last)
-            self.assertNotIn("supervisor_add_addon_repository", last)
+            self.assertIn("supervisor_add_addon_repository", body[-1])
+            self.assertNotIn("buymeacoffee", readme.render(root))
+
+    def test_support_block_is_appended_once_with_large_badges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_app(root)
+            (root / "README.md").write_text("# Sample\n\nText\n\n## License\n\nOpen.\n")
+            readme.update(root)
+            text = (root / "README.md").read_text()
+            self.assertEqual(text.count(readme.SUPPORT_START), 1)
+            self.assertTrue(text.rstrip().endswith(readme.SUPPORT_END))
+            tail = text[text.index(readme.SUPPORT_START):]
+            self.assertIn("## Say thanks", tail)
+            self.assertIn("hot drink", tail)
+            self.assertEqual(tail.count("style=for-the-badge"), 2)
+            self.assertFalse(readme.update(root))
 
     def test_hacs_button_uses_actual_repository(self):
         with tempfile.TemporaryDirectory() as tmp:

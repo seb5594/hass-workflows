@@ -207,7 +207,6 @@ def render_header(entries, own=None):
         [badgekit.install_badge()] if KIND == "apps" else [],
         status,
         stats,
-        badgekit.support_badges(),
     ])
 
 
@@ -246,11 +245,12 @@ def license_note(entries):
 
 def render_readme(entries, own=None):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
-    for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}", "{{LICENSE_NOTE}}"):
+    for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}", "{{SUPPORT}}", "{{LICENSE_NOTE}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
     return (template.replace("{{BADGES}}", render_header(entries, own))
             .replace("{{APP_CATALOG}}", render_catalog(entries))
+            .replace("{{SUPPORT}}", badgekit.support_section())
             .replace("{{LICENSE_NOTE}}", license_note(entries)).rstrip("\n") + "\n")
 
 

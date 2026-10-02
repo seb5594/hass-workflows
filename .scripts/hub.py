@@ -142,16 +142,16 @@ def render_header(apps, integrations, own=None):
         badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
             "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
         + [badgekit.github("last-commit", HUB_REPOSITORY, "synced", f"{hub}/commits/main")],
-        badgekit.support_badges(),
     ])
 
 
 def render_readme(apps, integrations, own=None):
     template = (ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8")
-    for placeholder in ("{{BADGES}}", "{{APPS}}", "{{INTEGRATIONS}}"):
+    for placeholder in ("{{BADGES}}", "{{APPS}}", "{{INTEGRATIONS}}", "{{SUPPORT}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
     return (template.replace("{{BADGES}}", render_header(apps, integrations, own))
+            .replace("{{SUPPORT}}", badgekit.support_section())
             .replace("{{APPS}}", app_table(apps) if apps else "_No apps are published yet._")
             .replace("{{INTEGRATIONS}}", integration_table(integrations) if integrations
                      else "_No integrations are published yet._"))
