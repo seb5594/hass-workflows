@@ -1,6 +1,5 @@
 """Build Shields.io badges and arrange them in thematic rows."""
 import json
-import re
 from urllib.parse import quote, urlencode
 
 
@@ -22,7 +21,6 @@ SUPPORT = [
 ]
 CATALOG_URL = "https://github.com/seb5594/Home-Assistant-Apps"
 MOUNT_NAMES = {"all_addon_configs": "app configs", "addons": "local apps"}
-STAGES = {"a": "alpha", "b": "beta", "rc": "release candidate"}
 
 
 def _url(path, **params):
@@ -109,83 +107,133 @@ def install_badge():
     return static("Home Assistant", "Add app repository", "18BCF2", redirect, "homeassistant")
 
 
-def community_row(repo, forks=0):
-    """Stars, forks (only once somebody forked), issues and activity."""
-    link = f"https://github.com/{repo}"
-    row = [github("stars", repo, "stars", f"{link}/stargazers")]
-    if forks:
-        row.append(github("forks", repo, "forks", f"{link}/forks"))
-    row += [github("issues", repo, "issues", f"{link}/issues"),
-            github("last-commit", repo, "updated", f"{link}/commits/main")]
-    return row
+def hacs_badge(repo):
+    owner, name = repo.split("/")
+    redirect = ("https://my.home-assistant.io/redirect/hacs_repository/?"
+                + urlencode({"owner": owner, "repository": name, "category": "integration"}, quote_via=quote))
+    return static("HACS", "Add integration", "41BDF5", redirect, "homeassistantcommunitystore")
+
+
+# ---------------------------------------------------------------------------------------------
+# Badge layout: THE place to add, remove or reorder badges for every project and catalog.
+# Each inner list is one line; each name refers to a builder below. Unknown names fail loudly,
+# builders that have nothing to show simply return no badge.
+# ---------------------------------------------------------------------------------------------
+APP_LAYOUT = [
+    ["version", "released", "build"],
+    ["stars", "forks", "issues", "updated", "image_pulls"],
+    ["arch"],
+    ["mounts"],
+    ["stage", "ingress", "privileged", "apparmor", "options"],
+    ["image_size", "runtime_tests", "last_build"],
+    ["install"],
+    ["support"],
+]
+INTEGRATION_LAYOUT = [
+    ["version", "released", "checks"],
+    ["stars", "forks", "issues", "updated"],
+    ["downloads", "latest_downloads"],
+    ["home_assistant", "setup", "requirements", "quality_scale"],
+    ["tests", "zip_size", "last_build"],
+    ["install"],
+    ["support"],
+]
+# Rows that only make sense on a project's own README, not in a catalog listing.
+README_ONLY = {"install", "support"}
+
+
+def _links(ctx):
+    return f"https://github.com/{ctx['repo']}"
+
+
+def _common_builders():
+    return {
+        "version": lambda c: [static("version", str(c["data"]["version"]), "info", f"{_links(c)}/releases")],
+        "released": lambda c: [github("release-date-pre", c["repo"], "released", f"{_links(c)}/releases")],
+        "stars": lambda c: [github("stars", c["repo"], "stars", f"{_links(c)}/stargazers")],
+        # Hidden until somebody forks; the caller passes the current count when it knows it.
+        "forks": lambda c: [github("forks", c["repo"], "forks", f"{_links(c)}/forks")] if c["forks"] else [],
+        "issues": lambda c: [github("issues", c["repo"], "issues", f"{_links(c)}/issues")],
+        "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
+        "last_build": lambda c: [endpoint(c["repo"], "last-build", "last build")],
+        "support": lambda c: support_badges(),
+    }
+
+
+def _app_builders():
+    def mounts(c):
+        return mount_badges(c["data"])
+
+    def flag(label, value, color, condition):
+        return lambda c: [static(label, value(c["data"]), color)] if condition(c["data"]) else []
+
+    builders = _common_builders()
+    builders.update({
+        "build": lambda c: [workflow(c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")],
+        "image_pulls": lambda c: [endpoint(c["repo"], "image-pulls", "image pulls")],
+        "arch": lambda c: [static("arch", " · ".join(c["data"]["arch"]), "ok")],
+        "mounts": mounts,
+        "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
+        "ingress": flag("ingress", lambda d: "enabled", "accent", lambda d: d.get("ingress")),
+        "privileged": flag("privileged", lambda d: ", ".join(d["privileged"]), "write",
+                           lambda d: d.get("privileged")),
+        "apparmor": flag("apparmor", lambda d: "disabled", "write", lambda d: d.get("apparmor") is False),
+        "options": flag("options", lambda d: str(option_count(d["options"])), "info",
+                        lambda d: d.get("options")),
+        "image_size": lambda c: [endpoint(c["repo"], "image-size", "image size")],
+        "runtime_tests": lambda c: [endpoint(c["repo"], "runtime-tests", "runtime tests")],
+        "install": lambda c: [install_badge()],
+    })
+    return builders
+
+
+def _integration_builders():
+    def minimum_version(c):
+        minimum = c["hacs"].get("homeassistant")
+        return [static("home assistant", f"≥ {minimum}", "info")] if minimum else []
+
+    def requirements(c):
+        count = len(c["data"].get("requirements", []))
+        return [static("requirements", str(count), "info")] if count else []
+
+    builders = _common_builders()
+    builders.update({
+        "checks": lambda c: [workflow(c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")],
+        "downloads": lambda c: [github("downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total")],
+        "latest_downloads": lambda c: [github("downloads", c["repo"], "latest release",
+                                              f"{_links(c)}/releases/latest", "/latest/total")],
+        "home_assistant": minimum_version,
+        "setup": lambda c: [static("setup", "UI config flow", "ok")] if c["data"].get("config_flow") else [],
+        "requirements": requirements,
+        "quality_scale": lambda c: [static("quality scale", c["data"]["quality_scale"], "ok")]
+        if c["data"].get("quality_scale") else [],
+        "tests": lambda c: [endpoint(c["repo"], "tests", "tests")],
+        "zip_size": lambda c: [endpoint(c["repo"], "zip-size", "HACS zip")],
+        "install": lambda c: [hacs_badge(c["repo"])],
+    })
+    return builders
+
+
+def build_rows(layout, builders, context, with_install=True):
+    rows = []
+    for names in layout:
+        row = []
+        for name in names:
+            if name in README_ONLY and not with_install:
+                continue
+            row += builders[name](context)
+        rows.append(row)
+    return rows
 
 
 def app_rows(data, repo, folder, with_install=True, forks=0):
-    link = f"https://github.com/{repo}"
-    capabilities = [static("stage", data.get("stage", "stable"), "stable")]
-    if data.get("ingress"):
-        capabilities.append(static("ingress", "enabled", "accent"))
-    if data.get("privileged"):
-        capabilities.append(static("privileged", ", ".join(data["privileged"]), "write"))
-    if data.get("apparmor") is False:
-        capabilities.append(static("apparmor", "disabled", "write"))
-    if data.get("options"):
-        capabilities.append(static("options", str(option_count(data["options"])), "info"))
-    return [
-        [static("version", str(data["version"]), "info", f"{link}/releases"),
-         github("release-date-pre", repo, "released", f"{link}/releases"),
-         workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")],
-        community_row(repo, forks) + [endpoint(repo, "image-pulls", "image pulls")],
-        [static("arch", " · ".join(data["arch"]), "ok")],
-        mount_badges(data),
-        capabilities,
-        [endpoint(repo, "image-size", "image size"), endpoint(repo, "runtime-tests", "runtime tests"),
-         endpoint(repo, "last-build", "last build")],
-        [install_badge()] if with_install else [],
-        support_badges() if with_install else [],
-    ]
-
-
-def stage_of(version):
-    match = re.search(r"(a|b|rc)\d+$", version)
-    return STAGES[match.group(1)] if match else "stable"
+    context = {"data": data, "repo": repo, "folder": folder, "forks": forks}
+    return build_rows(APP_LAYOUT, _app_builders(), context, with_install)
 
 
 def integration_rows(manifest, hacs, repo, with_install=True, forks=0):
-    link = f"https://github.com/{repo}"
-    owner, name = repo.split("/")
-    platform = [static("home assistant", f"≥ {hacs['homeassistant']}", "info")] \
-        if hacs.get("homeassistant") else []
-    platform += [static("stage", stage_of(manifest["version"]),
-                        "stable" if stage_of(manifest["version"]) == "stable" else "pre"),
-                 static("type", manifest.get("integration_type", "integration"), "muted"),
-                 static("iot class", manifest.get("iot_class", "unknown").replace("_", " "), "muted")]
-    if manifest.get("config_flow"):
-        platform.append(static("setup", "UI config flow", "ok"))
-    discovery = [key for key in ("bluetooth", "zeroconf", "ssdp", "dhcp", "usb", "mqtt")
-                 if manifest.get(key)]
-    if discovery:
-        platform.append(static("discovery", ", ".join(discovery), "ok"))
-    platform.append(static("requirements", str(len(manifest.get("requirements", []))), "info"))
-    if manifest.get("quality_scale"):
-        platform.append(static("quality scale", manifest["quality_scale"], "ok"))
-    hacs_button = static("HACS", "Add integration", "41BDF5",
-                         "https://my.home-assistant.io/redirect/hacs_repository/?"
-                         + urlencode({"owner": owner, "repository": name, "category": "integration"},
-                                     quote_via=quote), "homeassistantcommunitystore")
-    return [
-        [static("version", str(manifest["version"]), "info", f"{link}/releases"),
-         github("release-date-pre", repo, "released", f"{link}/releases"),
-         workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")],
-        community_row(repo, forks),
-        [github("downloads", repo, "downloads", f"{link}/releases", "/total"),
-         github("downloads", repo, "latest release", f"{link}/releases/latest", "/latest/total")],
-        platform,
-        [endpoint(repo, "tests", "tests"), endpoint(repo, "zip-size", "HACS zip"),
-         endpoint(repo, "last-build", "last build")],
-        [hacs_button] if with_install else [],
-        support_badges() if with_install else [],
-    ]
+    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks}
+    return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, with_install)
 
 
 def dump_endpoint(label, message, color="ok"):
