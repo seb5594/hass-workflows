@@ -1,0 +1,23 @@
+name: Validate custom integration
+description: HACS metadata and Python checks
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Check Python and release metadata
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: |
+        python -m pip install flake8==7.3.0
+        flake8 custom_components --count --select=E9,F63,F7,F82 --show-source --statistics
+        python "$ENGINE/.scripts/package_integration.py" --check
+        if [ -d tests ]; then python -m unittest discover -s tests -v; fi
+    - uses: hacs/action@main
+      with:
+        category: integration
+        ignore: brands
+        comment: 'false'

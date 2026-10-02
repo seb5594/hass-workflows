@@ -1,4 +1,4 @@
-name: Engine - App Multi-Arch GHCR Release
+name: Engine - App CI and release
 
 on:
   workflow_call:
@@ -6,67 +6,75 @@ on:
       app_name:
         required: true
         type: string
-      target_repo:
-        required: false
-        type: string
-        default: "seb5594/Home-Assistant-Apps"
     secrets:
-      PAT_TOKEN:
+      ORCHESTRATION_PAT:
         required: true
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
 jobs:
-  publish-ghcr-image:
-    name: Build & Push Multi-Arch Image to GHCR
+  validate-and-build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: amd64, platform: linux/amd64}
+          - {arch: aarch64, platform: linux/arm64}
+          - {arch: armv7, platform: linux/arm/v7}
+          - {arch: armhf, platform: linux/arm/v6}
+          - {arch: i386, platform: linux/386}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check out private workflow engine
+        uses: actions/checkout@v4
+        with:
+          repository: seb5594/hass-workflows
+          ref: main
+          token: ${{ secrets.ORCHESTRATION_PAT }}
+          path: .engine
+          persist-credentials: false
+      - uses: ./.engine/.actions/app-ci
+        with:
+          app: ${{ inputs.app_name }}
+          arch: ${{ matrix.arch }}
+          platform: ${{ matrix.platform }}
+  release:
+    needs: validate-and-build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
-      contents: read
+      contents: write
       packages: write
     steps:
-      - name: Checkout Source Code
+      - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Metadata / Tags for Docker
-        id: meta
-        uses: docker/metadata-action@v5
+          persist-credentials: false
+      - name: Check out private workflow engine
+        uses: actions/checkout@v4
         with:
-          images: ghcr.io/\({{ github.repository_owner }}/amd64-\){{ inputs.app_name }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=ref,event=branch
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-
-      - name: Set up QEMU for Multi-Arch
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and Push Container Image
-        uses: docker/build-push-action@v6
+          repository: seb5594/hass-workflows
+          ref: main
+          token: ${{ secrets.ORCHESTRATION_PAT }}
+          path: .engine
+          persist-credentials: false
+      - uses: ./.engine/.actions/app-release
         with:
-          context: ./${{ inputs.app_name }}
-          file: ./${{ inputs.app_name }}/Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm/v7
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-  dispatch-update:
-    needs: publish-ghcr-image
-    name: Trigger Distribution Submodule Update
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch Submodule Update Event
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          repository: ${{ inputs.target_repo }}
-          event-type: update-submodule
-          client-payload: '{"submodule": "\({{ github.event.repository.name }}", "sha": "\){{ github.sha }}"}'
+          app: ${{ inputs.app_name }}
+          token: ${{ github.token }}
+          orchestration-token: ${{ secrets.ORCHESTRATION_PAT }}
