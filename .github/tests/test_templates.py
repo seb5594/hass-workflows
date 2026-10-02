@@ -33,7 +33,7 @@ class ProjectBadges(unittest.TestCase):
             kind, folder, metadata = project.discover(root)
             self.assertEqual((kind, folder, metadata["version"]), ("app", app, "2.3.4"))
             block = readme.render(root)
-            for item in ("message=2.3.4", "message=armv7", "label=read-only", "message=config",
+            for item in ("message=2.3.4", "message=amd64%20%C2%B7%20armv7", "label=read-only", "message=config",
                          "label=read-write", "message=share", "message=enabled",
                          "buymeacoffee.com/seb5594"):
                 self.assertIn(item, block)

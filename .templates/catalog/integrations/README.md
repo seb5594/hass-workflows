@@ -17,8 +17,3 @@ under **Settings → Devices & services**.
 
 <!-- Generated from the source repositories by the hass-workflows catalog action. -->
 {{APP_CATALOG}}
-
-Download counts come from GitHub release assets; GitHub does not report installations or countries.
-Only public repositories are listed. Test counts and ZIP sizes are published by each project's pipeline.
-
-The catalog follows each source repository's current default branch and pins that commit as a Git submodule. [How catalog updates work](.github/DEVELOPMENT.md).
