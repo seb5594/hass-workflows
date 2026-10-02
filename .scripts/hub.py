@@ -107,6 +107,12 @@ def cell(text):
     return str(text).replace("|", "\\|").replace("\n", " ").strip()
 
 
+def title_cell(name, link, description):
+    """Linked name, with the description on a second line only when there is one."""
+    text = f"**[{cell(name)}]({link})**"
+    return f"{text}<br>{cell(description)}" if description else text
+
+
 def project_link(entry):
     return f"https://github.com/{entry['repository']}"
 
@@ -118,7 +124,7 @@ def app_table(entries):
         for app in entry["items"]:
             status = " ".join([badgekit.workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml"),
                                badgekit.github("stars", repo, "stars", f"{link}/stargazers")])
-            rows.append(f"| **[{cell(app['name'])}]({link})**<br>{cell(app.get('description', ''))} "
+            rows.append(f"| {title_cell(app['name'], link, app.get('description'))} "
                         f"| {badgekit.static('version', app['version'], 'info', f'{link}/releases')} "
                         f"| {' · '.join(app['arch'])} | {status} |")
     return "\n".join(rows)
@@ -132,7 +138,7 @@ def integration_table(entries):
             minimum = manifest["hacs"].get("homeassistant")
             status = " ".join([badgekit.workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml"),
                                badgekit.github("downloads", repo, "downloads", f"{link}/releases", "/total")])
-            rows.append(f"| **[{cell(manifest['name'])}]({link})**<br>{cell(manifest.get('description', ''))} "
+            rows.append(f"| {title_cell(manifest['name'], link, manifest.get('description'))} "
                         f"| {badgekit.static('version', manifest['version'], 'info', f'{link}/releases')} "
                         f"| {'≥ ' + minimum if minimum else '–'} | {status} |")
     return "\n".join(rows)
