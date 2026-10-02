@@ -1,5 +1,9 @@
 name: Validate custom integration
 description: HACS metadata and Python checks
+inputs:
+  repository:
+    description: Source integration repository
+    default: ${{ github.repository }}
 runs:
   using: composite
   steps:
@@ -19,5 +23,6 @@ runs:
     - uses: hacs/action@main
       with:
         category: integration
+        repository: ${{ inputs.repository }}
         ignore: brands
         comment: 'false'
