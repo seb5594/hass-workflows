@@ -1,0 +1,19 @@
+[
+  {"homeassistant": "2022.4.7", "plugin": "0.8.12", "python": "3.9", "note": "oldest release the test plugin supports"},
+  {"homeassistant": "2022.8.7", "plugin": "0.11.12", "python": "3.9"},
+  {"homeassistant": "2022.12.8", "plugin": "0.12.36", "python": "3.9"},
+  {"homeassistant": "2023.1.7", "plugin": "0.12.49", "python": "3.9", "note": "last release on Python 3.9"},
+  {"homeassistant": "2023.2.5", "plugin": "0.12.57", "python": "3.10", "note": "first release that needs Python 3.10"},
+  {"homeassistant": "2023.3.6", "plugin": "0.13.10", "python": "3.10", "note": "config entries own background tasks"},
+  {"homeassistant": "2023.6.3", "plugin": "0.13.39", "python": "3.10", "note": "last release without entity name translations"},
+  {"homeassistant": "2023.7.3", "plugin": "0.13.45", "python": "3.10", "note": "last release on Python 3.10"},
+  {"homeassistant": "2023.12.3", "plugin": "0.13.85", "python": "3.11"},
+  {"homeassistant": "2024.3.3", "plugin": "0.13.109", "python": "3.11", "note": "last release on Python 3.11, before frozen entity descriptions"},
+  {"homeassistant": "2024.6.4", "plugin": "0.13.136", "python": "3.12", "note": "ConfigFlowResult and reconfigure flows; static paths still blocking", "pins": ["josepy<2"]},
+  {"homeassistant": "2024.7.4", "plugin": "0.13.148", "python": "3.12", "note": "static paths are registered asynchronously", "pins": ["josepy<2"]},
+  {"homeassistant": "2024.11.3", "plugin": "0.13.184", "python": "3.12", "note": "options flows get their entry injected", "pins": ["josepy<2"]},
+  {"homeassistant": "2025.1.4", "plugin": "0.13.205", "python": "3.12", "pins": ["josepy<2"]},
+  {"homeassistant": "2025.12.4", "plugin": "0.13.301", "python": "3.13"},
+  {"homeassistant": "2026.2.3", "plugin": "0.13.316", "python": "3.13"},
+  {"homeassistant": "2026.9.4", "plugin": "0.13.367", "python": "3.14", "note": "active scans and advertisement replay"}
+]

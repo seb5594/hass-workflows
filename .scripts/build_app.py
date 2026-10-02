@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+import legacy
 import metrics
 import validate_app
 from common import run, run_captured
@@ -35,10 +36,7 @@ def main(app, arch, platform):
     image = f"local/{app}:{arch}"
     args = ["docker", "buildx", "build", "--platform", platform, "--load", "--tag", image,
             "--build-arg", f"BUILD_ARCH={arch}", "--build-arg", f"BUILD_VERSION={config['version']}"]
-    build_file = folder / "build.yaml"
-    if build_file.exists():
-        base = yaml.safe_load(build_file.read_text())["build_from"][arch]
-        args += ["--build-arg", f"BUILD_FROM={base}"]
+    args += legacy.build_args(arch, (folder / "Dockerfile").read_text())
     run(*args, app)
     run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image,
         "-c", S6_SMOKE_TEST if validate_app.s6_services(folder) else ENTRYPOINT_SMOKE_TEST)
