@@ -130,12 +130,12 @@ APP_LAYOUT = [
     ["support"],
 ]
 INTEGRATION_LAYOUT = [
+    ["install"],
     ["version", "released", "checks"],
     ["stars", "forks", "issues", "updated"],
     ["downloads", "latest_downloads"],
     ["home_assistant", "setup", "requirements", "quality_scale"],
     ["tests", "zip_size", "last_build"],
-    ["install"],
     ["support"],
 ]
 # Rows that only make sense on a project's own README, not in a catalog listing.

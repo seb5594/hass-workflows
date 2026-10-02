@@ -73,6 +73,18 @@ class ProjectBadges(unittest.TestCase):
                             "label=requirements"):
                 self.assertNotIn(removed, block)
 
+    def test_hacs_badge_leads_in_its_own_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "custom_components/demo"
+            folder.mkdir(parents=True)
+            (folder / "manifest.json").write_text(json.dumps({
+                "domain": "demo", "version": "1.0.0", "documentation": "https://github.com/seb5594/demo-integration"}))
+            (root / "hacs.json").write_text("{}")
+            first = readme.render(root).splitlines()[1]
+            self.assertIn("label=HACS", first)
+            self.assertEqual(first.count("!["), 1)
+
     def test_update_inserts_and_checks_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
