@@ -1,0 +1,71 @@
+"""Catalog discovery, pinning and rendering without network access."""
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from support import ENGINE  # noqa: F401
+
+import catalog
+
+REPOSITORY = "Home-Assistant-Rsync-Local-Addon"
+
+
+class CatalogTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        patcher = patch.object(catalog, "ROOT", self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.source = self.root / "Rsync-Local"
+        app = self.source / "rsync-local"
+        app.mkdir(parents=True)
+        (app / "config.yaml").write_text(
+            "name: Rsync Local\nversion: '1.74.1'\nslug: rsync-local\n"
+            "description: USB backups\narch: [amd64]\nmap: ['config:ro']\ndevices: [/dev/sda1]\n")
+        (app / "Dockerfile").write_text("ARG BUILD_FROM=alpine:3.24.2\n")
+        (self.source / "README.md").write_text("Back up Home Assistant files.\n")
+        self.repo = {"name": REPOSITORY, "default_branch": "main", "description": "USB backups"}
+        self.modules = {"Rsync-Local": {"key": "submodule.rsync",
+                                        "url": f"https://github.com/seb5594/{REPOSITORY}.git"}}
+
+    def test_nested_app_discovery_ignores_source_workflows(self):
+        (self.source / ".github").mkdir()
+        (self.source / ".github/config.yaml").write_text("invalid: [")
+        self.assertEqual(catalog.app_metadata(self.source)[0]["path"], "rsync-local")
+
+    def test_sync_keeps_root_submodule_and_pins_default_branch(self):
+        with patch.object(catalog, "git", return_value="a" * 40) as git:
+            entry = catalog.sync_repository(self.repo, self.modules, 500)
+        self.assertEqual((entry["path"], entry["commit"]), ("Rsync-Local", "a" * 40))
+        git.assert_any_call("fetch", "--depth=1", "origin", "refs/heads/main", cwd=self.source)
+        git.assert_any_call("checkout", "--detach", "a" * 40, cwd=self.source)
+        self.assertFalse(any(call.args[:2] == ("submodule", "add") for call in git.call_args_list))
+
+    def test_sync_refuses_unmanaged_directory(self):
+        with self.assertRaisesRegex(ValueError, "unmanaged"):
+            catalog.sync_repository(self.repo, {}, 500)
+
+    def test_managed_paths_reject_unrelated_modules(self):
+        unrelated = {"notes": {"key": "submodule.notes", "url": "https://github.com/another/project.git"}}
+        self.assertEqual(set(catalog.managed_submodules(self.modules | unrelated)), {"Rsync-Local"})
+
+    def test_rendered_catalog_reflects_declared_features(self):
+        entry = {"path": "Rsync-Local", "url": f"https://github.com/seb5594/{REPOSITORY}",
+                 "repository": f"seb5594/{REPOSITORY}", "excerpt": "USB backups", "commit": "a" * 40,
+                 "apps": catalog.app_metadata(self.source)}
+        readme = catalog.render_readme([entry])
+        for item in ("message=1.74.1", "label=config", "label=local%20disks", "Pinned commit",
+                     "label=apps", "alpine%3A3.24.2"):
+            self.assertIn(item, readme)
+        self.assertNotIn("{{", readme)
+        self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1])
+
+    def test_repository_metadata_names_the_maintainer_handle(self):
+        self.assertIn("maintainer: seb5594", catalog.repository_yaml())
+
+
+if __name__ == "__main__":
+    unittest.main()
