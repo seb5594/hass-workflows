@@ -64,9 +64,8 @@ def main(options):
     out.mkdir(exist_ok=True)
     files = sorted(p for p in folder.rglob("*") if p.is_file()
                    and "__pycache__" not in p.parts and p.suffix not in {".pyc", ".pyo"})
-    for name, prefix in [(hacs["filename"], ""),
-                         (f"{domain}-{version}-manual.zip", f"custom_components/{domain}/")]:
-        write_archive(out / name, files, folder, prefix)
+    # One ZIP serves HACS and manual installs: its content is the component folder itself.
+    write_archive(out / hacs["filename"], files, folder, "")
     metrics.record("zip_size", (out / hacs["filename"]).stat().st_size)
     checksums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n"
                         for p in sorted(out.glob("*.zip")))

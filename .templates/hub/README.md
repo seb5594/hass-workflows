@@ -11,7 +11,7 @@ they currently pin.
 | I want to… | Do this |
 | --- | --- |
 | Install an app | Add the [app catalog](https://github.com/seb5594/Home-Assistant-Apps) with the blue button above, or in **Settings → Apps → App store → ⋮ → Repositories**. Then pick the app in the store. |
-| Install an integration | Open the project's repository below and use its *Add to HACS* button, or add it in **HACS → ⋮ → Custom repositories** with category **Integration**. |
+| Install an integration | Open the project's repository below and use the *HACS* badge in its README, or add it in **HACS → ⋮ → Custom repositories** with category **Integration**. |
 | Report a problem or ask something | Open an issue in the repository of the project concerned. |
 
 ## Apps

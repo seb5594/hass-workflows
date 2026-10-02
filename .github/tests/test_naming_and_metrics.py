@@ -32,8 +32,9 @@ class ImagePublishing(unittest.TestCase):
             references = release_app.push_architecture_images(
                 config, Path("git-exporter"), "ghcr.io/seb5594/hass-git-exporter", assets)
             description = json.loads((assets / "armv7-hass-git-exporter-v1.18.1.json").read_text())
-        self.assertEqual(references, ["ghcr.io/seb5594/hass-git-exporter:amd64-hass-git-exporter-v1.18.1",
-                                      "ghcr.io/seb5594/hass-git-exporter:armv7-hass-git-exporter-v1.18.1"])
+        self.assertEqual(references, [
+            "ghcr.io/seb5594/hass-git-exporter:amd64-hass-git-exporter-v1.18.1",
+            "ghcr.io/seb5594/hass-git-exporter:armv7-hass-git-exporter-v1.18.1"])
         run.assert_any_call("docker", "tag", "local/git-exporter:amd64", references[0])
         run.assert_any_call("docker", "push", references[1])
         self.assertEqual(description["platform"], "linux/arm/v7")

@@ -5,7 +5,7 @@ Everything needed for a self-hosted Renovate server is in place; nothing runs ye
 | File | Purpose |
 | --- | --- |
 | [`default.json`](../default.json) | Shared preset every project extends |
-| [`.templates/renovate/renovate.json`](../.templates/renovate/renovate.json) | The only file a project needs; CI checks that it matches |
+| `.github/renovate.json` ([template](../.templates/renovate/renovate.json)) | The only file a project needs; CI checks that it matches |
 | [`.templates/renovate/self-hosted.js`](../.templates/renovate/self-hosted.js) | Server configuration with the repository list |
 
 ## What the preset updates
