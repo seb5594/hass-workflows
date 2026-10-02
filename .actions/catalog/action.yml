@@ -1,0 +1,34 @@
+name: Synchronize the Home Assistant app or integration catalog
+description: List every matching public repository, regenerate the catalog README and publish the result
+inputs:
+  kind:
+    description: Catalog type, apps or integrations
+    default: apps
+  token:
+    description: Token with read access to the owner's repositories and write access to this repository
+    required: true
+  hub-token:
+    description: Optional token that lets the catalog tell the hub to refresh
+    required: false
+runs:
+  using: composite
+  steps:
+    - uses: ./.engine/.actions/setup-python
+    - name: Discover projects and render the catalog
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        GH_TOKEN: ${{ inputs.token }}
+        CATALOG_KIND: ${{ inputs.kind }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python "$ENGINE/.scripts/catalog.py"
+    - name: Publish only when something changed, then tell the hub
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+        NOTIFY_TOKEN: ${{ inputs.hub-token }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: |
+        python "$ENGINE/.scripts/gitops.py" publish "chore: synchronize submodules and catalog" \
+          --notify hub

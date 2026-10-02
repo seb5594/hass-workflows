@@ -1,0 +1,27 @@
+name: Update the Home Assistant hub
+description: Render the hub README from the app and integration catalogs and publish it when it changed
+inputs:
+  token:
+    description: Token with read access to the catalogs and the projects they list
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./.engine/.actions/setup-python
+    - name: Render the hub README
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        GH_TOKEN: ${{ inputs.token }}
+        # The token above reads the catalogs; this one can read the hub repository itself.
+        OWN_TOKEN: ${{ github.token }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python "$ENGINE/.scripts/hub.py"
+    - name: Publish only when something changed
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: |
+        python "$ENGINE/.scripts/gitops.py" publish "chore: update hub overview"
