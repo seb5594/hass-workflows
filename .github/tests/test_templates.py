@@ -167,6 +167,19 @@ class BadgeLayout(unittest.TestCase):
                 self.assertIn(name, builders)
 
 
+class ShellScriptDiscovery(unittest.TestCase):
+    def test_extensionless_scripts_are_found_by_their_shebang(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "svc").mkdir()
+            (root / "svc/run").write_text("#!/command/with-contenv bash\necho\n")
+            (root / "svc/type").write_text("longrun\n")
+            (root / "tool.sh").write_text("echo\n")
+            (root / "data.json").write_text("{}")
+            names = sorted(Path(path).name for path in project.shell_scripts([root, root / "missing"]))
+            self.assertEqual(names, ["run", "tool.sh"])
+
+
 class StyleOptions(unittest.TestCase):
     def test_options_come_from_pyproject(self):
         with tempfile.TemporaryDirectory() as tmp:
