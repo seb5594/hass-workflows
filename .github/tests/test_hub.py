@@ -6,7 +6,7 @@ from support import ENGINE  # noqa: F401
 
 import hub
 
-GITMODULES = '[submodule "x"]\n\tpath = Demo\n\turl = https://github.com/seb5594/Home-Assistant-Demo-Addon.git\n'
+GITMODULES = '[submodule "x"]\n\t# Replaced: path = .sources/Demo\n\tpath = Demo\n\turl = https://github.com/seb5594/Home-Assistant-Demo-Addon.git\n'
 CONFIG = ("name: Demo App\nslug: demo\nversion: '1.2.3'\ndescription: A | piped description\n"
           "arch: [amd64, aarch64]\n")
 MANIFEST = '{"domain": "demo", "name": "Demo Integration", "version": "0.4.0"}'
