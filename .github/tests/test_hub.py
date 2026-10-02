@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from support import ENGINE  # noqa: F401
 
+import excerpt
 import hub
 import remote
 
@@ -43,6 +44,15 @@ def fake_fetch_text(url):
     if url.endswith("hacs.json"):
         return '{"homeassistant": "2026.9.0"}'
     raise AssertionError(url)
+
+
+class ExcerptTests(unittest.TestCase):
+    def test_navigation_lines_are_not_a_description(self):
+        text = "# T\n\n**Changelog** · **[Download](https://x)**\n\nThis is a custom component.\n"
+        self.assertEqual(excerpt.first_paragraph(text), "This is a custom component.")
+
+    def test_prose_with_bold_words_is_kept(self):
+        self.assertEqual(excerpt.first_paragraph("A **fast** loopback."), "A **fast** loopback.")
 
 
 class HubTests(unittest.TestCase):
