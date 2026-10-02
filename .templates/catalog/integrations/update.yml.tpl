@@ -41,3 +41,4 @@ jobs:
         with:
           kind: integrations
           token: ${{ github.token }}
+          hub-token: ${{ secrets.ORCHESTRATION_PAT }}
