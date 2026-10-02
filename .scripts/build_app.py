@@ -28,4 +28,5 @@ if arch == "amd64":
         subprocess.run(["docker", "run", "--rm", "--entrypoint", "/bin/bash", image, "-c",
                         "printf '%s' '{\"data\":{\"title\":\"CI\"}}' > /tmp/sample.json; "
                         "/utils/jsonToYaml.py /tmp/sample.json data; grep -q 'title: CI' /tmp/sample.yaml; "
-                        "git secrets --list >/dev/null"], check=True)
+                        "git init -q /tmp/secrets-check; cd /tmp/secrets-check; "
+                        "git secrets --add CI_TEST_PATTERN; git secrets --list | grep -q CI_TEST_PATTERN"], check=True)
