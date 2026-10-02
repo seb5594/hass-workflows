@@ -1,0 +1,42 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Europe/Berlin",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "commitMessagePrefix": "chore(deps):",
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "description": "Update workflow actions together",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Base image tags look like 3.24-2026.08.0; compare them numerically",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/home-assistant/base"],
+      "versioning": "loose"
+    },
+    {
+      "description": "Base image and the Alpine packages built for it must move together",
+      "matchPackageNames": ["ghcr.io/home-assistant/base", "alpine", "/^alpine_/"],
+      "groupName": "alpine base and packages"
+    },
+    {
+      "description": "Alpine package versions such as 2.54.0-r0 are not semver",
+      "matchDatasources": ["repology"],
+      "versioning": "loose"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "Versions marked with '# renovate: datasource=... depName=...' in a Dockerfile",
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+(?:ENV |ARG )?[A-Za-z0-9_-]+=(?<currentValue>[^\\s\\\\]+)"
+      ]
+    }
+  ]
+}

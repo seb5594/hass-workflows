@@ -46,7 +46,7 @@ runs:
       uses: hadolint/hadolint-action@v3.1.0
       with:
         dockerfile: ${{ steps.project.outputs.directory }}/Dockerfile
-        ignore: DL3018,DL3008
+        ignore: DL3008
     - name: Validate HACS repository
       if: steps.project.outputs.kind == 'integration' && github.repository != 'seb5594/hass-workflows'
       uses: hacs/action@main
