@@ -161,7 +161,7 @@ def main():
     apps, integrations = collect("apps"), collect("integrations")
     if not apps and not integrations:
         raise ValueError("Both catalogs came back empty; refusing to overwrite the hub README.")
-    own = live.fetch(HUB_REPOSITORY, "update.yml")
+    own = live.fetch_own(HUB_REPOSITORY, "update.yml", os.environ.get("OWN_TOKEN"))
     (ROOT / "README.md").write_text(render_readme(apps, integrations, own), encoding="utf-8")
     print(f"Hub lists {sum(len(e['items']) for e in apps)} apps and "
           f"{sum(len(e['items']) for e in integrations)} integrations.")

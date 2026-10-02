@@ -18,6 +18,8 @@ runs:
       env:
         ENGINE: ${{ github.action_path }}/../..
         GH_TOKEN: ${{ inputs.token }}
+        # The token above reads the catalogs; this one can read the hub repository itself.
+        OWN_TOKEN: ${{ github.token }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/hub.py"
     - name: Commit and push only when something changed
