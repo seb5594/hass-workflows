@@ -41,7 +41,7 @@ The build and smoke-test phase executes once per architecture. Publishing pushes
 
 ## README badges
 
-Which badges appear, and in which row, is decided in one place: `APP_LAYOUT` and `INTEGRATION_LAYOUT` at the top of [`badgekit.py`](.scripts/badgekit.py). Editing a list there changes every project README and catalog entry; colors and the badge style are constants in the same file.
+Which badges appear, and in which row, is decided in one place: `APP_LAYOUT` and `INTEGRATION_LAYOUT` at the top of [`badgekit.py`](.scripts/badgekit.py). Editing a list there changes every project README and catalog entry. Live badges appear only when they have something to show: no stars, forks, issues, releases, downloads, workflow runs or unpublished metrics, no badge. A README cannot hide badges by itself, so the pipeline asks GitHub for the current values and rewrites the block on every run from the default branch (and weekly via the schedule trigger); CI only checks that the generated block exists. Catalogs and the hub apply the same rule per project. colors and the badge style are constants in the same file.
 
 The badge block of every project is generated from its metadata and arranged in tight rows: release, community, platform (architectures), access (mounts), capabilities, quality, install, and a last row with the donation links alone. Static rows come from `config.yaml`, `manifest.json` and `hacs.json`; live rows use the GitHub API.
 

@@ -20,6 +20,7 @@ import yaml
 import badgekit
 import excerpt
 import github_api
+import live
 import remote
 
 ENGINE = Path(__file__).resolve().parents[1]
@@ -167,7 +168,7 @@ def sync_repository(repo, modules, limit):
     git("submodule", "update", "--init", "--recursive", cwd=folder)
     items = app_metadata(folder)
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
-            "url": f"https://github.com/{OWNER}/{name}", "forks": repo.get("forks_count", 0),
+            "url": f"https://github.com/{OWNER}/{name}", "live": live.fetch(f"{OWNER}/{name}"),
             "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
             "items": items}
 
@@ -185,22 +186,27 @@ def describe_repository(repo, limit):
     for item in items:
         item.setdefault("description", summary)
     return {"repository": repository, "path": project_path(name), "branch": repo["default_branch"],
-            "commit": sha, "url": f"https://github.com/{repository}", "forks": repo.get("forks_count", 0),
+            "commit": sha, "url": f"https://github.com/{repository}", "live": live.fetch(repository),
             "excerpt": summary, "items": items}
 
 
-def render_header(entries, forks=0):
+def render_header(entries, own=None):
+    """Header badges; `own` holds live facts about the catalog repository (None keeps everything)."""
     items = [item for entry in entries for item in entry["items"]]
     link = f"https://github.com/{CATALOG_REPOSITORY}"
-    status = [badgekit.workflow(CATALOG_REPOSITORY, "update.yml", "catalog sync",
-                                f"{link}/actions/workflows/update.yml"),
-              badgekit.static(KIND, str(len(items)), "info")]
+    context = {"repo": CATALOG_REPOSITORY, "data": {}, "forks": 0, "live": own}
+    status = badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
+        CATALOG_REPOSITORY, "update.yml", "catalog sync", f"{link}/actions/workflows/update.yml")])
+    status.append(badgekit.static(KIND, str(len(items)), "info"))
+    stats = badgekit.when(badgekit.has(context, "stars"),
+                          [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers")])
+    stats += badgekit.when(own is not None and badgekit.has(context, "forks"),
+                           [badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks")])
+    stats.append(badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main"))
     return badgekit.render([
         [badgekit.install_badge()] if KIND == "apps" else [],
         status,
-        [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers")]
-        + ([badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks")] if forks else [])
-        + [badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main")],
+        stats,
         badgekit.support_badges(),
     ])
 
@@ -208,9 +214,9 @@ def render_header(entries, forks=0):
 def item_rows(item, entry):
     if KIND == "integrations":
         return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False,
-                                         forks=entry.get("forks", 0))
+                                         live=entry.get("live"))
     return badgekit.app_rows(item, entry["repository"], ROOT / entry["path"] / item["path"],
-                             with_install=False, forks=entry.get("forks", 0))
+                             with_install=False, live=entry.get("live"))
 
 
 def render_catalog(entries):
@@ -227,12 +233,12 @@ def render_catalog(entries):
     return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
-def render_readme(entries, forks=0):
+def render_readme(entries, own=None):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
     for placeholder in ("{{BADGES}}", "{{APP_CATALOG}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
-    return (template.replace("{{BADGES}}", render_header(entries, forks))
+    return (template.replace("{{BADGES}}", render_header(entries, own))
             .replace("{{APP_CATALOG}}", render_catalog(entries)))
 
 
@@ -277,8 +283,8 @@ def main():
     gitmodules = ROOT / ".gitmodules"
     if gitmodules.exists() and not gitmodules.read_text().strip():
         gitmodules.unlink()
-    forks = fetch_json(f"https://api.github.com/repos/{CATALOG_REPOSITORY}").get("forks_count", 0)
-    (ROOT / "README.md").write_text(render_readme(entries, forks), encoding="utf-8")
+    own = live.fetch(CATALOG_REPOSITORY, "update.yml")
+    (ROOT / "README.md").write_text(render_readme(entries, own), encoding="utf-8")
     if metadata:
         (ROOT / "repository.yaml").write_text(metadata, encoding="utf-8")
     write_listing(entries)

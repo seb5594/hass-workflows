@@ -106,3 +106,13 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/project.py" publish-metrics
+    - name: Refresh README badges with live values
+      if: steps.project.outputs.publish == 'true'
+      shell: bash
+      env:
+        ENGINE: ${{ github.action_path }}/../..
+        GH_TOKEN: ${{ inputs.token }}
+        REF: ${{ github.ref }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python "$ENGINE/.scripts/project.py" refresh-readme

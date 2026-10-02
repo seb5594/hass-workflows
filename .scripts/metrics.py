@@ -4,7 +4,6 @@ Steps record raw values with `record()`. `render` turns them into one JSON file 
 badge and `publish` force-pushes those files to the `badges` branch of the project,
 where the generated README badges read them.
 """
-import base64
 import json
 import os
 import re
@@ -16,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import badgekit
-from common import run
+from common import authenticated_git, run
 
 STORE = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hass-metrics.json"
 OUTPUT = STORE.with_name("hass-badges")
@@ -83,10 +82,7 @@ def render(slug=None, owner=None):
 
 def publish(repository, token):
     """Replace the badges branch with a single fresh commit; history is not needed."""
-    credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-    git = ["git", "-c", f"http.https://github.com/.extraheader=AUTHORIZATION: basic {credentials}",
-           "-c", "user.name=github-actions[bot]",
-           "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com"]
+    git = authenticated_git(token)
     with tempfile.TemporaryDirectory() as work:
         run(*git[:1], "init", "-q", "-b", "badges", work)
         for path in OUTPUT.iterdir():

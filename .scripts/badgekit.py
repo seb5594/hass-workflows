@@ -131,10 +131,9 @@ APP_LAYOUT = [
 ]
 INTEGRATION_LAYOUT = [
     ["install"],
-    ["version", "released", "checks"],
-    ["stars", "forks", "issues", "updated"],
+    ["home_assistant", "version", "released", "checks", "setup", "quality_scale"],
     ["downloads", "latest_downloads"],
-    ["home_assistant", "setup", "requirements", "quality_scale"],
+    ["stars", "forks", "issues", "updated"],
     ["tests", "zip_size", "last_build"],
     ["support"],
 ]
@@ -146,16 +145,38 @@ def _links(ctx):
     return f"https://github.com/{ctx['repo']}"
 
 
+def has(ctx, fact):
+    """Live badges appear only with a value: zero, missing or unknown facts hide them.
+
+    Without live facts (offline rendering) every badge is kept.
+    """
+    live = ctx.get("live")
+    return True if live is None else bool(live.get(fact))
+
+
+def published(ctx, metric):
+    """Endpoint badges exist only after the pipeline published their JSON file."""
+    live = ctx.get("live")
+    return True if live is None else metric in live["metrics"]
+
+
+def when(condition, badges):
+    return badges if condition else []
+
+
 def _common_builders():
     return {
         "version": lambda c: [static("version", str(c["data"]["version"]), "info", f"{_links(c)}/releases")],
-        "released": lambda c: [github("release-date-pre", c["repo"], "released", f"{_links(c)}/releases")],
-        "stars": lambda c: [github("stars", c["repo"], "stars", f"{_links(c)}/stargazers")],
-        # Hidden until somebody forks; the caller passes the current count when it knows it.
-        "forks": lambda c: [github("forks", c["repo"], "forks", f"{_links(c)}/forks")] if c["forks"] else [],
-        "issues": lambda c: [github("issues", c["repo"], "issues", f"{_links(c)}/issues")],
+        "released": lambda c: when(has(c, "releases"),
+                                   [github("release-date-pre", c["repo"], "released", f"{_links(c)}/releases")]),
+        "stars": lambda c: when(has(c, "stars"),
+                                [github("stars", c["repo"], "stars", f"{_links(c)}/stargazers")]),
+        "forks": lambda c: when(has(c, "forks") if c.get("live") else c["forks"],
+                                [github("forks", c["repo"], "forks", f"{_links(c)}/forks")]),
+        "issues": lambda c: when(has(c, "issues"),
+                                 [github("issues", c["repo"], "issues", f"{_links(c)}/issues")]),
         "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
-        "last_build": lambda c: [endpoint(c["repo"], "last-build", "last build")],
+        "last_build": lambda c: when(published(c, "last-build"), [endpoint(c["repo"], "last-build", "last build")]),
         "support": lambda c: support_badges(),
     }
 
@@ -169,8 +190,9 @@ def _app_builders():
 
     builders = _common_builders()
     builders.update({
-        "build": lambda c: [workflow(c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")],
-        "image_pulls": lambda c: [endpoint(c["repo"], "image-pulls", "image pulls")],
+        "build": lambda c: when(has(c, "builds"), [workflow(
+            c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")]),
+        "image_pulls": lambda c: when(published(c, "image-pulls"), [endpoint(c["repo"], "image-pulls", "image pulls")]),
         "arch": lambda c: [static("arch", " · ".join(c["data"]["arch"]), "ok")],
         "mounts": mounts,
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
@@ -180,8 +202,9 @@ def _app_builders():
         "apparmor": flag("apparmor", lambda d: "disabled", "write", lambda d: d.get("apparmor") is False),
         "options": flag("options", lambda d: str(option_count(d["options"])), "info",
                         lambda d: d.get("options")),
-        "image_size": lambda c: [endpoint(c["repo"], "image-size", "image size")],
-        "runtime_tests": lambda c: [endpoint(c["repo"], "runtime-tests", "runtime tests")],
+        "image_size": lambda c: when(published(c, "image-size"), [endpoint(c["repo"], "image-size", "image size")]),
+        "runtime_tests": lambda c: when(published(c, "runtime-tests"),
+                                        [endpoint(c["repo"], "runtime-tests", "runtime tests")]),
         "install": lambda c: [install_badge()],
     })
     return builders
@@ -192,23 +215,20 @@ def _integration_builders():
         minimum = c["hacs"].get("homeassistant")
         return [static("home assistant", f"≥ {minimum}", "info")] if minimum else []
 
-    def requirements(c):
-        count = len(c["data"].get("requirements", []))
-        return [static("requirements", str(count), "info")] if count else []
-
     builders = _common_builders()
     builders.update({
-        "checks": lambda c: [workflow(c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")],
-        "downloads": lambda c: [github("downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total")],
-        "latest_downloads": lambda c: [github("downloads", c["repo"], "latest release",
-                                              f"{_links(c)}/releases/latest", "/latest/total")],
+        "checks": lambda c: when(has(c, "builds"), [workflow(
+            c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
+        "downloads": lambda c: when(has(c, "downloads"), [github(
+            "downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total")]),
+        "latest_downloads": lambda c: when(has(c, "latest_downloads"), [github(
+            "downloads", c["repo"], "latest release", f"{_links(c)}/releases/latest", "/latest/total")]),
         "home_assistant": minimum_version,
         "setup": lambda c: [static("setup", "UI config flow", "ok")] if c["data"].get("config_flow") else [],
-        "requirements": requirements,
         "quality_scale": lambda c: [static("quality scale", c["data"]["quality_scale"], "ok")]
         if c["data"].get("quality_scale") else [],
-        "tests": lambda c: [endpoint(c["repo"], "tests", "tests")],
-        "zip_size": lambda c: [endpoint(c["repo"], "zip-size", "HACS zip")],
+        "tests": lambda c: when(published(c, "tests"), [endpoint(c["repo"], "tests", "tests")]),
+        "zip_size": lambda c: when(published(c, "zip-size"), [endpoint(c["repo"], "zip-size", "HACS zip")]),
         "install": lambda c: [hacs_badge(c["repo"])],
     })
     return builders
@@ -226,13 +246,13 @@ def build_rows(layout, builders, context, with_install=True):
     return rows
 
 
-def app_rows(data, repo, folder, with_install=True, forks=0):
-    context = {"data": data, "repo": repo, "folder": folder, "forks": forks}
+def app_rows(data, repo, folder, with_install=True, forks=0, live=None):
+    context = {"data": data, "repo": repo, "folder": folder, "forks": forks, "live": live}
     return build_rows(APP_LAYOUT, _app_builders(), context, with_install)
 
 
-def integration_rows(manifest, hacs, repo, with_install=True, forks=0):
-    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks}
+def integration_rows(manifest, hacs, repo, with_install=True, forks=0, live=None):
+    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks, "live": live}
     return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, with_install)
 
 

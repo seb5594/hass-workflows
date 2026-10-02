@@ -15,6 +15,7 @@ import yaml
 
 import badgekit
 import excerpt
+import live
 import remote
 
 ENGINE = Path(__file__).resolve().parents[1]
@@ -71,7 +72,8 @@ def collect(kind):
             for item in items:
                 item.setdefault("description", summary)
         if items:
-            entries.append({"repository": repository, "sha": sha, "items": items})
+            entries.append({"repository": repository, "sha": sha, "items": items,
+                            "live": live.fetch(repository)})
     return entries
 
 
@@ -94,8 +96,12 @@ def app_table(entries):
     for entry in entries:
         link, repo = project_link(entry), entry["repository"]
         for app in entry["items"]:
-            status = " ".join([badgekit.workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml"),
-                               badgekit.github("stars", repo, "stars", f"{link}/stargazers")])
+            facts = {"repo": repo, "live": entry.get("live")}
+            status = " ".join(
+                badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
+                    repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")])
+                + badgekit.when(badgekit.has(facts, "stars"), [badgekit.github(
+                    "stars", repo, "stars", f"{link}/stargazers")]))
             rows.append(f"| {title_cell(app['name'], link, app.get('description'))} "
                         f"| {badgekit.static('version', app['version'], 'info', f'{link}/releases')} "
                         f"| {' · '.join(app['arch'])} | {status} |")
@@ -108,37 +114,44 @@ def integration_table(entries):
         link, repo = project_link(entry), entry["repository"]
         for manifest in entry["items"]:
             minimum = manifest["hacs"].get("homeassistant")
-            status = " ".join([badgekit.workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml"),
-                               badgekit.github("downloads", repo, "downloads", f"{link}/releases", "/total")])
+            facts = {"repo": repo, "live": entry.get("live")}
+            status = " ".join(
+                badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
+                    repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")])
+                + badgekit.when(badgekit.has(facts, "downloads"), [badgekit.github(
+                    "downloads", repo, "downloads", f"{link}/releases", "/total")]))
             rows.append(f"| {title_cell(manifest['name'], link, manifest.get('description'))} "
                         f"| {badgekit.static('version', manifest['version'], 'info', f'{link}/releases')} "
                         f"| {'≥ ' + minimum if minimum else '–'} | {status} |")
     return "\n".join(rows)
 
 
-def render_header(apps, integrations):
+def render_header(apps, integrations, own=None):
     hub = f"https://github.com/{HUB_REPOSITORY}"
     projects = len(apps) + len(integrations)
+    context = {"live": own}
     return badgekit.render([
         [badgekit.install_badge()]
         + [badgekit.static("HACS", "browse integrations", "info", f"https://github.com/{CATALOGS['integrations']}")],
-        [badgekit.workflow(HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml"),
-         badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", f"https://github.com/{CATALOGS['apps']}"),
-         badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
-                         f"https://github.com/{CATALOGS['integrations']}"),
-         badgekit.static("repositories", str(projects), "muted")],
-        [badgekit.github("stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers"),
-         badgekit.github("last-commit", HUB_REPOSITORY, "synced", f"{hub}/commits/main")],
+        badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
+            HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml")])
+        + [badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", f"https://github.com/{CATALOGS['apps']}"),
+           badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
+                           f"https://github.com/{CATALOGS['integrations']}"),
+           badgekit.static("repositories", str(projects), "muted")],
+        badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
+            "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
+        + [badgekit.github("last-commit", HUB_REPOSITORY, "synced", f"{hub}/commits/main")],
         badgekit.support_badges(),
     ])
 
 
-def render_readme(apps, integrations):
+def render_readme(apps, integrations, own=None):
     template = (ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8")
     for placeholder in ("{{BADGES}}", "{{APPS}}", "{{INTEGRATIONS}}"):
         if template.count(placeholder) != 1:
             raise ValueError(f"README template must contain exactly one {placeholder} placeholder.")
-    return (template.replace("{{BADGES}}", render_header(apps, integrations))
+    return (template.replace("{{BADGES}}", render_header(apps, integrations, own))
             .replace("{{APPS}}", app_table(apps) if apps else "_No apps are published yet._")
             .replace("{{INTEGRATIONS}}", integration_table(integrations) if integrations
                      else "_No integrations are published yet._"))
@@ -148,7 +161,8 @@ def main():
     apps, integrations = collect("apps"), collect("integrations")
     if not apps and not integrations:
         raise ValueError("Both catalogs came back empty; refusing to overwrite the hub README.")
-    (ROOT / "README.md").write_text(render_readme(apps, integrations), encoding="utf-8")
+    own = live.fetch(HUB_REPOSITORY, "update.yml")
+    (ROOT / "README.md").write_text(render_readme(apps, integrations, own), encoding="utf-8")
     print(f"Hub lists {sum(len(e['items']) for e in apps)} apps and "
           f"{sum(len(e['items']) for e in integrations)} integrations.")
 
