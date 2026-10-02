@@ -90,6 +90,8 @@ def validate(kind, folder):
     readme.update(check=True)
     check_caller_workflow(kind)
     run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
+    if Path("renovate.json").exists():
+        run("cmp", str(ENGINE / ".templates/renovate/renovate.json"), "renovate.json")
     if kind == "app":
         run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
         run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
