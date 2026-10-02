@@ -1,4 +1,4 @@
-name: Engine - App CI/CD Pipeline
+name: Engine - App CI & Linting Pipeline
 
 on:
   workflow_call:
@@ -8,8 +8,30 @@ on:
         type: string
 
 jobs:
-  build-and-validate:
-    name: Validate and Build Container Image
+  lint-and-validate:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Run Yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+
+      - name: Run Hadolint (Dockerfile Linter)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: "${{ inputs.app_name }}/Dockerfile"
+          ignore: DL3018,DL3008
+
+  test-build:
+    needs: lint-and-validate
+    name: Test Container Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code

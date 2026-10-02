@@ -2,10 +2,8 @@
 
 This repository hosts private reusable workflows, deployment helpers, and automation engines for the Home Assistant ecosystem maintained by [@seb5594](https://github.com/seb5594).
 
-## Architecture & Workflows
-- `.github/workflows/engine-app-ci.yml`: Automated CI/CD build pipeline for Home Assistant Apps/Add-ons.
-- `.github/workflows/engine-integration-ci.yml`: HACS validation and code quality checks for Custom Components.
-- `.github/workflows/engine-dispatch-update.yml`: Cross-repository event trigger via GitHub Repository Dispatch.
-- `.github/workflows/engine-dashboard-generator.yml`: Automated multi-repository README telemetry and dashboard engine.
-- `.templates/entrypoint.sh`: Standardized container entrypoint script for Home Assistant Add-ons.
-- `scripts/generate_readme.py`: Python generator for generating modular ecosystem READMEs.
+## Included Reusable Workflows
+- `engine-app-ci.yml`: Code quality checks (Yamllint, ShellCheck, Hadolint) and container build tests.
+- `engine-app-release.yml`: Multi-architecture container build & push to GitHub Container Registry (GHCR) and dispatch update.
+- `engine-integration-ci.yml`: HACS validation and code quality checks for Custom Components.
+- `engine-dashboard-generator.yml`: Automated multi-repository README telemetry and dashboard engine.
