@@ -159,7 +159,8 @@ class StyleOptions(unittest.TestCase):
             try:
                 os.chdir(tmp)
                 self.assertIsNone(project.pycodestyle_options())
-                Path("pyproject.toml").write_text(
+                Path(".github/dev").mkdir(parents=True)
+                Path(".github/dev/pyproject.toml").write_text(
                     '[tool.pycodestyle]\nmax-line-length = 100\nignore = ["E501", "W503"]\n')
                 self.assertEqual(project.pycodestyle_options(),
                                  ["--max-line-length=100", "--ignore=E501,W503"])

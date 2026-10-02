@@ -85,10 +85,15 @@ def run_project_checks():
         run(sys.executable, str(check))
 
 
+def dev_file(name):
+    """Tooling files live in .github/dev to keep the repository root clean; the root also works."""
+    return next((p for p in (Path(".github/dev") / name, Path(name)) if p.exists()), None)
+
+
 def pycodestyle_options():
     """Options from [tool.pycodestyle] in pyproject.toml; None when the project did not opt in."""
-    config = Path("pyproject.toml")
-    if not config.exists():
+    config = dev_file("pyproject.toml")
+    if config is None:
         return None
     table = tomllib.loads(config.read_text()).get("tool", {}).get("pycodestyle")
     if table is None:
@@ -102,11 +107,13 @@ def test_directory():
 
 
 def run_integration_tests(directory):
-    requirements = Path("requirements-dev.txt")
-    if requirements.exists():
+    requirements, config = dev_file("requirements-dev.txt"), dev_file("pyproject.toml")
+    if requirements:
         run(sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
             "-r", str(requirements))
-        output = run_captured(sys.executable, "-m", "pytest", "-q", str(directory))
+        # An explicit config keeps pytest's paths relative to the repository root.
+        options = ["-c", str(config), "--rootdir", "."] if config else []
+        output = run_captured(sys.executable, "-m", "pytest", *options, "-q", str(directory))
         passed = re.search(r"(\d+) passed", output)
     else:
         output = run_captured(sys.executable, "-m", "unittest", "discover", "-s", str(directory), "-v")
