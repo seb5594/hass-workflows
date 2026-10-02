@@ -4,11 +4,10 @@ import urllib.parse
 import github_api
 
 API = "https://api.github.com"
-USER_AGENT = "seb5594-hass-workflows"
 
 
 def _json(url, token=None):
-    return github_api.fetch_json(url, USER_AGENT, token)
+    return github_api.fetch_json(url, token)
 
 
 def _optional(url, default, token=None):
