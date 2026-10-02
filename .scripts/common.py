@@ -1,4 +1,5 @@
 """Constants and helpers shared by the engine scripts."""
+import json
 import os
 import subprocess
 import sys
@@ -42,3 +43,16 @@ def run_captured(*args, **kwargs):
     if process.wait():
         raise subprocess.CalledProcessError(process.returncode, args)
     return "".join(lines)
+
+
+def notify_catalog(catalog_repository, event_type, source_repository):
+    """Ask a catalog repository to refresh; without a token the hourly run catches up."""
+    token = os.environ.get("ORCHESTRATION_TOKEN")
+    if not token:
+        print("No ORCHESTRATION_TOKEN; the catalog picks this version up on its hourly run.")
+        return
+    payload = {"event_type": event_type, "client_payload": {
+        "repository": source_repository, "sha": os.environ["GITHUB_SHA"]}}
+    subprocess.run(["gh", "api", f"repos/{catalog_repository}/dispatches", "--input", "-"],
+                   input=json.dumps(payload), text=True, check=True,
+                   env=dict(os.environ, GH_TOKEN=token))

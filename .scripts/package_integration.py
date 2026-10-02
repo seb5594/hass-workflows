@@ -9,7 +9,9 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 import metrics
-from common import release_flags, run
+from common import notify_catalog, release_flags, run
+
+CATALOG_REPOSITORY = "seb5594/Home-Assistant-Integrations"
 
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?")
 PRERELEASE = re.compile(r"(?:a|b|rc)\d+$")
@@ -72,6 +74,7 @@ def main(options):
     print(checksums)
     if "--release" in options:
         publish(tag, manifest, out)
+        notify_catalog(CATALOG_REPOSITORY, "update-integrations", os.environ["GITHUB_REPOSITORY"])
 
 
 if __name__ == "__main__":
