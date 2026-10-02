@@ -113,7 +113,7 @@ class IntegrationCatalog(unittest.TestCase):
         with_fork = catalog.render_readme([self.describe(2)])
         self.assertNotIn("label=forks", without)
         self.assertIn("label=forks", with_fork)
-        for item in ("message=1.0.0b1", "message=beta", "label=downloads", "label=integrations"):
+        for item in ("message=1.0.0b1", "label=downloads", "label=integrations", "message=%E2%89%A5%202026.9.0"):
             self.assertIn(item, without)
         self.assertNotIn("hacs_repository", without)
 

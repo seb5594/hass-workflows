@@ -7,6 +7,7 @@ from pathlib import Path
 
 from support import ENGINE
 
+import badgekit
 import project
 import readme
 
@@ -66,8 +67,11 @@ class ProjectBadges(unittest.TestCase):
             (root / "hacs.json").write_text(json.dumps({"homeassistant": "2026.9.0"}))
             block = readme.render(root)
             self.assertIn("owner=seb5594&repository=demo-integration&category=integration", block)
-            for item in ("message=beta", "message=local%20polling", "message=bluetooth"):
-                self.assertIn(item, block)
+            self.assertIn("message=%E2%89%A5%202026.9.0", block)
+            self.assertIn("label=setup", block)
+            for removed in ("label=stage", "label=type", "label=iot%20class", "label=discovery",
+                            "label=requirements"):
+                self.assertNotIn(removed, block)
 
     def test_update_inserts_and_checks_block(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,6 +92,14 @@ class ProjectBadges(unittest.TestCase):
                 (root / name / "config.yaml").write_text("slug: example\n")
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 project.discover(root)
+
+
+class BadgeLayout(unittest.TestCase):
+    def test_every_layout_entry_has_a_builder(self):
+        for layout, builders in ((badgekit.APP_LAYOUT, badgekit._app_builders()),
+                                 (badgekit.INTEGRATION_LAYOUT, badgekit._integration_builders())):
+            for name in (name for row in layout for name in row):
+                self.assertIn(name, builders)
 
 
 class StyleOptions(unittest.TestCase):

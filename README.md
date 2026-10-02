@@ -41,6 +41,8 @@ The build and smoke-test phase executes once per architecture. Publishing pushes
 
 ## README badges
 
+Which badges appear, and in which row, is decided in one place: `APP_LAYOUT` and `INTEGRATION_LAYOUT` at the top of [`badgekit.py`](.scripts/badgekit.py). Editing a list there changes every project README and catalog entry; colors and the badge style are constants in the same file.
+
 The badge block of every project is generated from its metadata and arranged in tight rows: release, community, platform (architectures), access (mounts), capabilities, quality, install, and a last row with the donation links alone. Static rows come from `config.yaml`, `manifest.json` and `hacs.json`; live rows use the GitHub API.
 
 Pipeline metrics are published after each release-eligible run to the project's `badges` branch as [Shields endpoint](https://shields.io/badges/endpoint-badge) files and referenced by the README:
