@@ -5,7 +5,7 @@ on:
     - cron: '37 * * * *' # Every hour at minute 37 (UTC).
   workflow_dispatch:
   repository_dispatch:
-    types: [update-hub] # Sent by the catalogs after they changed.
+    types: [__EVENT__] # Sent by the catalogs after they changed.
   push:
     branches: [main]
     paths: ['.github/workflows/update.yml']
@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 1
       - uses: actions/checkout@v7
         with:
-          repository: seb5594/hass-workflows
+          repository: __ENGINE_REPOSITORY__
           ref: __ENGINE_SHA__
           token: ${{ secrets.ORCHESTRATION_PAT }}
           path: .engine

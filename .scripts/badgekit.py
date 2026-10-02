@@ -2,6 +2,8 @@
 import json
 from urllib.parse import quote, urlencode
 
+import config
+
 
 STYLE = "flat"
 COLORS = {
@@ -13,13 +15,7 @@ COLORS = {
     "write": "B45309",
     "muted": "5B6770",
 }
-SUPPORT = [
-    ("Buy Me a Coffee", "Support", "Buy Me a Coffee", "FFDD00", "buy-me-a-coffee", "black",
-     "https://buymeacoffee.com/seb5594"),
-    ("PayPal", "Support", "PayPal", "0070BA", "paypal", "white",
-     "https://www.paypal.com/donate/?hosted_button_id=QMQPNRENXDN26"),
-]
-CATALOG_URL = "https://github.com/seb5594/Home-Assistant-Apps"
+CATALOG_URL = config.github_url(config.APPS_CATALOG)
 MOUNT_NAMES = {"all_addon_configs": "app configs", "addons": "local apps"}
 
 
@@ -60,7 +56,7 @@ def support_badges():
     """Donation badges in the larger `for-the-badge` style so they stand out from the rest."""
     return [_wrap(label, _url("static/v1", label=left, message=right, color=color, logo=logo,
                               logoColor=logo_color, style="for-the-badge"), link)
-            for label, left, right, color, logo, logo_color, link in SUPPORT]
+            for label, left, right, color, logo, logo_color, link in config.SUPPORT]
 
 
 SUPPORT_HEADING = "## Say thanks"
@@ -93,20 +89,30 @@ def _mount_readonly(entry):
 
 
 def mount_badges(data):
-    """Group folders by access mode: two badges instead of one per folder."""
-    modes = {True: [], False: []}
+    """One badge for all mounted folders, sorted; writable ones are marked, plus attached disks."""
+    folders = {}
     for entry in data.get("map", []):
-        name = MOUNT_NAMES.get(_mount_type(entry), _mount_type(entry))
-        if name not in modes[_mount_readonly(entry)]:
-            modes[_mount_readonly(entry)].append(name)
+        folders.setdefault(MOUNT_NAMES.get(_mount_type(entry), _mount_type(entry)), _mount_readonly(entry))
     badges = []
-    if modes[True]:
-        badges.append(static("read-only", " · ".join(modes[True]), "ok"))
-    if modes[False]:
-        badges.append(static("read-write", " · ".join(modes[False]), "write"))
+    if folders:
+        writable = [name for name, readonly in folders.items() if not readonly]
+        names = sorted(folders, key=str.casefold)
+        if not writable:
+            label, color = "mounts (read-only)", "ok"
+        elif len(writable) == len(folders):
+            label, color = "mounts (read-write)", "write"
+        else:
+            label, color = "mounts", "write"
+            names = [f"{name} (rw)" if name in writable else name for name in names]
+        badges.append(static(label, " · ".join(names), color))
     if data.get("devices"):
         badges.append(static("local disks", "attached", "info"))
     return badges
+
+
+def architecture_rank(arch):
+    """Canonical order (amd64 first) instead of whatever order config.yaml lists."""
+    return list(config.PLATFORMS).index(arch) if arch in config.PLATFORMS else len(config.PLATFORMS)
 
 
 def option_count(options):
@@ -212,7 +218,7 @@ def _app_builders():
         "build": lambda c: when(has(c, "builds"), [workflow(
             c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")]),
         "image_pulls": lambda c: when(published(c, "image-pulls"), [endpoint(c["repo"], "image-pulls", "image pulls")]),
-        "arch": lambda c: [static("arch", " · ".join(c["data"]["arch"]), "ok")],
+        "arch": lambda c: [static("arch", " · ".join(sorted(c["data"]["arch"], key=architecture_rank)), "ok")],
         "mounts": mounts,
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
         "ingress": flag("ingress", lambda d: "enabled", "accent", lambda d: d.get("ingress")),

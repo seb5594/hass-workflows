@@ -5,9 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from support import ENGINE
+import support  # noqa: F401
 
 import badgekit
+import callers
 import project
 import readme
 
@@ -34,8 +35,8 @@ class ProjectBadges(unittest.TestCase):
             kind, folder, metadata = project.discover(root)
             self.assertEqual((kind, folder, metadata["version"]), ("app", app, "2.3.4"))
             block = readme.render(root)
-            for item in ("message=2.3.4", "message=amd64%20%C2%B7%20armv7", "label=read-only", "message=config",
-                         "label=read-write", "message=share", "message=enabled"):
+            for item in ("message=2.3.4", "message=amd64%20%C2%B7%20armv7", "label=mounts",
+                         "message=config%20%C2%B7%20share%20%28rw%29", "message=enabled"):
                 self.assertIn(item, block)
             self.assertNotIn("i386", block)
             for removed in ("label=startup", "label=boot", "label=supervisor", "label=base"):
@@ -199,28 +200,41 @@ class PublishDecision(unittest.TestCase):
 
 
 class CallerTemplates(unittest.TestCase):
-    def test_templates_pin_one_engine_commit_and_pass_secrets(self):
-        for kind in ("app", "integration"):
-            text = (ENGINE / f".templates/{kind}/ci.yml.tpl").read_text()
-            self.assertEqual(text.count("__ENGINE_SHA__"), 1)
-            self.assertIn("secrets.ORCHESTRATION_PAT", text)
+    SHA = "a" * 40
 
-    def test_caller_drift_is_detected(self):
+    def test_every_caller_pins_the_engine_and_passes_secrets(self):
+        for kind in callers.CALLERS:
+            text = callers.render(kind, self.SHA)
+            self.assertEqual(text.count(f"ref: {self.SHA}"), 1, kind)
+            self.assertIn("secrets.ORCHESTRATION_PAT", text, kind)
+            self.assertNotIn("__", text.replace("__pycache__", ""), kind)
+
+    def test_project_callers_differ_only_where_the_kinds_differ(self):
+        app, integration = (callers.render(kind, self.SHA) for kind in ("app", "integration"))
+        self.assertIn("packages: write", app)
+        self.assertNotIn("packages: write", integration)
+        self.assertIn("timeout-minutes: 90", app)
+        self.assertIn("timeout-minutes: 30", integration)
+        self.assertIn("name: Validate and release integration", integration)
+
+    def test_catalog_callers_name_their_own_event_and_kind(self):
+        apps, integrations = (callers.render(kind, self.SHA) for kind in ("catalog-apps", "catalog-integrations"))
+        self.assertIn("types: [update-addons]", apps)
+        self.assertIn("kind: integrations", integrations)
+        self.assertIn("group: synchronize-integration-catalog", integrations)
+
+    def test_sync_writes_pins_and_detects_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
-            workflow = Path(tmp) / ".github/workflows/ci.yml"
-            workflow.parent.mkdir(parents=True)
-            sha = "a" * 40
-            template = (ENGINE / ".templates/app/ci.yml.tpl").read_text()
-            workflow.write_text(template.replace("__ENGINE_SHA__", sha))
-            previous = Path.cwd()
-            try:
-                os.chdir(tmp)
-                project.check_caller_workflow("app")
-                workflow.write_text(workflow.read_text() + "# local edit\n")
-                with self.assertRaisesRegex(ValueError, "differs"):
-                    project.check_caller_workflow("app")
-            finally:
-                os.chdir(previous)
+            self.assertTrue(callers.sync("app", self.SHA, tmp))
+            self.assertFalse(callers.sync("app", self.SHA, tmp))
+            callers.check("app", tmp)
+            self.assertEqual(callers.pinned_sha("app", tmp), self.SHA)
+            self.assertTrue(callers.sync("app", "b" * 40, tmp))
+            self.assertEqual(callers.pinned_sha("app", tmp), "b" * 40)
+            workflow = callers.target("app", tmp)
+            workflow.write_text(workflow.read_text() + "# local edit\n")
+            with self.assertRaisesRegex(ValueError, "differs"):
+                callers.check("app", tmp)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from common import PLATFORMS
+from config import PLATFORMS
 
 
 def instructions(dockerfile):
