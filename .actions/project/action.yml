@@ -49,7 +49,7 @@ runs:
         dockerfile: ${{ steps.project.outputs.directory }}/Dockerfile
         ignore: DL3008
     - name: Validate HACS repository
-      if: steps.project.outputs.kind == 'integration' && github.repository != 'seb5594/hass-workflows'
+      if: steps.project.outputs.kind == 'integration' && github.repository != 'seb5594/hass-workflows' && github.event.repository.is_template != true
       uses: hacs/action@main
       with:
         category: integration
