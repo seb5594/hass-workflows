@@ -15,6 +15,7 @@ on:
         default: false
 
 permissions:
+  actions: read # Lets the README refresh see whether the workflow has run.
   contents: write
 
 jobs:

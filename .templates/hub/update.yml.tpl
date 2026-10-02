@@ -11,6 +11,7 @@ on:
     paths: ['.github/workflows/update.yml']
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -23,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@v7
