@@ -5,6 +5,7 @@ from pathlib import Path
 
 import yaml
 
+import legacy
 from config import PLATFORMS
 
 
@@ -20,16 +21,26 @@ def instructions(dockerfile):
             pending = []
 
 
-def unpinned_packages(dockerfile):
-    """apk packages without an exact =version."""
-    missing = []
+def apk_packages(dockerfile):
+    """Every package named in an `apk add`, as written (`name` or `name=version`)."""
+    packages = []
     for instruction in instructions(dockerfile):
         for command in re.split(r"&&|;", instruction):
             words = command.split()
             if "apk" in words and "add" in words:
-                packages = [w for w in words[words.index("add") + 1:] if not w.startswith("-")]
-                missing += [w for w in packages if "=" not in w]
-    return missing
+                packages += [w for w in words[words.index("add") + 1:] if not w.startswith("-")]
+    return packages
+
+
+def unpinned_packages(dockerfile):
+    """apk packages without an exact =version."""
+    return [package for package in apk_packages(dockerfile) if "=" not in package]
+
+
+def version_variables(dockerfile):
+    """Names of the build arguments that carry a package version (`pkg=${NAME}`)."""
+    return [match for package in apk_packages(dockerfile) if "=" in package
+            for match in re.findall(r"\$\{?([A-Za-z0-9_]+)\}?", package.split("=", 1)[1])]
 
 
 def s6_services(app):
@@ -53,12 +64,21 @@ def check_startup_style(app, config):
         assert (root / "user/contents.d" / name).is_file(), f"Register service {name} in user/contents.d"
 
 
-def check_static_versions(dockerfile):
+def check_static_versions(dockerfile, arches=()):
     base = re.search(r"^ARG BUILD_FROM=(\S+)", dockerfile, re.M)
     assert base, "Dockerfile must declare a default base image: ARG BUILD_FROM=<image>:<tag>"
     assert ":" in base.group(1) and not base.group(1).endswith(":latest"), "Pin the base image to a tag"
     missing = unpinned_packages(dockerfile)
     assert not missing, f"Pin apk packages to exact versions: {', '.join(missing)}"
+    defaults = legacy.defaults(dockerfile)
+    variables = version_variables(dockerfile)
+    undefined = [name for name in variables if not defaults.get(name)]
+    assert not undefined, f"Give each version argument a default: {', '.join(undefined)}"
+    if any(legacy.is_legacy(arch) for arch in arches):
+        literal = [p for p in apk_packages(dockerfile) if not re.search(r"=\$", p)]
+        assert not literal, f"Pin through ARG so legacy architectures can override: {', '.join(literal)}"
+        absent = [name for name in variables if not defaults.get(name + legacy.SUFFIX)]
+        assert not absent, f"Add a legacy pin for: {', '.join(name + legacy.SUFFIX for name in absent)}"
 
 
 def main(folder):
@@ -69,7 +89,7 @@ def main(folder):
     assert "(dev)" not in config["name"], "Release app names must not contain (dev)"
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
     check_startup_style(app, config)
-    check_static_versions((app / "Dockerfile").read_text())
+    check_static_versions((app / "Dockerfile").read_text(), config["arch"])
     print(f"Validated {config['name']} {config['version']}")
 
 

@@ -21,6 +21,11 @@ PLATFORMS = {
     "i386": "linux/386",
 }
 
+# The current Home Assistant base image ships amd64 and aarch64 only. These architectures exist
+# solely as the previous generation of per-architecture base images; see legacy.py.
+LEGACY_ARCHES = ("armv7", "armhf", "i386")
+LEGACY_BASE = "ghcr.io/home-assistant/{arch}-base:3.22-2025.11.1"
+
 # repository_dispatch events that tell a catalog or the hub to refresh.
 EVENTS = {"apps": "update-addons", "integrations": "update-integrations", "hub": "update-hub"}
 

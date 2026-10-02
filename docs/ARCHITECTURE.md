@@ -16,7 +16,9 @@ call it. Each module has one job.
 | `gitops.py` | Commit, push and repository_dispatch used by catalog, hub and the README refresh |
 | `readme.py` | Badge and thank-you blocks of a project README |
 | `project.py` | Entry point of the project action: inspect, validate, build, package, release, refresh |
+| `legacy.py` | Architectures only the previous base images cover (armv7, armhf, i386): their base and package pins |
 | `build_app.py`, `release_app.py`, `package_integration.py`, `validate_app.py` | App and integration specifics |
+| `ha_matrix.py`, `hass_real_tests.py`, `ha_releases.json` | Test an integration against genuine Home Assistant releases: environments, the shared pytest plugin and the release table |
 | `metrics.py` | Pipeline metrics as Shields endpoint files on the `badges` branch |
 | `catalog.py`, `hub.py` | Catalog and hub generation |
 
