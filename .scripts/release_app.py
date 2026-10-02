@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from common import PLATFORMS, image_repository, image_tag, release_flags, run
+from common import PLATFORMS, image_repository, image_tag, notify_catalog, release_flags, run
 
 CATALOG_REPOSITORY = "seb5594/Home-Assistant-Apps"
 
@@ -40,18 +40,6 @@ def create_release(config, folder, repo, tag, assets):
     run(*args, *map(str, sorted(assets.glob("*.json"))))
 
 
-def notify_catalog(repo):
-    token = os.environ.get("ORCHESTRATION_TOKEN")
-    if not token:
-        print("No ORCHESTRATION_TOKEN; the catalog picks this version up on its hourly run.")
-        return
-    payload = {"event_type": "update-addons",
-               "client_payload": {"repository": repo, "sha": os.environ["GITHUB_SHA"]}}
-    subprocess.run(["gh", "api", f"repos/{CATALOG_REPOSITORY}/dispatches", "--input", "-"],
-                   input=json.dumps(payload), text=True, check=True,
-                   env=dict(os.environ, GH_TOKEN=token))
-
-
 def main(app):
     folder = Path(app)
     config = yaml.safe_load((folder / "config.yaml").read_text())
@@ -74,7 +62,7 @@ def main(app):
         "--tag", f"{repository}:latest", *references)
     if not exists:
         create_release(config, folder, repo, tag, assets)
-    notify_catalog(repo)
+    notify_catalog(CATALOG_REPOSITORY, "update-addons", repo)
 
 
 if __name__ == "__main__":

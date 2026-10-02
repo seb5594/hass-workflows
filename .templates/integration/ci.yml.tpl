@@ -36,3 +36,4 @@ jobs:
         with:
           token: ${{ github.token }}
           draft: ${{ inputs.draft }}
+          catalog-token: ${{ secrets.ORCHESTRATION_PAT }}
