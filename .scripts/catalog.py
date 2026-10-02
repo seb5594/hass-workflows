@@ -12,14 +12,12 @@ import os
 import re
 import subprocess
 import sys
-import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import yaml
 
 import badgekit
+import github_api
 
 ENGINE = Path(__file__).resolve().parents[1]
 KIND = os.environ.get("CATALOG_KIND", "apps")
@@ -37,7 +35,6 @@ NAME_PATTERNS = {
 NAME_PATTERN = re.compile(NAME_PATTERNS[KIND])
 ARCHITECTURES = {"aarch64", "amd64", "armhf", "armv7", "i386"}
 CONFIG_NAMES = {"config.yaml", "config.yml", "config.json"}
-RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
 def git(*args, cwd=None):
@@ -49,21 +46,7 @@ def git(*args, cwd=None):
 
 
 def fetch_json(url):
-    headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28",
-               "User-Agent": f"{OWNER}-app-catalog"}
-    if token := os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"Bearer {token}"
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as error:
-            if error.code not in RETRYABLE_STATUS or attempt == 3:
-                raise RuntimeError(f"GitHub API returned HTTP {error.code}: {url}") from error
-        except (urllib.error.URLError, TimeoutError):
-            if attempt == 3:
-                raise
-        time.sleep(2 ** attempt)
+    return github_api.fetch_json(url, f"{OWNER}-catalog")
 
 
 def discover_repositories(excluded):
