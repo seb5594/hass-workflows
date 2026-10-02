@@ -74,6 +74,7 @@ class ProjectBadges(unittest.TestCase):
                 self.assertNotIn(removed, block)
             rows = block.splitlines()[1:-1]
             self.assertIn("label=HACS", rows[0])
+            self.assertIn("label=setup", rows[0])
             self.assertIn("label=home%20assistant", rows[1])
             self.assertIn("label=version", rows[1])
             self.assertIn("label=downloads", rows[2])

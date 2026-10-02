@@ -130,8 +130,8 @@ APP_LAYOUT = [
     ["support"],
 ]
 INTEGRATION_LAYOUT = [
-    ["install"],
-    ["home_assistant", "version", "released", "checks", "setup", "quality_scale"],
+    ["install", "setup"],
+    ["home_assistant", "version", "released", "checks", "quality_scale"],
     ["downloads", "latest_downloads"],
     ["stars", "forks", "issues", "updated"],
     ["tests", "zip_size", "last_build"],
