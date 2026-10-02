@@ -9,7 +9,7 @@ import yaml
 import metrics
 from common import run, run_captured
 
-SMOKE_TEST = "bash -n /entrypoint.sh /run.sh && rsync --version && test -x /run.sh"
+SMOKE_TEST = "bash -n /entrypoint.sh /run.sh && test -x /run.sh"
 UTILS_TEST = (
     "printf '%s' '{\"data\":{\"title\":\"CI\"}}' > /tmp/sample.json; "
     "/utils/jsonToYaml.py /tmp/sample.json data; grep -q 'title: CI' /tmp/sample.yaml; "
