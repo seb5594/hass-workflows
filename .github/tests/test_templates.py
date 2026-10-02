@@ -35,18 +35,24 @@ class ProjectBadges(unittest.TestCase):
             block = readme.render(root)
             for item in ("message=2.3.4", "message=armv7", "label=read-only", "message=config",
                          "label=read-write", "message=share", "message=enabled",
-                         "label=base%20image", "alpine%3A3.24.2", "buymeacoffee.com/seb5594"):
+                         "buymeacoffee.com/seb5594"):
                 self.assertIn(item, block)
             self.assertNotIn("i386", block)
+            for removed in ("label=startup", "label=boot", "label=supervisor", "label=base"):
+                self.assertNotIn(removed, block)
             self.assertIn("message=2", block)  # leaf option count, not group count
 
-    def test_badges_are_grouped_into_paragraphs(self):
+    def test_rows_are_tight_and_donations_stand_alone_at_the_end(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_app(root)
-            block = readme.render(root)
-            self.assertGreaterEqual(block.count("\n\n"), 5)
-            self.assertTrue(all(line.count("![") >= 1 for line in block.splitlines()[1:-1] if line))
+            body = readme.render(root).splitlines()[1:-1]
+            self.assertNotIn("", body)
+            self.assertGreaterEqual(len(body), 6)
+            self.assertTrue(all(line.endswith("<br>") for line in body[:-1]))
+            last = body[-1]
+            self.assertIn("buymeacoffee.com", last)
+            self.assertNotIn("supervisor_add_addon_repository", last)
 
     def test_hacs_button_uses_actual_repository(self):
         with tempfile.TemporaryDirectory() as tmp:
