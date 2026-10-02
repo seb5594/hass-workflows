@@ -1,4 +1,4 @@
-name: Engine - App CI & Linting Pipeline
+name: Engine - App CI
 
 on:
   workflow_call:
@@ -6,44 +6,49 @@ on:
       app_name:
         required: true
         type: string
+    secrets:
+      ORCHESTRATION_PAT:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
 
 jobs:
-  lint-and-validate:
-    name: Code Quality & Linting
+  validate-and-build:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {arch: amd64, platform: linux/amd64}
+          - {arch: aarch64, platform: linux/arm64}
+          - {arch: armv7, platform: linux/arm/v7}
+          - {arch: armhf, platform: linux/arm/v6}
+          - {arch: i386, platform: linux/386}
     steps:
-      - name: Checkout Source Code
+      - name: Check out source
         uses: actions/checkout@v4
-
-      - name: Run Yamllint
-        uses: ibiqlik/action-yamllint@v3
         with:
-          file_or_dir: .
-
-      - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
-
-      - name: Run Hadolint (Dockerfile Linter)
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: "${{ inputs.app_name }}/Dockerfile"
-          ignore: DL3018,DL3008
-
-  test-build:
-    needs: lint-and-validate
-    name: Test Container Build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source Code
+          persist-credentials: false
+      - name: Check out private workflow engine
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Test Build Container
-        run: |
-          TARGET_DIR="${{ inputs.app_name }}"
-          if [ -d "$TARGET_DIR" ]; then
-            cd "$TARGET_DIR"
-          fi
-          docker buildx build --platform linux/amd64 .
+        with:
+          repository: seb5594/hass-workflows
+          ref: main
+          token: ${{ secrets.ORCHESTRATION_PAT }}
+          path: .engine
+          persist-credentials: false
+      - uses: ./.engine/.actions/app-ci
+        with:
+          app: ${{ inputs.app_name }}
+          arch: ${{ matrix.arch }}
+          platform: ${{ matrix.platform }}
