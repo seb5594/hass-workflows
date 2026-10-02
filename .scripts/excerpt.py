@@ -3,6 +3,13 @@ import html
 import re
 
 SKIPPED_STARTS = ("#", "[", "!", "<", "|", "---", "* ", "- ", ">")
+LINK = re.compile(r"!?\[[^\]]*\]\([^)]*\)")
+
+
+def only_links(line):
+    """True for navigation lines such as '**Changelog** · **Download**'."""
+    return not re.sub(r"[\s*_·|•-]+", "", LINK.sub("", line)) or not re.sub(
+        r"[\s*_·|•-]+", "", re.sub(r"\*\*[^*]+\*\*", "", line))
 
 
 def first_paragraph(markdown, limit=500, fallback=""):
@@ -21,7 +28,7 @@ def first_paragraph(markdown, limit=500, fallback=""):
             continue
         if in_code:
             continue
-        if not line or line.startswith(SKIPPED_STARTS):
+        if not line or line.startswith(SKIPPED_STARTS) or only_links(line):
             if paragraph:
                 break
             continue
