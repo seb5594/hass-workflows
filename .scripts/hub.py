@@ -120,7 +120,7 @@ def render_header(apps, integrations):
     hub = f"https://github.com/{HUB_REPOSITORY}"
     projects = len(apps) + len(integrations)
     return badgekit.render([
-        badgekit.install_row()[:1]
+        [badgekit.install_badge()]
         + [badgekit.static("HACS", "browse integrations", "info", f"https://github.com/{CATALOGS['integrations']}")],
         [badgekit.workflow(HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml"),
          badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", f"https://github.com/{CATALOGS['apps']}"),

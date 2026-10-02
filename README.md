@@ -41,7 +41,7 @@ The build and smoke-test phase executes once per architecture. Publishing pushes
 
 ## README badges
 
-The badge block of every project is generated from its metadata and arranged in rows: release, community, platform (architectures, image sizes), access (mounts), capabilities, quality, install and support. Static rows come from `config.yaml`, `manifest.json` and `hacs.json`; live rows use the GitHub API.
+The badge block of every project is generated from its metadata and arranged in tight rows: release, community, platform (architectures), access (mounts), capabilities, quality, install, and a last row with the donation links alone. Static rows come from `config.yaml`, `manifest.json` and `hacs.json`; live rows use the GitHub API.
 
 Pipeline metrics are published after each release-eligible run to the project's `badges` branch as [Shields endpoint](https://shields.io/badges/endpoint-badge) files and referenced by the README:
 

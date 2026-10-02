@@ -3,7 +3,6 @@ import json
 import re
 from urllib.parse import quote, urlencode
 
-import yaml
 
 STYLE = "flat"
 COLORS = {
@@ -66,8 +65,8 @@ def support_badges():
 
 
 def render(rows):
-    """One paragraph per non-empty row: GitHub breaks lines only between paragraphs."""
-    return "\n\n".join(" ".join(row) for row in rows if row)
+    """One line per non-empty row inside a single paragraph; <br> keeps the line spacing tight."""
+    return "<br>\n".join(" ".join(row) for row in rows if row)
 
 
 def _mount_type(entry):
@@ -97,22 +96,6 @@ def mount_badges(data):
     return badges
 
 
-def base_image(app_folder):
-    """Name the base image from build.yaml or the Dockerfile default, if declared."""
-    reference = None
-    build_file = app_folder / "build.yaml"
-    if build_file.exists():
-        sources = (yaml.safe_load(build_file.read_text()) or {}).get("build_from", {})
-        reference = next(iter(sources.values()), None)
-    if reference is None:
-        match = re.search(r"^ARG BUILD_FROM=(\S+)", (app_folder / "Dockerfile").read_text(), re.M)
-        reference = match.group(1) if match else None
-    if not reference or ":" not in reference:
-        return None
-    name, tag = reference.rsplit(":", 1)
-    return re.sub(r"^(amd64|aarch64|armv7|armhf|i386)-", "", name.rsplit("/", 1)[-1]) + ":" + tag
-
-
 def option_count(options):
     """Count leaf settings so nested option groups are not reported as one entry."""
     if isinstance(options, dict):
@@ -120,12 +103,10 @@ def option_count(options):
     return 1
 
 
-def install_row():
-    """Add-repository badge plus the donation links shown at the end of a project README."""
+def install_badge():
     redirect = ("https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?"
                 + urlencode({"repository_url": CATALOG_URL}, quote_via=quote))
-    return [static("Home Assistant", "Add app repository", "18BCF2", redirect, "homeassistant")] \
-        + support_badges()
+    return static("Home Assistant", "Add app repository", "18BCF2", redirect, "homeassistant")
 
 
 def community_row(repo, forks=0):
@@ -141,21 +122,15 @@ def community_row(repo, forks=0):
 
 def app_rows(data, repo, folder, with_install=True, forks=0):
     link = f"https://github.com/{repo}"
-    capabilities = [static("stage", data.get("stage", "stable"), "stable"),
-                    static("startup", data.get("startup", "application"), "muted"),
-                    static("boot", data.get("boot", "auto"), "muted")]
+    capabilities = [static("stage", data.get("stage", "stable"), "stable")]
     if data.get("ingress"):
         capabilities.append(static("ingress", "enabled", "accent"))
-    if data.get("hassio_api"):
-        capabilities.append(static("supervisor api", data.get("hassio_role", "default"), "write"))
     if data.get("privileged"):
         capabilities.append(static("privileged", ", ".join(data["privileged"]), "write"))
     if data.get("apparmor") is False:
         capabilities.append(static("apparmor", "disabled", "write"))
     if data.get("options"):
         capabilities.append(static("options", str(option_count(data["options"])), "info"))
-    if image := base_image(folder):
-        capabilities.append(static("base image", image, "muted"))
     return [
         [static("version", str(data["version"]), "info", f"{link}/releases"),
          github("release-date-pre", repo, "released", f"{link}/releases"),
@@ -166,7 +141,8 @@ def app_rows(data, repo, folder, with_install=True, forks=0):
         capabilities,
         [endpoint(repo, "image-size", "image size"), endpoint(repo, "runtime-tests", "runtime tests"),
          endpoint(repo, "last-build", "last build")],
-        install_row() if with_install else [],
+        [install_badge()] if with_install else [],
+        support_badges() if with_install else [],
     ]
 
 
@@ -207,7 +183,8 @@ def integration_rows(manifest, hacs, repo, with_install=True, forks=0):
         platform,
         [endpoint(repo, "tests", "tests"), endpoint(repo, "zip-size", "HACS zip"),
          endpoint(repo, "last-build", "last build")],
-        ([hacs_button] + support_badges()) if with_install else [],
+        [hacs_button] if with_install else [],
+        support_badges() if with_install else [],
     ]
 
 

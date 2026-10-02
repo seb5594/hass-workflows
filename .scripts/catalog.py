@@ -199,12 +199,12 @@ def render_header(entries, forks=0):
         architectures = sorted({arch for item in items for arch in item["arch"]})
         status.append(badgekit.static("architectures", " · ".join(architectures), "ok"))
     return badgekit.render([
-        badgekit.install_row()[:1] if KIND == "apps" else [],
+        [badgekit.install_badge()] if KIND == "apps" else [],
         status,
         [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers")]
         + ([badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks")] if forks else [])
         + [badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main")],
-        badgekit.install_row()[1:] if KIND == "apps" else badgekit.support_badges(),
+        badgekit.support_badges(),
     ])
 
 

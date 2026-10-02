@@ -58,7 +58,7 @@ class CatalogTests(unittest.TestCase):
                  "items": catalog.app_metadata(self.source)}
         readme = catalog.render_readme([entry])
         for item in ("message=1.74.1", "label=read-only", "label=local%20disks", "Pinned commit",
-                     "label=apps", "alpine%3A3.24.2"):
+                     "label=apps"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
         self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1])
