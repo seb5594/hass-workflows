@@ -7,7 +7,9 @@ from support import ENGINE  # noqa: F401
 
 import badgekit
 import config
+import github_api
 import gitops
+import live
 import templating
 
 
@@ -74,6 +76,37 @@ class GitOperations(unittest.TestCase):
         url, payload, token = post.call_args.args
         self.assertTrue(url.endswith(f"/repos/{config.HUB_REPOSITORY}/dispatches"))
         self.assertEqual((payload["event_type"], token), ("update-hub", "token"))
+
+
+class LiveFacts(unittest.TestCase):
+    """Facts travel through the real HTTP layer; only the network itself is replaced."""
+
+    ANSWERS = {
+        "/search/issues": '{"total_count": 3}',
+        "/releases": '[{"draft": false, "assets": [{"download_count": 4}]}, {"draft": true, "assets": []}]',
+        "/actions/workflows/": '{"total_count": 7}',
+        "/contents/": '[{"name": "image-size.json"}, {"name": "README.md"}]',
+    }
+
+    def answer(self, url, accept, token=None, data=None):
+        found = next((text for part, text in self.ANSWERS.items() if part in url), None)
+        return found or '{"stargazers_count": 2, "forks_count": 1, "license": {"spdx_id": "MIT"}}'
+
+    def test_facts_are_assembled_from_the_api_answers(self):
+        with mock.patch.object(github_api, "_request", side_effect=self.answer) as request:
+            facts = live.fetch("seb5594/demo", token="secret")
+        self.assertEqual(facts, {"license": "MIT", "stars": 2, "forks": 1, "issues": 3, "releases": 1,
+                                 "downloads": 4, "latest_downloads": 4, "builds": 7, "metrics": {"image-size"}})
+        self.assertTrue(all(call.args[2] == "secret" for call in request.call_args_list))
+
+    def test_a_missing_badges_branch_or_workflow_means_nothing_there(self):
+        def missing(url, accept, token=None, data=None):
+            if "/contents/" in url or "/actions/" in url:
+                raise RuntimeError(f"GitHub returned HTTP 404: {url}")
+            return self.answer(url, accept)
+        with mock.patch.object(github_api, "_request", side_effect=missing):
+            facts = live.fetch("seb5594/demo")
+        self.assertEqual((facts["builds"], facts["metrics"]), (0, set()))
 
 
 class BadgeOrdering(unittest.TestCase):
