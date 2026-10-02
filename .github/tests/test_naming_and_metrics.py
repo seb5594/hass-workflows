@@ -28,10 +28,10 @@ class MetricBadges(unittest.TestCase):
         self.assertEqual(metrics.duration(9), "9s")
 
     def test_badges_cover_recorded_values(self):
-        recorded = {"image_size.amd64": 16 * 1024 * 1024, "runtime_tests": 12, "tests": 202, "zip_size": 1024 * 1024}
+        recorded = {"image_size.amd64": 16 * 1024 * 1024, "image_size.armv7": 12 * 1024 * 1024, "runtime_tests": 12, "tests": 202, "zip_size": 1024 * 1024}
         with mock.patch.object(metrics, "package_pulls", return_value=1234):
             result = metrics.badges(recorded, "sample", "seb5594")
-        self.assertEqual(result["image-size-amd64"][1], "16.0 MiB")
+        self.assertEqual(result["image-size"][1], "amd64 16.0 · armv7 12.0 MiB")
         self.assertEqual(result["runtime-tests"][1], "12 passed")
         self.assertEqual(result["tests"][1], "202 passed")
         self.assertEqual(result["image-pulls"][1], "1,234")

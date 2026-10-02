@@ -33,8 +33,8 @@ class ProjectBadges(unittest.TestCase):
             kind, folder, metadata = project.discover(root)
             self.assertEqual((kind, folder, metadata["version"]), ("app", app, "2.3.4"))
             block = readme.render(root)
-            for item in ("message=2.3.4", "message=armv7", "label=config", "message=read-only",
-                         "label=share", "message=read-write", "message=enabled",
+            for item in ("message=2.3.4", "message=armv7", "label=read-only", "message=config",
+                         "label=read-write", "message=share", "message=enabled",
                          "label=base%20image", "alpine%3A3.24.2", "buymeacoffee.com/seb5594"):
                 self.assertIn(item, block)
             self.assertNotIn("i386", block)

@@ -80,11 +80,17 @@ def _mount_readonly(entry):
 
 
 def mount_badges(data):
-    mounts = {}
+    """Group folders by access mode: two badges instead of one per folder."""
+    modes = {True: [], False: []}
     for entry in data.get("map", []):
-        mounts.setdefault(_mount_type(entry), _mount_readonly(entry))
-    badges = [static(MOUNT_NAMES.get(kind, kind), "read-only" if readonly else "read-write",
-                     "ok" if readonly else "write") for kind, readonly in mounts.items()]
+        name = MOUNT_NAMES.get(_mount_type(entry), _mount_type(entry))
+        if name not in modes[_mount_readonly(entry)]:
+            modes[_mount_readonly(entry)].append(name)
+    badges = []
+    if modes[True]:
+        badges.append(static("read-only", " · ".join(modes[True]), "ok"))
+    if modes[False]:
+        badges.append(static("read-write", " · ".join(modes[False]), "write"))
     if data.get("devices"):
         badges.append(static("local disks", "attached", "info"))
     return badges
@@ -125,7 +131,7 @@ def install_row():
 def app_rows(data, repo, folder, with_install=True):
     link = f"https://github.com/{repo}"
     capabilities = [static("stage", data.get("stage", "stable"), "stable"),
-                    static("start", data.get("startup", "application"), "muted"),
+                    static("startup", data.get("startup", "application"), "muted"),
                     static("boot", data.get("boot", "auto"), "muted")]
     if data.get("ingress"):
         capabilities.append(static("ingress", "enabled", "accent"))
@@ -142,18 +148,17 @@ def app_rows(data, repo, folder, with_install=True):
     return [
         [static("version", str(data["version"]), "info", f"{link}/releases"),
          github("release-date-pre", repo, "released", f"{link}/releases"),
-         workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml"),
-         endpoint(repo, "last-build", "last build")],
+         workflow(repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")],
         [github("stars", repo, "stars", f"{link}/stargazers"),
          github("forks", repo, "forks", f"{link}/forks"),
          github("issues", repo, "issues", f"{link}/issues"),
          github("last-commit", repo, "updated", f"{link}/commits/main"),
          endpoint(repo, "image-pulls", "image pulls")],
         [static("arch", arch, "ok") for arch in data["arch"]],
-        [endpoint(repo, f"image-size-{arch}", f"{arch} image") for arch in data["arch"]],
         mount_badges(data),
         capabilities,
-        [endpoint(repo, "runtime-tests", "runtime tests")],
+        [endpoint(repo, "image-size", "image size"), endpoint(repo, "runtime-tests", "runtime tests"),
+         endpoint(repo, "last-build", "last build")],
         install_row() if with_install else [],
     ]
 
@@ -188,8 +193,7 @@ def integration_rows(manifest, hacs, repo):
     return [
         [static("version", str(manifest["version"]), "info", f"{link}/releases"),
          github("release-date-pre", repo, "released", f"{link}/releases"),
-         workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml"),
-         endpoint(repo, "last-build", "last build")],
+         workflow(repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")],
         [github("stars", repo, "stars", f"{link}/stargazers"),
          github("forks", repo, "forks", f"{link}/forks"),
          github("issues", repo, "issues", f"{link}/issues"),
@@ -197,7 +201,8 @@ def integration_rows(manifest, hacs, repo):
         [github("downloads", repo, "downloads", f"{link}/releases", "/total"),
          github("downloads", repo, "latest release", f"{link}/releases/latest", "/latest/total")],
         platform,
-        [endpoint(repo, "tests", "tests"), endpoint(repo, "zip-size", "HACS zip")],
+        [endpoint(repo, "tests", "tests"), endpoint(repo, "zip-size", "HACS zip"),
+         endpoint(repo, "last-build", "last build")],
         [hacs_button] + support_badges(),
     ]
 
