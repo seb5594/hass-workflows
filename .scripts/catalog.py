@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Discover seb5594's public apps, pin them as submodules and render the catalog README.
+"""Discover seb5594's public apps or integrations, pin them as submodules and render the catalog.
 
-Runs inside a checkout of the catalog repository (the working directory, or CATALOG_ROOT);
-the static text and repository metadata come from .templates/catalog of this engine.
+Runs inside a checkout of the catalog repository (the working directory, or CATALOG_ROOT).
+CATALOG_KIND selects `apps` (default) or `integrations`; static text and metadata come from
+.templates/catalog/<kind> of this engine. Private, archived and disabled repositories are never
+listed or pinned, so a public catalog does not reveal that they exist.
 """
 import html
 import json
@@ -20,13 +22,19 @@ import yaml
 import badgekit
 
 ENGINE = Path(__file__).resolve().parents[1]
-TEMPLATES = ENGINE / ".templates/catalog"
+KIND = os.environ.get("CATALOG_KIND", "apps")
+TEMPLATES = ENGINE / ".templates/catalog" / KIND
 ROOT = Path(os.environ.get("CATALOG_ROOT", ".")).resolve()
 OWNER = "seb5594"
-CATALOG_REPOSITORY = f"{OWNER}/Home-Assistant-Apps"
+CATALOG_REPOSITORY = f"{OWNER}/" + {"apps": "Home-Assistant-Apps",
+                                    "integrations": "Home-Assistant-Integrations"}[KIND]
 EXCLUDED_REPOSITORIES = set()
 EXCERPT_MAX_CHARS = 500
-NAME_PATTERN = re.compile(r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:App|Addon)$")
+NAME_PATTERNS = {
+    "apps": r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:App|Addon)$",
+    "integrations": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?i:integration)$",
+}
+NAME_PATTERN = re.compile(NAME_PATTERNS[KIND])
 ARCHITECTURES = {"aarch64", "amd64", "armhf", "armv7", "i386"}
 CONFIG_NAMES = {"config.yaml", "config.yml", "config.json"}
 RETRYABLE_STATUS = {429, 500, 502, 503, 504}
@@ -109,6 +117,24 @@ def readme_excerpt(folder, fallback, limit):
     if len(text) > limit:
         text = text[:limit - 1].rsplit(" ", 1)[0] + "…"
     return html.escape(text, quote=False)
+
+
+def integration_metadata(folder):
+    """Every integration in the repository: manifest plus the HACS settings next to it."""
+    hacs_file = folder / "hacs.json"
+    hacs = json.loads(hacs_file.read_text(encoding="utf-8")) if hacs_file.is_file() else {}
+    items = []
+    for manifest_file in sorted(folder.glob("custom_components/*/manifest.json")):
+        manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        for key in ("domain", "name", "version"):
+            if not isinstance(manifest.get(key), str) or not manifest[key].strip():
+                raise ValueError(f"Missing or invalid {key!r} in {manifest_file}")
+        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs,
+                      "description": manifest.get("description", manifest["name"]),
+                      "path": manifest_file.parent.relative_to(folder).as_posix()})
+    if not items:
+        raise ValueError(f"No Home Assistant integration found in {folder.name}.")
+    return items
 
 
 def app_metadata(folder):
@@ -197,43 +223,55 @@ def sync_repository(repo, modules, limit):
     sha = git("rev-parse", "FETCH_HEAD", cwd=folder)
     git("checkout", "--detach", sha, cwd=folder)
     git("submodule", "update", "--init", "--recursive", cwd=folder)
-    apps = app_metadata(folder)
+    items = collect(folder)
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
             "url": f"https://github.com/{OWNER}/{name}",
-            "excerpt": readme_excerpt(folder, repo.get("description") or apps[0]["description"], limit),
-            "apps": apps}
+            "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
+            "items": items}
+
+
+def collect(folder):
+    return integration_metadata(folder) if KIND == "integrations" else app_metadata(folder)
 
 
 def render_header(entries):
-    apps = [app for entry in entries for app in entry["apps"]]
-    architectures = sorted({arch for app in apps for arch in app["arch"]})
+    items = [item for entry in entries for item in entry["items"]]
     link = f"https://github.com/{CATALOG_REPOSITORY}"
+    status = [badgekit.workflow(CATALOG_REPOSITORY, "update.yml", "catalog sync",
+                                f"{link}/actions/workflows/update.yml"),
+              badgekit.static(KIND, str(len(items)), "info")]
+    if KIND == "apps":
+        architectures = sorted({arch for item in items for arch in item["arch"]})
+        status.append(badgekit.static("architectures", " · ".join(architectures), "ok"))
     return badgekit.render([
-        badgekit.install_row()[:1],
-        [badgekit.workflow(CATALOG_REPOSITORY, "update.yml", "catalog sync",
-                           f"{link}/actions/workflows/update.yml"),
-         badgekit.static("apps", str(len(apps)), "info"),
-         badgekit.static("architectures", " · ".join(architectures), "ok")],
+        badgekit.install_row()[:1] if KIND == "apps" else [],
+        status,
         [badgekit.github("stars", CATALOG_REPOSITORY, "stars", f"{link}/stargazers"),
          badgekit.github("forks", CATALOG_REPOSITORY, "forks", f"{link}/forks"),
          badgekit.github("last-commit", CATALOG_REPOSITORY, "synced", f"{link}/commits/main")],
-        badgekit.install_row()[1:],
+        badgekit.install_row()[1:] if KIND == "apps" else badgekit.support_badges(),
     ])
+
+
+def item_rows(item, entry):
+    if KIND == "integrations":
+        return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False)
+    return badgekit.app_rows(item, entry["repository"], ROOT / entry["path"] / item["path"],
+                             with_install=False)
 
 
 def render_catalog(entries):
     sections = []
     for entry in entries:
         sections.extend([f"### [{entry['path']}]({entry['url']})", "", f"> {entry['excerpt']}", ""])
-        for app in entry["apps"]:
-            changelog = f"{entry['url']}/blob/main/{app['path']}/CHANGELOG.md"
-            rows = badgekit.app_rows(app, entry["repository"], ROOT / entry["path"] / app["path"],
-                                     with_install=False)
-            sections.extend([f"**{app['name']}** · [Changelog]({changelog})", "",
-                             badgekit.render(rows), ""])
+        for item in entry["items"]:
+            changelog_folder = "" if KIND == "integrations" else f"{item['path']}/"
+            changelog = f"{entry['url']}/blob/main/{changelog_folder}CHANGELOG.md"
+            sections.extend([f"**{item['name']}** · [Changelog]({changelog})", "",
+                             badgekit.render(item_rows(item, entry)), ""])
         sections.extend([f"[Source & documentation]({entry['url']}) · "
                          f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""])
-    return "\n".join(sections).strip() or "No matching apps are currently available."
+    return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
 def render_readme(entries):
@@ -255,7 +293,7 @@ def repository_yaml():
 
 
 def main():
-    metadata = repository_yaml()
+    metadata = repository_yaml() if KIND == "apps" else None
     repositories = discover_repositories(EXCLUDED_REPOSITORIES)
     modules = current_submodules()
     if managed_submodules(modules) and not repositories:
@@ -264,9 +302,9 @@ def main():
     if len(paths) != len(set(paths)):
         raise ValueError("Multiple source repositories resolve to the same app folder.")
     entries = [sync_repository(repo, modules, EXCERPT_MAX_CHARS) for repo in repositories]
-    slugs = [app["slug"] for entry in entries for app in entry["apps"]]
+    slugs = [item["slug"] for entry in entries for item in entry["items"]]
     if len(slugs) != len(set(slugs)):
-        raise ValueError("Duplicate app slugs would collide in Home Assistant.")
+        raise ValueError("Duplicate slugs would collide in Home Assistant.")
     wanted = {entry["path"] for entry in entries}
     # Remove managed submodules only after every current source validated.
     for path in managed_submodules(current_submodules()):
@@ -274,8 +312,9 @@ def main():
             git("rm", "--force", "--", path)
     readme = render_readme(entries)
     (ROOT / "README.md").write_text(readme, encoding="utf-8")
-    (ROOT / "repository.yaml").write_text(metadata, encoding="utf-8")
-    print(f"Synchronized {len(entries)} repositories and {len(slugs)} apps.")
+    if metadata:
+        (ROOT / "repository.yaml").write_text(metadata, encoding="utf-8")
+    print(f"Synchronized {len(entries)} repositories and {len(slugs)} {KIND}.")
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary, "a", encoding="utf-8") as stream:
             stream.write(f"## App catalog\n\n{render_catalog(entries)}\n")

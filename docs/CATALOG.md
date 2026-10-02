@@ -1,8 +1,12 @@
-# App catalog
+# Catalogs
 
-The catalog repository [`Home-Assistant-Apps`](https://github.com/seb5594/Home-Assistant-Apps) contains no logic of its own. Its workflow checks out this engine and runs the [catalog action](../.actions/catalog/action.yml); everything below lives in [`catalog.py`](../.scripts/catalog.py) and [`.templates/catalog`](../.templates/catalog).
+Two catalog repositories share one script: [`Home-Assistant-Apps`](https://github.com/seb5594/Home-Assistant-Apps) (`kind: apps`) and [`Home-Assistant-Integrations`](https://github.com/seb5594/Home-Assistant-Integrations) (`kind: integrations`). Neither contains logic of its own. Its workflow checks out this engine and runs the [catalog action](../.actions/catalog/action.yml); everything below lives in [`catalog.py`](../.scripts/catalog.py) and [`.templates/catalog`](../.templates/catalog).
 
 ## Discovery rules
+
+**Integrations** are repositories named `hass-<project>-integration` or `Home-Assistant-<project>-Integration` that contain `custom_components/*/manifest.json`. The rules below apply to both kinds; only the name pattern differs.
+
+**Private repositories stay invisible.** Discovery drops private, archived and disabled repositories, so they appear neither in the README nor as submodules, and a repository that turns private disappears on the next run. GitHub renders a README identically for every viewer, so this is the only way to keep a public catalog from revealing them.
 
 Only public, active repositories owned by `seb5594` are included. Names must match `Home-Assistant-<project>-App` or `Home-Assistant-<project>-Addon` with a nonempty project name. Matching is case-sensitive; forks owned by seb5594 are eligible.
 
@@ -22,14 +26,14 @@ Each project needs at least one app configuration, at its root or in a nested fo
 | --- | --- |
 | Schedule | Every hour at minute 17 (UTC) |
 | Manual | **Actions → Synchronize app catalog → Run workflow** |
-| `update-addons` dispatch | Sent by an app release through `ORCHESTRATION_PAT` |
+| `update-addons` / `update-integrations` dispatch | Sent after a release through `ORCHESTRATION_PAT` |
 | Workflow change | A push that edits `update.yml` (for example a new engine pin) |
 
 Unchanged results produce no commit. Apps created as submodules keep their pinned commit visible in the README.
 
 ## Changing the output
 
-- Static text and the repository metadata: [`.templates/catalog`](../.templates/catalog).
+- Static text and the repository metadata: `.templates/catalog/apps` and `.templates/catalog/integrations`.
 - Excluded repositories and excerpt length: constants at the top of `catalog.py`.
 - Badge rows are shared with the project READMEs: [`badgekit.py`](../.scripts/badgekit.py).
 - To use a new engine version, change `ref` in the catalog's `update.yml` to the commit.
