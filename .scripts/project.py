@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 import yaml
@@ -52,10 +53,16 @@ def run_project_checks():
         run(sys.executable, str(check))
 
 
-def wants_pycodestyle():
-    """Projects opt into style checks with a [tool.pycodestyle] section."""
+def pycodestyle_options():
+    """Options from [tool.pycodestyle] in pyproject.toml; None when the project did not opt in."""
     config = Path("pyproject.toml")
-    return config.exists() and "[tool.pycodestyle]" in config.read_text()
+    if not config.exists():
+        return None
+    table = tomllib.loads(config.read_text()).get("tool", {}).get("pycodestyle")
+    if table is None:
+        return None
+    return [f"--{key}={','.join(value) if isinstance(value, list) else value}"
+            for key, value in table.items()]
 
 
 def test_directory():
@@ -94,8 +101,8 @@ def validate(kind, folder):
         return
     run("flake8", "custom_components", "--count", "--select=E9,F63,F7,F82",
         "--show-source", "--statistics")
-    if wants_pycodestyle():
-        run(sys.executable, "-m", "pycodestyle", "custom_components")
+    if (options := pycodestyle_options()) is not None:
+        run(sys.executable, "-m", "pycodestyle", *options, "custom_components")
     run(sys.executable, str(ENGINE / ".scripts/package_integration.py"), "--check")
     run_project_checks()
     if directory := test_directory():

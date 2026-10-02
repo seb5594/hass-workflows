@@ -1,6 +1,8 @@
 """Image naming and metric badges."""
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from support import ENGINE  # noqa: F401
@@ -8,6 +10,7 @@ from support import ENGINE  # noqa: F401
 import badgekit
 import common
 import metrics
+import release_app
 
 
 class ImageNaming(unittest.TestCase):
@@ -19,6 +22,21 @@ class ImageNaming(unittest.TestCase):
 
     def test_repository_is_lowercase(self):
         self.assertEqual(common.image_repository("Seb5594", "rsync-local"), "ghcr.io/seb5594/hass-rsync-local")
+
+
+class ImagePublishing(unittest.TestCase):
+    def test_each_architecture_is_retagged_and_described(self):
+        config = {"slug": "git-exporter", "version": "1.18.1", "arch": ["amd64", "armv7"]}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(release_app, "run") as run:
+            assets = Path(tmp)
+            references = release_app.push_architecture_images(
+                config, Path("git-exporter"), "ghcr.io/seb5594/hass-git-exporter", assets)
+            description = json.loads((assets / "armv7-hass-git-exporter-v1.18.1.json").read_text())
+        self.assertEqual(references, ["ghcr.io/seb5594/hass-git-exporter:amd64-hass-git-exporter-v1.18.1",
+                                      "ghcr.io/seb5594/hass-git-exporter:armv7-hass-git-exporter-v1.18.1"])
+        run.assert_any_call("docker", "tag", "local/git-exporter:amd64", references[0])
+        run.assert_any_call("docker", "push", references[1])
+        self.assertEqual(description["platform"], "linux/arm/v7")
 
 
 class MetricBadges(unittest.TestCase):
