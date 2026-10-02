@@ -21,23 +21,30 @@ if existing.returncode == 0 and not ref.startswith("refs/tags/"):
     raise SystemExit(0)
 platforms = {"amd64": "linux/amd64", "aarch64": "linux/arm64", "armv7": "linux/arm/v7",
              "armhf": "linux/arm/v6", "i386": "linux/386"}
-build_file = app / "build.yaml"
-bases = yaml.safe_load(build_file.read_text())["build_from"] if build_file.exists() else {}
 owner = repo.split("/")[0].lower()
+image_name = f"ghcr.io/{owner}/hass-{app.name}"
+references = []
+assets = Path("dist")
+assets.mkdir(exist_ok=True)
 for arch in config["arch"]:
-    image = f"ghcr.io/{owner}/{arch}-{app.name}:{version}"
-    args = ["docker", "buildx", "build", "--platform", platforms[arch], "--push", "--tag", image,
-            "--provenance=false", "--build-arg", f"BUILD_ARCH={arch}",
-            "--build-arg", f"BUILD_VERSION={version}"]
-    if arch in bases:
-        args += ["--build-arg", f"BUILD_FROM={bases[arch]}"]
-    subprocess.run(args + [str(app)], check=True)
+    # Replaced: image = f"ghcr.io/{owner}/{arch}-{app.name}:{version}"
+    # The release tag follows hass-APPNAMEVERSION-ARCH; the package name stays stable.
+    image = f"{image_name}:hass-{app.name}{version}-{arch}"
+    # Replaced: buildx built each image again after the CI test build.
+    subprocess.run(["docker", "tag", f"local/{app.name}:{arch}", image], check=True)
+    subprocess.run(["docker", "push", image], check=True)
+    references.append(image)
+    (assets / f"hass-{app.name}{version}-{arch}.json").write_text(
+        json.dumps({"image": image, "platform": platforms[arch], "version": version}, indent=2) + "\n")
+# Supervisor resolves the architecture from this shared multi-platform manifest.
+subprocess.run(["docker", "buildx", "imagetools", "create", "--tag", f"{image_name}:{version}",
+                *references], check=True)
 if existing.returncode != 0:
     notes = app / "CHANGELOG.md"
     args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
             "--title", f"{config['name']} {version}"]
     args += ["--notes-file", str(notes)] if notes.exists() else ["--generate-notes"]
-    subprocess.run(args, check=True)
+    subprocess.run([*args, *map(str, sorted(assets.glob("*.json")))], check=True)
 # The catalog checks out and validates the app sources; it does not need image credentials.
 env = dict(os.environ, GH_TOKEN=os.environ["ORCHESTRATION_TOKEN"])
 subprocess.run(["gh", "api", "repos/seb5594/Home-Assistant-Apps/dispatches", "--input", "-"],

@@ -1,49 +1,37 @@
-# Central Workflows & Infrastructure Engine
+# Home Assistant Workflow Engine
 
-This repository hosts private reusable workflows, deployment helpers, and automation engines for the Home Assistant ecosystem maintained by [@seb5594](https://github.com/seb5594).
+[![Engine checks](https://img.shields.io/github/actions/workflow/status/seb5594/hass-workflows/engine-validation.yml?branch=main&label=engine%20checks)](https://github.com/seb5594/hass-workflows/actions/workflows/engine-validation.yml)
+![Projects](https://img.shields.io/badge/projects-apps%20%2B%20integrations-1877A5)
+![Architectures](https://img.shields.io/badge/builds-5%20architectures-157F71)
+[![Buy Me a Coffee](https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/seb5594)
+[![PayPal](https://img.shields.io/badge/Support-PayPal-0070BA?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=QMQPNRENXDN26)
 
-## Included Reusable Workflows
-- `engine-app-ci.yml`: Code quality checks (Yamllint, ShellCheck, Hadolint) and container build tests.
-- `engine-app-release.yml`: Multi-architecture container build & push to GitHub Container Registry (GHCR) and dispatch update.
-- `engine-integration-ci.yml`: HACS validation and code quality checks for Custom Components.
-- `engine-dashboard-generator.yml`: Automated multi-repository README telemetry and dashboard engine.
+**One private engine for every Home Assistant project.** Public repositories keep a short workflow, their app/integration code, and the `.github/dependabot.yml` file GitHub requires locally. Metadata from `config.yaml` or `manifest.json` determines the validation, build, badges, and release behavior.
 
-## Public repositories and the private engine
+| Building block | Purpose |
+| --- | --- |
+| [Project action](.actions/project/action.yml) | Single CI and publishing entry point; detects the project type |
+| [Project scripts](.scripts/project.py) | Metadata checks, five-architecture smoke tests, and release orchestration |
+| [App templates](.templates/app/) / [integration templates](.templates/integration/) | Minimal public workflow and generated badge blocks |
+| [Entrypoint](.templates/entrypoint.sh) | Shared startup code, copied into apps for standalone Supervisor builds |
+| [Dependabot template](.templates/dependabot.yml) | Canonical copy for GitHub's mandatory per-repository configuration |
 
-GitHub does not allow a public repository to call a private reusable workflow
-directly. Public entry workflows therefore check out this repository with
-`ORCHESTRATION_PAT`, then run its local composite actions in `.actions/`.
-Reusable workflow wrappers remain available for private callers.
+## Release flow
 
-Set `ORCHESTRATION_PAT` as an Actions secret in each app or integration repository.
-The token needs read access to this private repository. App releases also use it
-to send `update-addons` to `seb5594/Home-Assistant-Apps`, requiring write access to
-that repository. Package publication and release creation use each source
-repository's own `GITHUB_TOKEN` with job-scoped write permissions.
+Apps build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish architecture tags of the form `hass-APPNAMEVERSION-ARCH` in one stable GHCR package. For example, `ghcr.io/seb5594/hass-rsync-local:hass-rsync-local1.74.3-amd64`. A multi-platform `ghcr.io/seb5594/hass-rsync-local:1.74.3` tag resolves the correct architecture. Each version also gets a GitHub release with per-architecture image references; users can still build locally until prebuilt images are made public and selected in the app configuration.
 
-Fork pull requests do not receive this token and skip the private engine jobs.
-Review the changes before running them on a trusted branch. Never combine
-`pull_request_target` with a checkout of untrusted pull request code.
+Integrations run HACS checks, Python lint and tests. Every CI run produces verified HACS and manual-installation ZIP artifacts. A new manifest version publishes the two ZIPs and `SHA256SUMS.txt` as a GitHub release.
 
-Public callers pin the engine checkout to a reviewed commit. After changing the
-engine, update those pins. The app's `entrypoint.sh` is an exact vendored copy of
-`.templates/entrypoint.sh`, so local Supervisor builds also work without access
-to this private repository. CI checks that the copy is current.
+The build and smoke-test phase executes once per architecture. Publishing pushes the tested images instead of rebuilding them. A version already released on `main` remains unchanged; a matching `vVERSION` tag can republish app images deliberately.
 
-## Release contract
+## Public caller contract
 
-- CI validates YAML, shell scripts and Dockerfiles, then builds amd64, aarch64,
-  armv7, armhf and i386 images. Runtime regression tests run on amd64.
-- App releases publish `ghcr.io/seb5594/{arch}-{slug}:{version}` after the whole
-  build matrix passes. Local app builds remain supported without an image field.
-- A new stable version on `main` creates its GitHub release automatically.
-  Version tags and manual workflow dispatches are also supported; tag versions
-  must match `config.yaml` or the integration manifest.
-- Integration releases produce a HACS ZIP with the domain contents at its root,
-  a manual ZIP containing `custom_components/{domain}`, and `SHA256SUMS.txt`.
-  Existing ZIP releases are immutable; change the manifest version to publish
-  an update.
-- An already released app version on `main` is skipped. An explicit version tag
-  can rebuild its container images, for example after a packaging correction.
-- `engine-integration-release.yml` supplies the same ZIP publication for private
-  reusable-workflow callers.
+The public workflow checks out this private repository at a reviewed commit through `ORCHESTRATION_PAT`. GitHub's Actions sharing switch does not grant `actions/checkout` access to a private secondary repository from a public caller. The token must select `hass-workflows` with **Contents: Read**. App catalog notifications also need **Contents: Read and write** for `Home-Assistant-Apps`. The source repository's `GITHUB_TOKEN` publishes its own release and images.
+
+Fork pull requests cannot access the private engine and are skipped. The central [engine validation](.github/workflows/engine-validation.yml) checks both apps and the integration without publishing. Release ZIPs from these checks are available as workflow artifacts.
+
+Each project's `.github/dependabot.yml` stays in that project: GitHub reads it there and cannot consume a template from another repository. Its contents are checked against [the shared template](.templates/dependabot.yml).
+
+## Honest project metrics
+
+Project READMEs show metadata-derived version, architecture, mounts, ingress when enabled, CI status, stars, and GitHub release-asset downloads. GHCR pulls, local Home Assistant builds, and installations are not counted by GitHub release badges. GitHub does not expose download country or continent data through its release API, so this engine does not invent geographic statistics.
