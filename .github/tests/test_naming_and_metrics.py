@@ -42,6 +42,7 @@ class ImagePublishing(unittest.TestCase):
 class Measurements(unittest.TestCase):
     def test_formatting(self):
         self.assertEqual(metrics.human_size(17 * 1024 * 1024 + 800_000), "17.8 MiB")
+        self.assertEqual(metrics.human_size(10080), "9.8 KiB")
         self.assertEqual([metrics.compact_count(n) for n in (7, 1234, 1000, 2_500_000)], ["7", "1.2k", "1k", "2.5M"])
 
     def test_new_values_replace_old_ones_and_missing_ones_are_kept(self):
@@ -52,7 +53,7 @@ class Measurements(unittest.TestCase):
 
     def test_changes_the_badge_would_not_show_are_ignored(self):
         previous = {"image_pulls": 1210, "zip_size": 40_000}
-        self.assertEqual(metrics.merge(previous, {"image_pulls": 1240, "zip_size": 40_100}), previous)
+        self.assertEqual(metrics.merge(previous, {"image_pulls": 1240, "zip_size": 40_050}), previous)
         self.assertEqual(metrics.merge(previous, {"image_pulls": 1300})["image_pulls"], 1300)
 
     def test_snapshot_is_written_only_when_it_changes(self):

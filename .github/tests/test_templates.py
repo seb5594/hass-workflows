@@ -186,7 +186,7 @@ class LiveFacts(unittest.TestCase):
                           latest_downloads=5, builds=4)
         for shown in ("label=stars", "label=forks", "label=issues", "label=released", "label=downloads",
                       "label=latest%20release", "label=checks", "compat.yml", "label=tests&message=202%20passed",
-                      "label=ZIP%20size&message=0.0%20MiB"):
+                      "label=ZIP%20size&message=40.0%20KiB"):
             self.assertIn(shown, block)
         self.assertNotIn("endpoint", block)
 
