@@ -192,5 +192,6 @@ if __name__ == "__main__":
     except subprocess.CalledProcessError:
         sys.exit(1)  # The failing command has already been reported by common.run.
     except (ValueError, AssertionError, OSError) as error:
-        print(f"::error title=project.py {sys.argv[1]}::{type(error).__name__}: {error}", flush=True)
+        # stderr: the inspect command writes its stdout into GITHUB_OUTPUT.
+        print(f"::error title=project.py {sys.argv[1]}::{type(error).__name__}: {error}", file=sys.stderr)
         sys.exit(1)
