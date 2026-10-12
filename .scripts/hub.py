@@ -15,6 +15,7 @@ import yaml
 
 import badgekit
 import config
+import licenses
 import live
 import remote
 import templating
@@ -141,6 +142,7 @@ def render_header(apps, integrations, own=None):
 def render_readme(apps, integrations, own=None):
     text = templating.fill((ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8"), {
         "BADGES": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
+        "LICENSE_NOTE": licenses.COLLECTION_NOTE,
         "APPS": app_table(apps) if apps else "_No apps are published yet._",
         "INTEGRATIONS": (integration_table(integrations) if integrations
                          else "_No integrations are published yet._")})

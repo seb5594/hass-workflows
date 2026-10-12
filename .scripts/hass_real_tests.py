@@ -8,7 +8,6 @@ The core is booted for every test, so a test asks for `hass` only to use it.
 import importlib
 import json
 import sys
-from pathlib import Path
 
 import pytest
 

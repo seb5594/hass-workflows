@@ -21,7 +21,9 @@ import badgekit
 import config
 import excerpt
 import github_api
+import licenses
 import live
+import metrics
 import remote
 import templating
 
@@ -166,7 +168,7 @@ def sync_repository(repo, modules, limit):
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
             "url": config.github_url(f"{OWNER}/{name}"), "live": live.fetch(f"{OWNER}/{name}"),
             "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
-            "items": items}
+            "metrics": metrics.load(folder), "items": items}
 
 
 def describe_repository(repo, limit):
@@ -204,9 +206,10 @@ def render_header(entries, own=None):
 def item_rows(item, entry):
     if KIND == "integrations":
         return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False,
-                                         live=entry.get("live"))
+                                         live=entry.get("live"), measured_values=item.get("metrics"),
+                                         compat=item.get("compat", False))
     return badgekit.app_rows(item, entry["repository"], ROOT / entry["path"] / item["path"],
-                             with_install=False, live=entry.get("live"))
+                             with_install=False, live=entry.get("live"), measured_values=entry.get("metrics"))
 
 
 def entry_heading(entry):
@@ -241,15 +244,10 @@ def render_catalog(entries):
     return "\n".join(sections).strip() or f"No matching {KIND} are currently available."
 
 
-LICENSE_NOTE = """## License
-
-Every project listed here is licensed on its own. The license badge and the `LICENSE` file in each
-repository state which terms apply."""
-
-
 def license_note(entries):
     """Appears only once at least one listed project has a license."""
-    return LICENSE_NOTE if any((entry.get("live") or {}).get("license") for entry in entries) else ""
+    licensed = any((entry.get("live") or {}).get("license") for entry in entries)
+    return licenses.COLLECTION_NOTE if licensed else ""
 
 
 def render_readme(entries, own=None):

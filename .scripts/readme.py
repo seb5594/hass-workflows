@@ -1,4 +1,4 @@
-"""Render the badge block of a project README from its own metadata."""
+"""Generated parts of a project README: the badge block below the title, thanks and license at the end."""
 import json
 import sys
 from pathlib import Path
@@ -6,11 +6,16 @@ from pathlib import Path
 import yaml
 
 import badgekit
+import licenses
+import metrics
 
 START = "<!-- badges:begin (generated from project metadata) -->"
 END = "<!-- badges:end -->"
 SUPPORT_START = "<!-- support:begin (generated, shared text) -->"
 SUPPORT_END = "<!-- support:end -->"
+LICENSE_START = "<!-- license:begin (generated from the license file) -->"
+LICENSE_END = "<!-- license:end -->"
+COMPAT_WORKFLOW = Path(".github/workflows/compat.yml")
 
 
 def repository_of(url):
@@ -24,13 +29,16 @@ def render(root=Path("."), live=None):
     manifests = list(root.glob("custom_components/*/manifest.json"))
     if len(configs) + len(manifests) != 1:
         raise ValueError("Expected exactly one app or integration metadata file")
+    measured = metrics.load(root)
     if configs:
         data = yaml.safe_load(configs[0].read_text())
-        rows = badgekit.app_rows(data, repository_of(data["url"]), configs[0].parent, live=live)
+        rows = badgekit.app_rows(data, repository_of(data["url"]), configs[0].parent, live=live,
+                                 measured_values=measured)
     else:
         manifest = json.loads(manifests[0].read_text())
         hacs = json.loads((root / "hacs.json").read_text())
-        rows = badgekit.integration_rows(manifest, hacs, repository_of(manifest["documentation"]), live=live)
+        rows = badgekit.integration_rows(manifest, hacs, repository_of(manifest["documentation"]), live=live,
+                                         measured_values=measured, compat=(root / COMPAT_WORKFLOW).exists())
     return f"{START}\n{badgekit.render(rows)}\n{END}"
 
 
@@ -55,8 +63,25 @@ def replace_block(source, start_marker, end_marker, block):
     return source[:start] + block + source[end:]
 
 
+def remove_block(source, start_marker, end_marker):
+    """Cut a generated block out, together with the blank lines that separated it."""
+    if start_marker not in source:
+        return source
+    head = source[:source.index(start_marker)].rstrip("\n")
+    tail = source[source.index(end_marker) + len(end_marker):].lstrip("\n")
+    return f"{head}\n\n{tail}" if tail else f"{head}\n"
+
+
+def closing_blocks(root):
+    """Thanks first, license last: both always form the end of the README."""
+    blocks = [f"{SUPPORT_START}\n{badgekit.support_section()}\n{SUPPORT_END}"]
+    if section := licenses.project_section(root):
+        blocks.append(f"{LICENSE_START}\n{section}\n{LICENSE_END}")
+    return "\n\n".join(blocks)
+
+
 def update(root=Path("."), live=None):
-    """Write the badge block and the shared support block; returns True when README.md changed."""
+    """Write the badge block and the closing blocks; returns True when README.md changed."""
     readme = root / "README.md"
     source = original = readme.read_text()
     block = render(root, live)
@@ -67,11 +92,9 @@ def update(root=Path("."), live=None):
     else:
         verify(root)
         source = replace_block(source, START, END, block)
-    support = f"{SUPPORT_START}\n{badgekit.support_section()}\n{SUPPORT_END}"
-    if SUPPORT_START in source:
-        source = replace_block(source, SUPPORT_START, SUPPORT_END, support)
-    else:
-        source = source.rstrip("\n") + f"\n\n{support}\n"
+    for start_marker, end_marker in ((SUPPORT_START, SUPPORT_END), (LICENSE_START, LICENSE_END)):
+        source = remove_block(source, start_marker, end_marker)
+    source = source.rstrip("\n") + f"\n\n{closing_blocks(root)}\n"
     if source == original:
         return False
     readme.write_text(source)

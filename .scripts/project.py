@@ -4,7 +4,6 @@ import os
 import re
 import subprocess
 import sys
-import time
 import tomllib
 from pathlib import Path
 
@@ -43,30 +42,32 @@ def should_publish(env=os.environ):
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
 
 
-def refresh_readme(env=os.environ):
-    """Rewrite the README badge block with live values and push it when it changed.
+def refresh_readme(kind, metadata, env=os.environ):
+    """Store this run's measurements, rewrite the README badges with live values and push both.
 
-    Badges without a value (no releases yet, zero stars, unpublished metrics) are left out, so
-    the block depends on live data and is regenerated here instead of being compared in CI.
+    Badges without a value (no releases yet, zero stars, nothing measured) are left out, so the
+    block depends on live data and is regenerated here instead of being compared in CI.
     Pushes by GITHUB_TOKEN do not start another workflow run.
     """
     branch = env.get("DEFAULT_BRANCH")
     if env.get("REF") != f"refs/heads/{branch}":
         print("README badges are refreshed from the default branch only.")
         return
+    owner = env.get("GITHUB_REPOSITORY", "").partition("/")[0]
+    metrics.update_snapshot(slug=metadata.get("slug") if kind == "app" else None, owner=owner)
     try:
         facts = live.fetch(readme.repository())
-        changed = readme.update(live=facts)
+        readme.update(live=facts)
     except RuntimeError as error:
         print(f"::warning::README badges were not refreshed: {error}")
         return
-    if not changed:
-        print("README badges are up to date.")
-        return
+    paths = [str(path) for path in (Path("README.md"), metrics.SNAPSHOT) if path.exists()]
     try:
-        gitops.commit_and_push("docs: refresh README badges", branch, env["GH_TOKEN"], paths=["README.md"])
+        changed = gitops.commit_and_push("docs: refresh README badges", branch, env["GH_TOKEN"], paths=paths)
     except subprocess.CalledProcessError:
         print("::warning::The README refresh could not be pushed; the next run will retry.")
+        return
+    print("README badges refreshed." if changed else "README badges are up to date.")
 
 
 def shell_scripts(directories):
@@ -171,10 +172,8 @@ def main(command):
     elif command == "validate":
         validate(kind, folder)
     elif command == "build" and kind == "app":
-        started = time.monotonic()
         for arch in metadata["arch"]:
             run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(folder), arch, PLATFORMS[arch])
-        metrics.record("build_seconds", int(time.monotonic() - started))
     elif command == "package" and kind == "integration":
         run(sys.executable, str(ENGINE / ".scripts/package_integration.py"))
     elif command == "release":
@@ -182,10 +181,7 @@ def main(command):
         args = [str(folder)] if kind == "app" else ["--release"]
         run(sys.executable, str(ENGINE / ".scripts" / script), *args)
     elif command == "refresh-readme":
-        refresh_readme()
-    elif command in {"render-metrics", "publish-metrics"}:
-        run(sys.executable, str(ENGINE / ".scripts/metrics.py"), command.split("-")[0], kind,
-            str(metadata.get("slug", "")))
+        refresh_readme(kind, metadata)
     else:
         raise ValueError(f"Invalid command {command!r} for {kind}")
 
