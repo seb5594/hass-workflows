@@ -43,8 +43,13 @@ def load(root=Path(".")):
     return json.loads(path.read_text()) if path.exists() else {}
 
 
-def human_size(num_bytes):
+def mebibytes(num_bytes):
     return f"{num_bytes / 1024 / 1024:.1f} MiB"
+
+
+def human_size(num_bytes):
+    """Small files such as an integration ZIP in KiB, everything from 1 MiB on in MiB."""
+    return f"{num_bytes / 1024:.1f} KiB" if num_bytes < 1024 * 1024 else mebibytes(num_bytes)
 
 
 def compact_count(number):
@@ -69,7 +74,7 @@ def package_pulls(owner, package):
 def display(key, value):
     """The text a badge shows for a stored value."""
     if key == "image_size":
-        return {arch: human_size(size) for arch, size in value.items()}
+        return {arch: mebibytes(size) for arch, size in value.items()}
     return {"zip_size": human_size, "image_pulls": compact_count}.get(key, str)(value)
 
 
