@@ -6,6 +6,7 @@ from unittest import mock
 from support import ENGINE  # noqa: F401
 
 import badgekit
+import common
 import config
 import github_api
 import gitops
@@ -107,6 +108,22 @@ class LiveFacts(unittest.TestCase):
         with mock.patch.object(github_api, "_request", side_effect=missing):
             facts = live.fetch("seb5594/demo")
         self.assertEqual(facts["builds"], 0)
+
+
+class FailureAnnotations(unittest.TestCase):
+    def test_failed_commands_become_one_escaped_annotation_in_actions(self):
+        with mock.patch.dict(common.os.environ, {"GITHUB_ACTIONS": "true"}), \
+                mock.patch("builtins.print") as printed:
+            common.annotate_failure(["docker", "run", "img"], 2, ["ok\n", "50% done\n", "boom\n"])
+        message = printed.call_args.args[0]
+        self.assertTrue(message.startswith("::error title=Command failed::docker run img exited with 2"))
+        self.assertIn("%0A50%25 done%0Aboom", message)
+        self.assertNotIn("\n", message)
+
+    def test_nothing_is_printed_outside_actions(self):
+        with mock.patch.dict(common.os.environ, {"GITHUB_ACTIONS": ""}), mock.patch("builtins.print") as printed:
+            common.annotate_failure(["false"], 1)
+        printed.assert_not_called()
 
 
 class BadgeOrdering(unittest.TestCase):
