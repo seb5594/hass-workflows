@@ -18,10 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
-      - run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+          persist-credentials: false
+      # Same Python and PyYAML as every project run; pytest for the Home Assistant matrix tests.
+      - uses: ./.actions/setup-python
+        with:
+          packages: pytest==8.4.2
       - run: python -m unittest discover -s .github/tests -v
   app:
     name: App / ${{ matrix.project }}
