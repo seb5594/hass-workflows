@@ -192,7 +192,7 @@ class LiveFacts(unittest.TestCase):
 
     def test_downloads_count_from_the_first_release_even_at_zero(self):
         block = self.rows(releases=1, downloads=0)
-        self.assertIn("label=downloads", block)
+        self.assertIn("label=downloads&style=flat&color=1877A5", block)
         self.assertNotIn("label=latest%20release", block)
 
     def test_no_license_badge_in_the_header_rows(self):
