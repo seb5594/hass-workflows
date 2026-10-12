@@ -112,8 +112,8 @@ def integration_table(entries):
             status = " ".join(
                 badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
                     repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")])
-                + badgekit.when(badgekit.has(facts, "downloads"), [badgekit.github(
-                    "downloads", repo, "downloads", f"{link}/releases", "/total")]))
+                + badgekit.when(badgekit.has(facts, "releases"), [badgekit.github(
+                    "downloads", repo, "downloads", f"{link}/releases", "/total", "info")]))
             rows.append(f"| {title_cell(manifest['name'], link, manifest.get('description'))} "
                         f"| {badgekit.static('version', manifest['version'], 'info', f'{link}/releases')} "
                         f"| {'≥ ' + minimum if minimum else '–'} | {status} |")

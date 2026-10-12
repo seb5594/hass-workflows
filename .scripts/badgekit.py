@@ -35,9 +35,16 @@ def static(label, message, color="ok", link=None, logo=None):
     return _wrap(label, _url("static/v1", **params), link)
 
 
-def github(metric, repo, label, link=None, suffix=""):
-    """Live badge backed by the GitHub API, e.g. github('stars', 'owner/name', 'stars')."""
-    return _wrap(label, _url(f"github/{metric}/{repo}{suffix}", label=label, style=STYLE), link)
+def github(metric, repo, label, link=None, suffix="", color=None):
+    """Live badge backed by the GitHub API, e.g. github('stars', 'owner/name', 'stars').
+
+    `color` overrides Shields' own choice, which paints a zero download counter red as if
+    something were broken.
+    """
+    params = {"label": label, "style": STYLE}
+    if color:
+        params["color"] = COLORS.get(color, color)
+    return _wrap(label, _url(f"github/{metric}/{repo}{suffix}", **params), link)
 
 
 def workflow(repo, filename, label, link=None):
@@ -252,9 +259,9 @@ def _integration_builders():
         # Release ZIP downloads are the closest thing to an install count GitHub offers; they are
         # shown from the first release on, even while the counter is still at zero.
         "downloads": lambda c: when(has(c, "releases"), [github(
-            "downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total")]),
+            "downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total", "info")]),
         "latest_downloads": lambda c: when(released_more_than_once(c), [github(
-            "downloads", c["repo"], "latest release", f"{_links(c)}/releases/latest", "/latest/total")]),
+            "downloads", c["repo"], "latest release", f"{_links(c)}/releases/latest", "/latest/total", "info")]),
         "compatibility": lambda c: when(c.get("compat") and has(c, "builds"), [workflow(
             c["repo"], "compat.yml", "HA releases", f"{_links(c)}/actions/workflows/compat.yml")]),
         "home_assistant": minimum_version,
