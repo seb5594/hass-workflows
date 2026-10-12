@@ -187,4 +187,10 @@ def main(command):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    try:
+        main(sys.argv[1])
+    except subprocess.CalledProcessError:
+        sys.exit(1)  # The failing command has already been reported by common.run.
+    except (ValueError, AssertionError, OSError) as error:
+        print(f"::error title=project.py {sys.argv[1]}::{type(error).__name__}: {error}", flush=True)
+        sys.exit(1)
