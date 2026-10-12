@@ -106,6 +106,40 @@ class ProjectBadges(unittest.TestCase):
             self.assertIn("label=HACS", first)
             self.assertEqual(first.count("!["), 1)
 
+    def test_license_section_closes_the_readme_after_the_thanks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_app(root)
+            (root / "LICENSE.md").write_text("                Apache License\n          Version 2.0, January 2004\n")
+            (root / "README.md").write_text("# Sample\n\nText\n")
+            readme.update(root)
+            text = (root / "README.md").read_text()
+            self.assertTrue(text.rstrip().endswith(readme.LICENSE_END))
+            self.assertLess(text.index(readme.SUPPORT_END), text.index(readme.LICENSE_START))
+            self.assertIn("[Apache License 2.0](LICENSE.md)", text)
+            self.assertIn("message=Apache-2.0", text)
+            self.assertFalse(readme.update(root))
+            # Text written below the generated blocks is moved above them on the next refresh.
+            (root / "README.md").write_text(text + "\n## Later section\n\nMore.\n")
+            self.assertTrue(readme.update(root))
+            moved = (root / "README.md").read_text()
+            self.assertLess(moved.index("## Later section"), moved.index(readme.SUPPORT_START))
+            self.assertTrue(moved.rstrip().endswith(readme.LICENSE_END))
+            self.assertEqual(moved.count(readme.LICENSE_START), 1)
+
+    def test_measurements_come_from_the_committed_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_app(root)
+            (root / ".github").mkdir()
+            (root / ".github/metrics.json").write_text(json.dumps({
+                "image_pulls": 1234, "runtime_tests": 12,
+                "image_size": {"armv7": 12 * 1024 * 1024, "amd64": 16 * 1024 * 1024}}))
+            block = readme.render(root)
+            self.assertIn("label=image%20pulls&message=1.2k", block)
+            self.assertIn("message=amd64%2016.0%20%C2%B7%20armv7%2012.0%20MiB", block)
+            self.assertIn("label=runtime%20tests&message=12%20passed", block)
+
     def test_update_inserts_and_checks_block(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -130,33 +164,39 @@ class ProjectBadges(unittest.TestCase):
 
 class LiveFacts(unittest.TestCase):
     EMPTY = {"stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0,
-             "latest_downloads": 0, "builds": 0, "metrics": set()}
+             "latest_downloads": 0, "builds": 0}
+    MEASURED = {"tests": 202, "zip_size": 40 * 1024}
 
-    def rows(self, **facts):
+    def rows(self, measured=None, compat=False, **facts):
         manifest = {"domain": "demo", "version": "1.0.0", "config_flow": True}
         rows = badgekit.integration_rows(manifest, {"homeassistant": "2026.9.0"}, "seb5594/demo",
-                                         live={**self.EMPTY, **facts})
+                                         live={**self.EMPTY, **facts}, measured_values=measured, compat=compat)
         return badgekit.render(rows)
 
     def test_badges_without_a_value_are_hidden(self):
         block = self.rows()
         for hidden in ("label=stars", "label=forks", "label=issues", "label=released", "label=downloads",
-                       "label=checks", "tests.json", "last-build.json"):
+                       "label=checks", "label=tests", "label=ZIP%20size", "label=HA%20releases", "endpoint"):
             self.assertNotIn(hidden, block)
         for kept in ("label=version", "label=updated", "label=HACS", "label=home%20assistant"):
             self.assertIn(kept, block)
 
     def test_badges_with_a_value_are_shown(self):
-        block = self.rows(stars=3, forks=1, issues=2, releases=1, downloads=5, latest_downloads=5, builds=4,
-                          metrics={"tests", "last-build", "zip-size"})
+        block = self.rows(self.MEASURED, True, stars=3, forks=1, issues=2, releases=2, downloads=5,
+                          latest_downloads=5, builds=4)
         for shown in ("label=stars", "label=forks", "label=issues", "label=released", "label=downloads",
-                      "label=latest%20release", "label=checks", "tests.json", "zip-size.json"):
+                      "label=latest%20release", "label=checks", "compat.yml", "label=tests&message=202%20passed",
+                      "label=ZIP%20size&message=0.0%20MiB"):
             self.assertIn(shown, block)
+        self.assertNotIn("endpoint", block)
 
-    def test_latest_release_downloads_hide_independently(self):
-        block = self.rows(downloads=9, latest_downloads=0)
+    def test_downloads_count_from_the_first_release_even_at_zero(self):
+        block = self.rows(releases=1, downloads=0)
         self.assertIn("label=downloads", block)
         self.assertNotIn("label=latest%20release", block)
+
+    def test_no_license_badge_in_the_header_rows(self):
+        self.assertNotIn("label=license", self.rows(releases=1))
 
 
 class BadgeLayout(unittest.TestCase):

@@ -1,46 +1,58 @@
-"""Collect pipeline metrics and publish them as Shields endpoint badges.
+"""Pipeline measurements that end up as plain README badges.
 
-Steps record raw values with `record()`. `render` turns them into one JSON file per
-badge and `publish` force-pushes those files to the `badges` branch of the project,
-where the generated README badges read them.
+Build, test and packaging steps call `record()` while they run. The README refresh then folds
+those raw values into `.github/metrics.json` of the project, which is committed together with the
+README. Badges are rendered from that file as ordinary static Shields badges, so a README never
+depends on an extra branch or on an endpoint that can disappear.
+
+A value that was not measured in the current run (an unreadable package page, a run without
+tests) keeps its previous value instead of vanishing from the README.
 """
 import json
 import os
 import re
-import shutil
-import sys
 import tempfile
 import urllib.request
-from datetime import datetime, timezone
 from pathlib import Path
 
-import badgekit
-import gitops
-from common import run
-
-STORE = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hass-metrics.json"
-OUTPUT = STORE.with_name("hass-badges")
+RUN_STORE = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hass-metrics.json"
+SNAPSHOT = Path(".github/metrics.json")
 PACKAGE_PAGE = "https://github.com/users/{owner}/packages/container/package/{package}"
 DOWNLOADS = re.compile(r'Total downloads</span>\s*<h3 title="(\d+)"')
 
+# Raw keys written by record() that make it into the snapshot. Image sizes are recorded per
+# architecture as "image_size.<arch>" and stored together as one mapping.
+IMAGE_SIZE_PREFIX = "image_size."
+DISPLAYED = ("tests", "runtime_tests", "zip_size", "image_pulls")
 
-def load():
-    return json.loads(STORE.read_text()) if STORE.exists() else {}
+
+def recorded():
+    """Raw values recorded by the steps of the current run."""
+    return json.loads(RUN_STORE.read_text()) if RUN_STORE.exists() else {}
 
 
 def record(key, value):
-    metrics = load()
-    metrics[key] = value
-    STORE.write_text(json.dumps(metrics, indent=2))
+    values = recorded()
+    values[key] = value
+    RUN_STORE.write_text(json.dumps(values, indent=2))
 
 
-def size(num_bytes):
+def load(root=Path(".")):
+    """The committed snapshot of a project; empty when it has none yet."""
+    path = root / SNAPSHOT
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def human_size(num_bytes):
     return f"{num_bytes / 1024 / 1024:.1f} MiB"
 
 
-def duration(seconds):
-    minutes, seconds = divmod(int(seconds), 60)
-    return f"{minutes}m {seconds:02d}s" if minutes else f"{seconds}s"
+def compact_count(number):
+    """1234 -> 1.2k, so a growing counter only changes the README every few hundred pulls."""
+    for limit, suffix in ((1_000_000, "M"), (1_000, "k")):
+        if number >= limit:
+            return f"{number / limit:.1f}".rstrip("0").rstrip(".") + suffix
+    return str(number)
 
 
 def package_pulls(owner, package):
@@ -54,55 +66,41 @@ def package_pulls(owner, package):
     return int(match.group(1)) if match else None
 
 
-def badges(metrics, slug=None, owner=None):
-    """Map badge file names to (label, message, color)."""
-    result = {"last-build": ("last build", datetime.now(timezone.utc).strftime("%Y-%m-%d"), "info")}
-    sizes = {key.split(".", 1)[1]: value for key, value in metrics.items() if key.startswith("image_size.")}
+def display(key, value):
+    """The text a badge shows for a stored value."""
+    if key == "image_size":
+        return {arch: human_size(size) for arch, size in value.items()}
+    return {"zip_size": human_size, "image_pulls": compact_count}.get(key, str)(value)
+
+
+def merge(previous, values):
+    """New measurements replace old ones; anything not measured this time is kept.
+
+    Byte counts and pull counters change on almost every run. A new value is only taken over when
+    the badge would show something different, so the README is not committed for nothing.
+    """
+    measured = {key: values[key] for key in DISPLAYED if values.get(key) is not None}
+    sizes = {key.removeprefix(IMAGE_SIZE_PREFIX): value for key, value in values.items()
+             if key.startswith(IMAGE_SIZE_PREFIX)}
     if sizes:
-        # Compact one-line summary, e.g. "amd64 16.8 · aarch64 19.9 MiB".
-        parts = [f"{arch} {value / 1024 / 1024:.1f}" for arch, value in sizes.items()]
-        result["image-size"] = ("image size", " · ".join(parts) + " MiB", "ok")
-    if "runtime_tests" in metrics:
-        result["runtime-tests"] = ("runtime tests", f"{metrics['runtime_tests']} passed", "stable")
-    if "tests" in metrics:
-        result["tests"] = ("tests", f"{metrics['tests']} passed", "stable")
-    if "zip_size" in metrics:
-        result["zip-size"] = ("HACS zip", size(metrics["zip_size"]), "ok")
-    if slug and (pulls := package_pulls(owner, f"hass-{slug}")) is not None:
-        result["image-pulls"] = ("image pulls", f"{pulls:,}", "info")
-    return result
+        measured["image_size"] = sizes
+    snapshot = dict(previous)
+    for key, value in measured.items():
+        if key not in previous or display(key, value) != display(key, previous[key]):
+            snapshot[key] = value
+    return snapshot
 
 
-def render(slug=None, owner=None):
-    shutil.rmtree(OUTPUT, ignore_errors=True)
-    OUTPUT.mkdir(parents=True)
-    for name, (label, message, color) in badges(load(), slug, owner).items():
-        (OUTPUT / f"{name}.json").write_text(badgekit.dump_endpoint(label, message, color))
-    return sorted(path.name for path in OUTPUT.iterdir())
-
-
-def publish(repository, token):
-    """Replace the badges branch with a single fresh commit; history is not needed."""
-    git = gitops.git_command(token)
-    with tempfile.TemporaryDirectory() as work:
-        run(*git[:1], "init", "-q", "-b", "badges", work)
-        for path in OUTPUT.iterdir():
-            shutil.copy(path, work)
-        run(*git, "-C", work, "add", "--all")
-        run(*git, "-C", work, "commit", "-q", "-m", "chore: update pipeline metrics")
-        run(*git, "-C", work, "push", "-q", "--force",
-            f"https://github.com/{repository}.git", "badges")
-
-
-def main(command, kind, slug):
-    owner, repository = None, os.environ.get("GITHUB_REPOSITORY", "")
-    if repository:
-        owner = repository.split("/")[0]
-    files = render(slug if kind == "app" else None, owner)
-    print("Rendered badges:", ", ".join(files))
-    if command == "publish":
-        publish(repository, os.environ["GH_TOKEN"])
-
-
-if __name__ == "__main__":
-    main(*sys.argv[1:4])
+def update_snapshot(root=Path("."), slug=None, owner=None):
+    """Fold this run's values into .github/metrics.json; returns True when the file changed."""
+    values = recorded()
+    if slug and owner:
+        values["image_pulls"] = package_pulls(owner, f"hass-{slug}")
+    path = root / SNAPSHOT
+    previous = load(root)
+    snapshot = merge(previous, values)
+    if snapshot == previous:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+    return True

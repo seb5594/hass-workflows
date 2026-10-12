@@ -21,7 +21,7 @@ class CatalogTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         facts = patch.object(catalog.live, "fetch", return_value={
             "stars": 1, "forks": 0, "issues": 0, "releases": 1, "downloads": 0, "latest_downloads": 0,
-            "builds": 1, "metrics": set()})
+            "builds": 1})
         facts.start()
         self.addCleanup(facts.stop)
         self.source = self.root / "Rsync-Local"
@@ -97,7 +97,7 @@ class IntegrationCatalog(unittest.TestCase):
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
     FACTS = {"license": "", "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
-             "builds": 0, "metrics": set()}
+             "builds": 0}
 
     def describe(self, **facts):
         repo = {"name": "hass-demo-integration", "default_branch": "main"}
@@ -131,12 +131,12 @@ class IntegrationCatalog(unittest.TestCase):
         self.assertIn("## Support", unlicensed)
         self.assertNotIn("## License", unlicensed)
         self.assertTrue(licensed.rstrip().endswith("terms apply."))
-        self.assertIn("label=license", licensed)
-        self.assertNotIn("label=license", unlicensed)
+        self.assertLess(licensed.index("## Say thanks"), licensed.index("## License"))
+        self.assertNotIn("label=license", licensed)
 
     def test_entries_without_values_hide_their_badges(self):
         quiet = catalog.render_readme([self.describe()], own=dict(self.FACTS))
-        busy = catalog.render_readme([self.describe(stars=2, forks=1, downloads=3, builds=1)], own={
+        busy = catalog.render_readme([self.describe(stars=2, forks=1, releases=1, downloads=3, builds=1)], own={
             **self.FACTS, "stars": 5, "forks": 1, "builds": 2})
         for hidden in ("label=stars", "label=forks", "label=downloads", "label=catalog%20sync"):
             self.assertNotIn(hidden, quiet)
