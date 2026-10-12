@@ -9,6 +9,8 @@ import github_api
 
 RAW = "https://raw.githubusercontent.com"
 API = "https://api.github.com"
+METRICS_FILE = ".github/metrics.json"
+COMPAT_WORKFLOW = ".github/workflows/compat.yml"
 
 
 fetch_json = github_api.fetch_json
@@ -45,13 +47,21 @@ def load_apps(repository, sha, files):
     return apps
 
 
+def optional_json(repository, sha, files, path):
+    return json.loads(raw(repository, sha, path)) if path in files else {}
+
+
 def load_integrations(repository, sha, files):
-    hacs = json.loads(raw(repository, sha, "hacs.json")) if "hacs.json" in files else {}
+    """Manifests plus what the listings need besides them: hacs.json, measurements, compat workflow."""
+    hacs = optional_json(repository, sha, files, "hacs.json")
+    measured = optional_json(repository, sha, files, METRICS_FILE)
+    compat = COMPAT_WORKFLOW in files
     manifests = [p for p in sorted(files) if re.fullmatch(r"custom_components/[^/]+/manifest\.json", p)]
     items = []
     for path in manifests:
         manifest = json.loads(raw(repository, sha, path))
-        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs, "path": path.rsplit("/", 1)[0]})
+        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs, "path": path.rsplit("/", 1)[0],
+                      "metrics": measured, "compat": compat})
     return items
 
 

@@ -28,8 +28,6 @@ options and documentation are in each app's repository.
 Integrations install through HACS and are configured under **Settings → Devices & services**.
 Only public projects are listed.
 
-{{SUPPORT}}
-
 ## How this works
 
 Each app or integration lives in its own repository and ships through one shared pipeline. The
@@ -37,3 +35,7 @@ Each app or integration lives in its own repository and ships through one shared
 [integration catalog](https://github.com/seb5594/Home-Assistant-Integrations) pin the latest
 version of every public project; this hub reads both and renders the overview every hour and
 whenever a catalog changes.
+
+{{SUPPORT}}
+
+{{LICENSE_NOTE}}

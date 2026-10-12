@@ -82,37 +82,37 @@ class LiveFacts(unittest.TestCase):
     """Facts travel through the real HTTP layer; only the network itself is replaced."""
 
     ANSWERS = {
-        "/search/issues": '{"total_count": 3}',
+        "/pulls": '[{"number": 9}]',
         "/releases": '[{"draft": false, "assets": [{"download_count": 4}]}, {"draft": true, "assets": []}]',
         "/actions/workflows/": '{"total_count": 7}',
-        "/contents/": '[{"name": "image-size.json"}, {"name": "README.md"}]',
     }
 
     def answer(self, url, accept, token=None, data=None):
         found = next((text for part, text in self.ANSWERS.items() if part in url), None)
-        return found or '{"stargazers_count": 2, "forks_count": 1, "license": {"spdx_id": "MIT"}}'
+        return found or ('{"stargazers_count": 2, "forks_count": 1, "open_issues_count": 4, '
+                         '"license": {"spdx_id": "MIT"}}')
 
     def test_facts_are_assembled_from_the_api_answers(self):
         with mock.patch.object(github_api, "_request", side_effect=self.answer) as request:
             facts = live.fetch("seb5594/demo", token="secret")
         self.assertEqual(facts, {"license": "MIT", "stars": 2, "forks": 1, "issues": 3, "releases": 1,
-                                 "downloads": 4, "latest_downloads": 4, "builds": 7, "metrics": {"image-size"}})
+                                 "downloads": 4, "latest_downloads": 4, "builds": 7})
         self.assertTrue(all(call.args[2] == "secret" for call in request.call_args_list))
 
-    def test_a_missing_badges_branch_or_workflow_means_nothing_there(self):
+    def test_a_missing_workflow_means_nothing_there(self):
         def missing(url, accept, token=None, data=None):
-            if "/contents/" in url or "/actions/" in url:
+            if "/actions/" in url:
                 raise RuntimeError(f"GitHub returned HTTP 404: {url}")
             return self.answer(url, accept)
         with mock.patch.object(github_api, "_request", side_effect=missing):
             facts = live.fetch("seb5594/demo")
-        self.assertEqual((facts["builds"], facts["metrics"]), (0, set()))
+        self.assertEqual(facts["builds"], 0)
 
 
 class BadgeOrdering(unittest.TestCase):
     def test_architectures_follow_the_canonical_order(self):
         data = {"arch": ["i386", "armhf", "amd64", "aarch64"], "version": "1", "map": []}
-        row = badgekit.render([badgekit.app_rows(data, "o/n", None)[2]])
+        row = badgekit.render([badgekit.app_rows(data, "o/n", None)[badgekit.APP_LAYOUT.index(["arch"])]])
         self.assertIn("amd64%20%C2%B7%20aarch64%20%C2%B7%20armhf%20%C2%B7%20i386", row)
 
     def test_mounts_are_one_sorted_badge_and_mark_writable_folders(self):

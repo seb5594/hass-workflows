@@ -33,7 +33,7 @@ Unchanged results produce no commit. Apps created as submodules keep their pinne
 
 ## Support and license sections
 
-Both catalog READMEs end with a Support section that sends questions to the repository of the project concerned. A License section follows automatically as soon as one listed project has a license on GitHub; each project also gets a license badge then.
+Both catalog READMEs end with a Support section that sends questions to the repository of the project concerned, the shared Say thanks section and, as soon as one listed project has a license on GitHub, a License note as the very last section. Project entries carry no license badge; each project names its license at the end of its own README.
 
 ## Changing the output
 

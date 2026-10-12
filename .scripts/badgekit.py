@@ -1,8 +1,8 @@
 """Build Shields.io badges and arrange them in thematic rows."""
-import json
 from urllib.parse import quote, urlencode
 
 import config
+import metrics
 
 
 STYLE = "flat"
@@ -44,12 +44,6 @@ def workflow(repo, filename, label, link=None):
     url = _url(f"github/actions/workflow/status/{repo}/{filename}",
                branch="main", label=label, style=STYLE)
     return _wrap(label, url, link)
-
-
-def endpoint(repo, name, label):
-    """Metric published by the pipeline to the repository's `badges` branch."""
-    source = f"https://raw.githubusercontent.com/{repo}/badges/{name}.json"
-    return _wrap(label, _url("endpoint", url=source, style=STYLE), None)
 
 
 def support_badges():
@@ -142,19 +136,18 @@ def hacs_badge(repo):
 # ---------------------------------------------------------------------------------------------
 APP_LAYOUT = [
     ["version", "released", "build"],
-    ["stars", "forks", "issues", "updated", "license", "image_pulls"],
+    ["image_pulls", "image_size", "runtime_tests"],
+    ["stars", "forks", "issues", "updated"],
     ["arch"],
     ["mounts"],
     ["stage", "ingress", "privileged", "apparmor", "options"],
-    ["image_size", "runtime_tests", "last_build"],
     ["install"],
 ]
 INTEGRATION_LAYOUT = [
     ["install", "setup"],
-    ["home_assistant", "version", "released", "checks", "quality_scale"],
-    ["downloads", "latest_downloads"],
-    ["stars", "forks", "issues", "updated", "license"],
-    ["tests", "zip_size", "last_build"],
+    ["home_assistant", "version", "released", "checks", "compatibility", "quality_scale"],
+    ["downloads", "latest_downloads", "zip_size", "tests"],
+    ["stars", "forks", "issues", "updated"],
 ]
 # Rows that only make sense on a project's own README, not in a catalog listing.
 README_ONLY = {"install"}
@@ -173,16 +166,31 @@ def has(ctx, fact):
     return True if live is None else bool(live.get(fact))
 
 
-def published(ctx, metric):
-    """Endpoint badges exist only after the pipeline published their JSON file."""
+def released_more_than_once(ctx):
+    """A separate 'latest release' counter only adds something next to an older release."""
     live = ctx.get("live")
-    return True if live is None else metric in live["metrics"]
+    return True if live is None else live.get("releases", 0) > 1
 
 
-def licensed(ctx):
-    """A license badge needs a confirmed license, so it stays hidden when facts are unknown."""
-    live = ctx.get("live")
-    return bool(live and live.get("license"))
+def measured(ctx, key):
+    """Display text of a pipeline measurement from .github/metrics.json; None when never measured."""
+    snapshot = ctx.get("metrics") or {}
+    return metrics.display(key, snapshot[key]) if key in snapshot else None
+
+
+def measurement(ctx, key, label, color="ok", suffix=""):
+    """Static badge for one measurement; nothing when the pipeline has not measured it yet."""
+    value = measured(ctx, key)
+    return [static(label, f"{value}{suffix}", color)] if value is not None else []
+
+
+def image_sizes(ctx):
+    """One compact badge, e.g. 'amd64 16.8 · aarch64 19.9 MiB', in canonical architecture order."""
+    sizes = measured(ctx, "image_size")
+    if not sizes:
+        return []
+    parts = [f"{arch} {sizes[arch].removesuffix(' MiB')}" for arch in sorted(sizes, key=architecture_rank)]
+    return [static("image size", " · ".join(parts) + " MiB", "ok")]
 
 
 def when(condition, badges):
@@ -201,8 +209,6 @@ def _common_builders():
         "issues": lambda c: when(has(c, "issues"),
                                  [github("issues", c["repo"], "issues", f"{_links(c)}/issues")]),
         "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
-        "license": lambda c: when(licensed(c), [github("license", c["repo"], "license", _links(c))]),
-        "last_build": lambda c: when(published(c, "last-build"), [endpoint(c["repo"], "last-build", "last build")]),
     }
 
 
@@ -217,7 +223,9 @@ def _app_builders():
     builders.update({
         "build": lambda c: when(has(c, "builds"), [workflow(
             c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")]),
-        "image_pulls": lambda c: when(published(c, "image-pulls"), [endpoint(c["repo"], "image-pulls", "image pulls")]),
+        "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
+        "image_size": image_sizes,
+        "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
         "arch": lambda c: [static("arch", " · ".join(sorted(c["data"]["arch"], key=architecture_rank)), "ok")],
         "mounts": mounts,
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
@@ -227,9 +235,6 @@ def _app_builders():
         "apparmor": flag("apparmor", lambda d: "disabled", "write", lambda d: d.get("apparmor") is False),
         "options": flag("options", lambda d: str(option_count(d["options"])), "info",
                         lambda d: d.get("options")),
-        "image_size": lambda c: when(published(c, "image-size"), [endpoint(c["repo"], "image-size", "image size")]),
-        "runtime_tests": lambda c: when(published(c, "runtime-tests"),
-                                        [endpoint(c["repo"], "runtime-tests", "runtime tests")]),
         "install": lambda c: [install_badge()],
     })
     return builders
@@ -244,16 +249,20 @@ def _integration_builders():
     builders.update({
         "checks": lambda c: when(has(c, "builds"), [workflow(
             c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
-        "downloads": lambda c: when(has(c, "downloads"), [github(
+        # Release ZIP downloads are the closest thing to an install count GitHub offers; they are
+        # shown from the first release on, even while the counter is still at zero.
+        "downloads": lambda c: when(has(c, "releases"), [github(
             "downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total")]),
-        "latest_downloads": lambda c: when(has(c, "latest_downloads"), [github(
+        "latest_downloads": lambda c: when(released_more_than_once(c), [github(
             "downloads", c["repo"], "latest release", f"{_links(c)}/releases/latest", "/latest/total")]),
+        "compatibility": lambda c: when(c.get("compat") and has(c, "builds"), [workflow(
+            c["repo"], "compat.yml", "HA releases", f"{_links(c)}/actions/workflows/compat.yml")]),
         "home_assistant": minimum_version,
         "setup": lambda c: [static("setup", "UI config flow", "ok")] if c["data"].get("config_flow") else [],
         "quality_scale": lambda c: [static("quality scale", c["data"]["quality_scale"], "ok")]
         if c["data"].get("quality_scale") else [],
-        "tests": lambda c: when(published(c, "tests"), [endpoint(c["repo"], "tests", "tests")]),
-        "zip_size": lambda c: when(published(c, "zip-size"), [endpoint(c["repo"], "zip-size", "HACS zip")]),
+        "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
+        "zip_size": lambda c: measurement(c, "zip_size", "ZIP size", "ok"),
         "install": lambda c: [hacs_badge(c["repo"])],
     })
     return builders
@@ -271,17 +280,16 @@ def build_rows(layout, builders, context, with_install=True):
     return rows
 
 
-def app_rows(data, repo, folder, with_install=True, forks=0, live=None):
-    context = {"data": data, "repo": repo, "folder": folder, "forks": forks, "live": live}
+def app_rows(data, repo, folder, with_install=True, forks=0, live=None, measured_values=None):
+    context = {"data": data, "repo": repo, "folder": folder, "forks": forks, "live": live,
+               "metrics": measured_values}
     return build_rows(APP_LAYOUT, _app_builders(), context, with_install)
 
 
-def integration_rows(manifest, hacs, repo, with_install=True, forks=0, live=None):
-    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks, "live": live}
+def integration_rows(manifest, hacs, repo, with_install=True, forks=0, live=None, measured_values=None,
+                     compat=False):
+    """`compat` marks projects that keep the Compatibility workflow (tests against real releases)."""
+    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks, "live": live,
+               "metrics": measured_values, "compat": compat}
     return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, with_install)
 
-
-def dump_endpoint(label, message, color="ok"):
-    """Shields endpoint payload, see https://shields.io/badges/endpoint-badge."""
-    return json.dumps({"schemaVersion": 1, "label": label, "message": message,
-                       "color": COLORS.get(color, color), "cacheSeconds": 3600}, indent=2) + "\n"

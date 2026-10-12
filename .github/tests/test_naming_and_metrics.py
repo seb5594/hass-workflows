@@ -1,4 +1,4 @@
-"""Image naming and metric badges."""
+"""Image naming and pipeline measurements."""
 import json
 import tempfile
 import unittest
@@ -7,7 +7,6 @@ from unittest import mock
 
 from support import ENGINE  # noqa: F401
 
-import badgekit
 import common
 import metrics
 import release_app
@@ -40,34 +39,40 @@ class ImagePublishing(unittest.TestCase):
         self.assertEqual(description["platform"], "linux/arm/v7")
 
 
-class MetricBadges(unittest.TestCase):
+class Measurements(unittest.TestCase):
     def test_formatting(self):
-        self.assertEqual(metrics.size(17 * 1024 * 1024 + 800_000), "17.8 MiB")
-        self.assertEqual(metrics.duration(252), "4m 12s")
-        self.assertEqual(metrics.duration(9), "9s")
+        self.assertEqual(metrics.human_size(17 * 1024 * 1024 + 800_000), "17.8 MiB")
+        self.assertEqual([metrics.compact_count(n) for n in (7, 1234, 1000, 2_500_000)], ["7", "1.2k", "1k", "2.5M"])
 
-    def test_badges_cover_recorded_values(self):
-        recorded = {"image_size.amd64": 16 * 1024 * 1024, "image_size.armv7": 12 * 1024 * 1024, "runtime_tests": 12, "tests": 202, "zip_size": 1024 * 1024}
-        with mock.patch.object(metrics, "package_pulls", return_value=1234):
-            result = metrics.badges(recorded, "sample", "seb5594")
-        self.assertEqual(result["image-size"][1], "amd64 16.0 · armv7 12.0 MiB")
-        self.assertEqual(result["runtime-tests"][1], "12 passed")
-        self.assertEqual(result["tests"][1], "202 passed")
-        self.assertEqual(result["image-pulls"][1], "1,234")
-        self.assertIn("last-build", result)
+    def test_new_values_replace_old_ones_and_missing_ones_are_kept(self):
+        previous = {"tests": 10, "image_pulls": 1200, "zip_size": 4000}
+        merged = metrics.merge(previous, {"tests": 12, "image_size.amd64": 5 * 1024 * 1024, "image_pulls": None})
+        self.assertEqual(merged, {"tests": 12, "image_pulls": 1200, "zip_size": 4000,
+                                  "image_size": {"amd64": 5 * 1024 * 1024}})
 
-    def test_unreadable_pull_count_is_skipped(self):
+    def test_changes_the_badge_would_not_show_are_ignored(self):
+        previous = {"image_pulls": 1210, "zip_size": 40_000}
+        self.assertEqual(metrics.merge(previous, {"image_pulls": 1240, "zip_size": 40_100}), previous)
+        self.assertEqual(metrics.merge(previous, {"image_pulls": 1300})["image_pulls"], 1300)
+
+    def test_snapshot_is_written_only_when_it_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root, store = Path(tmp), Path(tmp) / "run.json"
+            with mock.patch.object(metrics, "RUN_STORE", store), \
+                    mock.patch.object(metrics, "package_pulls", return_value=4321):
+                metrics.record("tests", 5)
+                self.assertTrue(metrics.update_snapshot(root, "sample", "seb5594"))
+                self.assertFalse(metrics.update_snapshot(root, "sample", "seb5594"))
+            self.assertEqual(metrics.load(root), {"tests": 5, "image_pulls": 4321})
+
+    def test_unreadable_pull_count_keeps_the_previous_value(self):
         with mock.patch.object(metrics, "package_pulls", return_value=None):
-            self.assertNotIn("image-pulls", metrics.badges({}, "sample", "seb5594"))
+            self.assertEqual(metrics.merge({"image_pulls": 9}, {"image_pulls": metrics.package_pulls("o", "p")}),
+                             {"image_pulls": 9})
 
     def test_pull_count_parser(self):
         page = '<span>Total downloads</span>\n  <h3 title="4321">4.3K</h3>'
         self.assertEqual(int(metrics.DOWNLOADS.search(page).group(1)), 4321)
-
-    def test_endpoint_payload_matches_shields_schema(self):
-        payload = json.loads(badgekit.dump_endpoint("tests", "5 passed", "stable"))
-        self.assertEqual(payload["schemaVersion"], 1)
-        self.assertEqual(payload["color"], badgekit.COLORS["stable"])
 
 
 if __name__ == "__main__":

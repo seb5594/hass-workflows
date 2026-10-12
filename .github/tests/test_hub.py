@@ -60,7 +60,7 @@ class HubTests(unittest.TestCase):
     def setUp(self):
         facts = patch.object(live, "fetch", return_value={
             "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
-            "builds": 0, "metrics": set()})
+            "builds": 0})
         facts.start()
         self.addCleanup(facts.stop)
         for name, fake in (("fetch_json", fake_fetch_json), ("fetch_text", fake_fetch_text)):
@@ -102,6 +102,12 @@ class HubTests(unittest.TestCase):
         for hidden in ("label=build", "label=stars", "label=downloads", "label=hub%20sync"):
             self.assertNotIn(hidden, readme)
         self.assertIn("label=version", readme)
+
+    def test_thanks_and_license_close_the_page(self):
+        readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"))
+        self.assertLess(readme.index("## How this works"), readme.index("## Say thanks"))
+        self.assertLess(readme.index("## Say thanks"), readme.index("## License"))
+        self.assertTrue(readme.rstrip().endswith("terms apply."))
 
     def test_title_without_description_has_no_empty_line_break(self):
         self.assertEqual(hub.title_cell("Demo", "https://x", ""), "**[Demo](https://x)**")
