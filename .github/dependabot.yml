@@ -1,8 +1,11 @@
-# GitHub requires this file in each repository; keep it identical to this template.
+# The engine keeps its own copy: besides the workflows it also watches the composite actions in
+# .actions, which projects never have. Projects use .templates/dependabot.yml unchanged.
 version: 2
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.actions/*
     schedule:
       interval: monthly
     groups:
