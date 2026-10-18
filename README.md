@@ -73,8 +73,10 @@ The badge rows come in three sizes, set by the `HERO`, `MAJOR` and `MINOR` tiers
 | --- | --- | --- | --- |
 | 1 | 2x | Support PayPal, Support Buy Me a Coffee | the same |
 | 2 | 1.4x | HACS install, minimum Home Assistant, newest release, its downloads | install, minimum Home Assistant, newest release, GHCR pulls |
-| 3 | normal | stars (when above zero), open issues, tests (when measured), checks, license (when present) | the same, with runtime tests |
-| 4 | normal | | architectures, mounts, stage, ingress, privileges, options, image size |
+| 3 | normal | stars (when above zero), open issues, tests (when measured), checks, license (when present) | architectures, stage, ingress, mounts, privileges, image size |
+| 4 | normal | | the facts of row 3 of the integration, with runtime tests |
+
+The rows share one centered paragraph, separated by line breaks, so they stay close together.
 
 Which badge sits in which row is decided in one place: `INTEGRATION_LAYOUT` and `APP_LAYOUT`. Editing a list there changes every project README and catalog entry. Conditional badges appear only when they have something to show, and a README cannot hide badges by itself, so the pipeline asks GitHub for the current values and rewrites the header on every run from the default branch (and weekly via the schedule trigger); CI only checks that the generated block exists. The version badge shows the newest published release (the metadata version before the first one); the downloads badge counts that release's assets and appears once a release exists, even at zero. The minimum Home Assistant badge links to the Compatibility workflow when the project has one. Catalogs and the hub reuse the layout per project without the donation, install and license badges.
 
