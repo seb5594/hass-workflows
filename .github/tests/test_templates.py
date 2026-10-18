@@ -60,3 +60,14 @@ class ProjectTemplates(unittest.TestCase):
                 (root / name / "config.yaml").write_text("slug: example\n")
             with self.assertRaisesRegex(ValueError, "exactly one"):
                 project.discover(root)
+
+    def test_prerelease_version_badge_escapes_the_dash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app = root / "sample"
+            app.mkdir()
+            (app / "config.yaml").write_text(
+                "name: Sample\nslug: sample\nversion: '1.0.0-beta.4'\n"
+                "url: https://github.com/seb5594/Home-Assistant-Sample-Addon\n"
+                "arch: [amd64]\n")
+            self.assertIn("version-1.0.0--beta.4-1877A5", readme.project(root))

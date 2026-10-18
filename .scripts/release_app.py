@@ -44,6 +44,8 @@ if existing.returncode != 0:
     args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
             "--title", f"{config['name']} {version}"]
     args += ["--notes-file", str(notes)] if notes.exists() else ["--generate-notes"]
+    if "-" in version:   # 1.0.0-beta.4 and similar
+        args.append("--prerelease")
     subprocess.run([*args, *map(str, sorted(assets.glob("*.json")))], check=True)
 # The catalog checks out and validates the app sources; it does not need image credentials.
 env = dict(os.environ, GH_TOKEN=os.environ["ORCHESTRATION_TOKEN"])

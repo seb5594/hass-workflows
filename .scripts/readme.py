@@ -54,7 +54,7 @@ def project(root=Path(".")):
         capabilities = []
         path = ROOT / ".templates/integration/badges.md.tpl"
     block = Template(path.read_text()).substitute(
-        VERSION=str(data["version"]), REPO=repository, OWNER=owner, NAME=name,
+        VERSION=str(data["version"]).replace("-", "--"), REPO=repository, OWNER=owner, NAME=name,
         ARCH_BADGES=architectures, CAPABILITY_BADGES=" ".join(capabilities))
     # Replaces removal of every empty line: retain one visual break per badge group.
     grouped = re.sub(r"\n{3,}", "\n\n", block.strip())
