@@ -81,6 +81,18 @@ class HeaderStructure(unittest.TestCase):
             make_integration(root, **options)
             return readme.header(root)
 
+    def test_picture_sits_between_the_name_and_the_separator(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = make_integration(root)
+            (folder / "brand").mkdir()
+            (folder / "brand/logo.png").write_bytes(b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR"
+                                                      + (200).to_bytes(4, "big") + (100).to_bytes(4, "big"))
+            block = readme.header(root)
+        self.assertLess(block.index("<h1"), block.index("brand/logo.png"))
+        self.assertLess(block.index("brand/logo.png"), block.index("\n---\n"))
+        self.assertLess(block.index("\n---\n"), block.index("label=HACS"))
+
     def test_name_is_centered_and_followed_by_a_separator(self):
         block = self.header()
         self.assertTrue(block.startswith(readme.START + '\n<h1 align="center">Demo Integration</h1>'))
@@ -88,40 +100,40 @@ class HeaderStructure(unittest.TestCase):
         self.assertLess(block.index("<h1"), block.index("\n---\n"))
         self.assertLess(block.index("\n---\n"), block.index("label=Support"))
 
-    def test_rows_shrink_from_support_to_the_plain_facts(self):
+    def test_rows_end_with_the_large_support_row(self):
         rows = paragraphs(self.header())
         self.assertEqual(len(rows), 3)
         heights = [set(re.findall(r'height="(\d+)"', row)) for row in rows]
-        self.assertEqual(heights, [{"40"}, {"28"}, {"20"}])
+        self.assertEqual(heights, [{"28"}, {"20"}, {"40"}])
         self.assertEqual(badgekit.HERO.height, 2 * badgekit.MINOR.height)
         self.assertIn("style=for-the-badge", rows[0])
-        self.assertIn("style=for-the-badge", rows[1])
-        self.assertIn("style=flat", rows[2])
+        self.assertIn("style=flat", rows[1])
+        self.assertIn("style=for-the-badge", rows[2])
 
     def test_support_row_links_paypal_me_and_coffee(self):
-        support_row = paragraphs(self.header())[0]
+        support_row = paragraphs(self.header())[2]
         self.assertIn('href="https://paypal.me/seb5594"', support_row)
         self.assertIn('href="https://buymeacoffee.com/seb5594"', support_row)
         self.assertLess(support_row.index("PayPal"), support_row.index("Buy%20Me%20a%20Coffee"))
 
     def test_middle_row_lists_hacs_minimum_version_and_release(self):
-        row = paragraphs(self.header())[1]
+        row = paragraphs(self.header())[0]
         labels = re.findall(r"label=([^&]+)", row)
         self.assertEqual(labels, ["HACS", "home%20assistant", "version"])
         self.assertIn("message=%E2%89%A5%202026.9.0", row)
         self.assertIn("owner=seb5594&amp;repository=demo-integration&amp;category=integration", row)
 
     def test_without_a_minimum_version_that_badge_is_omitted(self):
-        row = paragraphs(self.header(hacs={}))[1]
+        row = paragraphs(self.header(hacs={}))[0]
         self.assertNotIn("home%20assistant", row)
 
     def test_facts_row_puts_downloads_before_issues_and_checks(self):
-        row = paragraphs(self.header())[2]
+        row = paragraphs(self.header())[1]
         labels = re.findall(r"label=([^&]+)", row)
         self.assertEqual(labels, ["stars", "downloads", "issues", "checks"])
 
     def test_offline_rendering_keeps_the_unconditional_badges(self):
-        row = paragraphs(self.header())[2]
+        row = paragraphs(self.header())[1]
         for kept in ("label=stars", "label=downloads", "label=issues", "label=checks"):
             self.assertIn(kept, row)
         self.assertNotIn("label=tests", row)
@@ -245,16 +257,17 @@ class AppHeader(unittest.TestCase):
             make_app(root)
             rows = paragraphs(readme.header(root))
             heights = [set(re.findall(r'height="(\d+)"', row)) for row in rows]
-            self.assertEqual(heights, [{"40"}, {"28"}, {"20"}, {"20"}])
-            self.assertIn("supervisor_add_addon_repository", rows[1])
-            self.assertIn("label=arch", rows[2])
-            self.assertIn("label=issues", rows[3])
+            self.assertEqual(heights, [{"28"}, {"20"}, {"20"}, {"40"}])
+            self.assertIn("supervisor_add_addon_repository", rows[0])
+            self.assertIn("label=arch", rows[1])
+            self.assertIn("label=issues", rows[2])
+            self.assertIn("label=Support", rows[3])
 
     def test_app_details_follow_arch_stage_ingress_mounts_and_leave_out_options(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_app(root)
-            details = paragraphs(readme.header(root))[2]
+            details = paragraphs(readme.header(root))[1]
             labels = re.findall(r"label=([^&]+)", details)
             self.assertEqual(labels, ["arch", "stage", "ingress", "mounts"])
             self.assertNotIn("label=options", readme.header(root))
