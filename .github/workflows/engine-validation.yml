@@ -33,6 +33,7 @@ jobs:
         project:
           - Home-Assistant-Rsync-Local-Addon
           - Home-Assistant-git-exporter-Addon
+          - Home-Assistant-Playstation-VR-Camera-Loader-App
     steps:
       - uses: actions/checkout@v7
         with:

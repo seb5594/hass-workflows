@@ -46,7 +46,8 @@ def main(command):
         run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
         if kind == "app":
             run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
-            run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
+            if (folder / "entrypoint.sh").exists():
+                run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
             run("yamllint", "-d", "{extends: relaxed, rules: {line-length: disable, truthy: disable}}",
                 ".github/workflows", str(folder / "config.yaml"))
             scripts = sorted(str(path) for directory in [folder, Path(".github/tests")]

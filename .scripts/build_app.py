@@ -17,8 +17,11 @@ build_file = folder / "build.yaml"
 if build_file.exists():
     args += ["--build-arg", f"BUILD_FROM={yaml.safe_load(build_file.read_text())['build_from'][arch]}"]
 subprocess.run(args + [app], check=True)
-subprocess.run(["docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image,
-                "-c", "bash -n /entrypoint.sh /run.sh && rsync --version && test -x /run.sh"], check=True)
+# Apps that run as services of the base image's s6-overlay have no entrypoint.sh; their Dockerfile
+# and .github/tests/runtime.sh verify the image instead.
+if (folder / "entrypoint.sh").exists():
+    subprocess.run(["docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image,
+                    "-c", "bash -n /entrypoint.sh /run.sh && rsync --version && test -x /run.sh"], check=True)
 if arch == "amd64":
     runtime = Path(".github/tests/runtime.sh")
     if runtime.exists():
