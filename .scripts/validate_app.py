@@ -49,16 +49,31 @@ def s6_services(app):
     return sorted(p.name for p in root.iterdir() if p.is_dir() and p.name != "user") if root.is_dir() else []
 
 
+ENTRYPOINT, RUN_SCRIPT, S6 = "entrypoint", "run", "s6"
+VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?")
+
+
+def startup_style(app, config):
+    """How the app starts: its own entrypoint.sh, a run.sh service (`init: false`) or rootfs s6 services."""
+    if s6_services(app):
+        return S6
+    return RUN_SCRIPT if config.get("init") is False else ENTRYPOINT
+
+
 def check_startup_style(app, config):
-    """Apps either bring their own entrypoint.sh or run as s6 services, never a mix."""
-    services = s6_services(app)
-    if not services:
-        assert (app / "entrypoint.sh").is_file(), "Provide entrypoint.sh or s6 services under rootfs/etc/s6-overlay"
+    """Apps start in exactly one of three ways; each needs its own files and none may mix."""
+    style = startup_style(app, config)
+    if style == ENTRYPOINT:
+        assert (app / "entrypoint.sh").is_file(), \
+            "Provide entrypoint.sh or s6 services under rootfs/etc/s6-overlay, or run.sh with `init: false`"
         return
     assert not (app / "entrypoint.sh").exists(), "s6 apps start through /init; remove entrypoint.sh"
     assert config.get("init") is False, "s6 apps need `init: false` in config.yaml"
+    if style == RUN_SCRIPT:
+        assert (app / "run.sh").is_file(), "Apps with `init: false` need a run.sh service script"
+        return
     root = app / "rootfs/etc/s6-overlay/s6-rc.d"
-    for name in services:
+    for name in s6_services(app):
         assert (root / name / "type").is_file(), f"Service {name} needs a `type` file"
         assert (root / name / "run").is_file(), f"Service {name} needs a `run` script"
         assert (root / "user/contents.d" / name).is_file(), f"Register service {name} in user/contents.d"
@@ -85,7 +100,8 @@ def main(folder):
     app = Path(folder)
     config = yaml.safe_load((app / "config.yaml").read_text())
     assert config["slug"] == app.name, "App directory and slug must agree"
-    assert re.fullmatch(r"\d+\.\d+(?:\.\d+)?", str(config["version"])), "Use a stable numeric version"
+    assert VERSION.fullmatch(str(config["version"])), \
+        "Use a numeric version, optionally with a pre-release suffix like -beta.4"
     assert "(dev)" not in config["name"], "Release app names must not contain (dev)"
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
     check_startup_style(app, config)

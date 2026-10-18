@@ -6,6 +6,8 @@ ENGINE_ROOT = Path(__file__).resolve().parents[1]
 OWNER = "seb5594"
 USER_AGENT = f"{OWNER}-hass-workflows"
 
+DEFAULT_BRANCH = "main"
+
 ENGINE_REPOSITORY = f"{OWNER}/hass-workflows"
 APPS_CATALOG = f"{OWNER}/Home-Assistant-Apps"
 INTEGRATIONS_CATALOG = f"{OWNER}/Home-Assistant-Integrations"
@@ -29,13 +31,23 @@ LEGACY_BASE = "ghcr.io/home-assistant/{arch}-base:3.22-2025.11.1"
 # repository_dispatch events that tell a catalog or the hub to refresh.
 EVENTS = {"apps": "update-addons", "integrations": "update-integrations", "hub": "update-hub"}
 
-# (alt text, left label, right label, color, logo, logo color, link)
-SUPPORT = [
-    ("Buy Me a Coffee", "Support", "Buy Me a Coffee", "FFDD00", "buy-me-a-coffee", "black",
-     f"https://buymeacoffee.com/{OWNER}"),
-    ("PayPal", "Support", "PayPal", "0070BA", "paypal", "white",
-     "https://www.paypal.com/donate/?hosted_button_id=QMQPNRENXDN26"),
-]
+# Every repository the engine serves, by catalog kind. Drives the engine's own validation matrix.
+PROJECTS = {
+    "apps": ["Home-Assistant-Rsync-Local-Addon", "Home-Assistant-git-exporter-Addon",
+             "Home-Assistant-Playstation-VR-Camera-Loader-App"],
+    "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
+                     "hass-vacuum_mapguard-integration", "Home-Assistant-Integration-Template"],
+}
+
+# Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
+COFFEE_USER = OWNER
+PAYPAL_URL = f"https://paypal.me/{OWNER}"
+COFFEE_URL = f"https://buymeacoffee.com/{COFFEE_USER}"
+# name -> (alt text, left label, right label, color, logo, logo color, link), in display order
+SUPPORT = {
+    "paypal": ("PayPal", "Support", "PayPal", "0070BA", "paypal", "white", PAYPAL_URL),
+    "coffee": ("Buy Me a Coffee", "Support", "Buy Me a Coffee", "FFDD00", "buy-me-a-coffee", "black", COFFEE_URL),
+}
 
 
 def github_url(repository):

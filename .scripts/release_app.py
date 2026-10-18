@@ -9,7 +9,7 @@ import yaml
 
 import config
 import gitops
-from common import image_repository, image_tag, release_flags, run
+from common import image_repository, image_tag, is_prerelease, release_flags, run
 
 
 def release_exists(tag, repo):
@@ -35,7 +35,7 @@ def push_architecture_images(app_config, folder, repository, assets):
 def create_release(app_config, folder, repo, tag, assets):
     notes = folder / "CHANGELOG.md"
     args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
-            "--title", f"{app_config['name']} {app_config['version']}", *release_flags()]
+            "--title", f"{app_config['name']} {app_config['version']}", *release_flags(app_config["version"])]
     args += ["--notes-file", str(notes)] if notes.exists() else ["--generate-notes"]
     run(*args, *map(str, sorted(assets.glob("*.json"))))
 
@@ -57,9 +57,11 @@ def main(app):
     assets.mkdir(exist_ok=True)
     references = push_architecture_images(app_config, folder, repository, assets)
     # One multi-arch manifest lets Docker pick the right architecture by itself.
-    run("docker", "buildx", "imagetools", "create", "--tag",
-        f"{repository}:{image_tag(app_config['slug'], app_config['version'])}",
-        "--tag", f"{repository}:latest", *references)
+    tags = [image_tag(app_config["slug"], app_config["version"])]
+    if not is_prerelease(app_config["version"]):
+        tags.append("latest")
+    run("docker", "buildx", "imagetools", "create",
+        *(option for tag in tags for option in ("--tag", f"{repository}:{tag}")), *references)
     if not exists:
         create_release(app_config, folder, repo, tag, assets)
     gitops.notify(config.EVENTS["apps"], config.APPS_CATALOG, os.environ.get("ORCHESTRATION_TOKEN"))

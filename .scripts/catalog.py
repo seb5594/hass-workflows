@@ -204,12 +204,15 @@ def render_header(entries, own=None):
 
 
 def item_rows(item, entry):
+    """Badge lists of one listed project; README-only badges and the row sizes are left out."""
     if KIND == "integrations":
-        return badgekit.integration_rows(item, item["hacs"], entry["repository"], with_install=False,
+        rows = badgekit.integration_rows(item, item["hacs"], entry["repository"], standalone=False,
                                          live=entry.get("live"), measured_values=item.get("metrics"),
                                          compat=item.get("compat", False))
-    return badgekit.app_rows(item, entry["repository"], ROOT / entry["path"] / item["path"],
-                             with_install=False, live=entry.get("live"), measured_values=entry.get("metrics"))
+    else:
+        rows = badgekit.app_rows(item, entry["repository"], standalone=False, live=entry.get("live"),
+                                 measured_values=entry.get("metrics"))
+    return badgekit.plain(rows)
 
 
 def entry_heading(entry):

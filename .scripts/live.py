@@ -41,8 +41,8 @@ def fetch(repository, workflow="ci.yml", token=None):
         "forks": info.get("forks_count", 0),
         "issues": open_issues,
         "releases": len(releases),
+        "latest_tag": releases[0]["tag_name"] if releases else "",
         "downloads": sum(downloads(release) for release in releases),
-        "latest_downloads": downloads(releases[0]) if releases else 0,
         "builds": runs.get("total_count", 0),
     }
 

@@ -1,4 +1,6 @@
-"""Build Shields.io badges and arrange them in thematic rows."""
+"""Build Shields.io badges and arrange them in rows of three sizes."""
+import html
+from dataclasses import dataclass
 from urllib.parse import quote, urlencode
 
 import config
@@ -19,20 +21,52 @@ CATALOG_URL = config.github_url(config.APPS_CATALOG)
 MOUNT_NAMES = {"all_addon_configs": "app configs", "addons": "local apps"}
 
 
-def _url(path, **params):
-    return f"https://img.shields.io/{path}?" + urlencode(params, quote_via=quote)
+@dataclass(frozen=True)
+class Tier:
+    """How large a row of badges is drawn: the Shields style and the rendered height in pixels."""
+    style: str
+    height: int
 
 
-def _wrap(alt, url, link):
-    image = f"![{alt}]({url})"
-    return f"[{image}]({link})" if link else image
+# The smallest tier keeps the native height of a flat badge; the others are 2x and 1.4x of it.
+HERO = Tier("for-the-badge", 40)
+MAJOR = Tier("for-the-badge", 28)
+MINOR = Tier(STYLE, 20)
 
 
-def static(label, message, color="ok", link=None, logo=None):
-    params = {"label": label, "message": message, "color": COLORS.get(color, color), "style": STYLE}
+@dataclass(frozen=True)
+class Badge:
+    """One Shields badge; the style is chosen when it is rendered, so a row decides its own size."""
+    alt: str
+    path: str
+    params: dict
+    link: str | None = None
+
+    def url(self, style=STYLE):
+        return f"https://img.shields.io/{self.path}?" + urlencode({**self.params, "style": style}, quote_via=quote)
+
+    def markdown(self, style=STYLE):
+        image = f"![{self.alt}]({self.url(style)})"
+        return f"[{image}]({self.link})" if self.link else image
+
+    def html(self, tier):
+        image = f'<img src="{html.escape(self.url(tier.style))}" alt="{html.escape(self.alt)}" height="{tier.height}">'
+        return f'<a href="{html.escape(self.link)}">{image}</a>' if self.link else image
+
+    __str__ = markdown
+
+
+@dataclass(frozen=True)
+class Row:
+    tier: Tier
+    badges: list
+
+
+def static(label, message, color="ok", link=None, logo=None, logo_color="white"):
+    params = {"label": label, "message": message, "color": COLORS.get(color, color)}
     if logo:
-        params.update(logo=logo, logoColor="white")
-    return _wrap(label, _url("static/v1", **params), link)
+        params.update(logo=logo, logoColor=logo_color)
+    return Badge(label, "static/v1", params, link)
 
 
 def github(metric, repo, label, link=None, suffix="", color=None):
@@ -41,23 +75,24 @@ def github(metric, repo, label, link=None, suffix="", color=None):
     `color` overrides Shields' own choice, which paints a zero download counter red as if
     something were broken.
     """
-    params = {"label": label, "style": STYLE}
+    params = {"label": label}
     if color:
         params["color"] = COLORS.get(color, color)
-    return _wrap(label, _url(f"github/{metric}/{repo}{suffix}", **params), link)
+    return Badge(label, f"github/{metric}/{repo}{suffix}", params, link)
 
 
 def workflow(repo, filename, label, link=None):
-    url = _url(f"github/actions/workflow/status/{repo}/{filename}",
-               branch="main", label=label, style=STYLE)
-    return _wrap(label, url, link)
+    return Badge(label, f"github/actions/workflow/status/{repo}/{filename}",
+                 {"branch": config.DEFAULT_BRANCH, "label": label}, link)
+
+
+def support_badge(name):
+    alt, left, right, color, logo, logo_color, link = config.SUPPORT[name]
+    return static(left, right, color, link, logo, logo_color)
 
 
 def support_badges():
-    """Donation badges in the larger `for-the-badge` style so they stand out from the rest."""
-    return [_wrap(label, _url("static/v1", label=left, message=right, color=color, logo=logo,
-                              logoColor=logo_color, style="for-the-badge"), link)
-            for label, left, right, color, logo, logo_color, link in config.SUPPORT]
+    return [support_badge(name) for name in config.SUPPORT]
 
 
 SUPPORT_HEADING = "## Say thanks"
@@ -70,13 +105,26 @@ SUPPORT_TEXT = (
 
 
 def support_section():
-    """The shared thank-you block: heading, text and the donation badges."""
-    return f"{SUPPORT_HEADING}\n\n{SUPPORT_TEXT}\n\n" + " ".join(support_badges())
+    """The shared thank-you block: heading, text and the donation badges in the large style."""
+    return (f"{SUPPORT_HEADING}\n\n{SUPPORT_TEXT}\n\n"
+            + " ".join(badge.markdown(HERO.style) for badge in support_badges()))
 
 
 def render(rows):
-    """One line per non-empty row inside a single paragraph; <br> keeps the line spacing tight."""
-    return "<br>\n".join(" ".join(row) for row in rows if row)
+    """Compact catalog form: one line per non-empty list of badges inside a single paragraph."""
+    return "<br>\n".join(" ".join(str(badge) for badge in row) for row in rows if row)
+
+
+def render_header(rows):
+    """Centered README form: one paragraph per row, drawn in the size of the row's tier."""
+    return "\n\n".join(
+        '<p align="center">\n  ' + "\n  ".join(badge.html(row.tier) for badge in row.badges) + "\n</p>"
+        for row in rows if row.badges)
+
+
+def plain(rows):
+    """The badge lists of rows, for places that ignore the tiers."""
+    return [row.badges for row in rows]
 
 
 def _mount_type(entry):
@@ -138,30 +186,27 @@ def hacs_badge(repo):
 
 # ---------------------------------------------------------------------------------------------
 # Badge layout: THE place to add, remove or reorder badges for every project and catalog.
-# Each inner list is one line; each name refers to a builder below. Unknown names fail loudly,
-# builders that have nothing to show simply return no badge.
+# Each entry is one row: its size and the names of its badges, each naming a builder below.
+# Unknown names fail loudly; builders that have nothing to show simply return no badge.
 # ---------------------------------------------------------------------------------------------
-APP_LAYOUT = [
-    ["version", "released", "build"],
-    ["image_pulls", "image_size", "runtime_tests"],
-    ["stars", "forks", "issues", "updated"],
-    ["arch"],
-    ["mounts"],
-    ["stage", "ingress", "privileged", "apparmor", "options"],
-    ["install"],
-]
 INTEGRATION_LAYOUT = [
-    ["install", "setup"],
-    ["home_assistant", "version", "released", "checks", "compatibility", "quality_scale"],
-    ["downloads", "latest_downloads", "zip_size", "tests"],
-    ["stars", "forks", "issues", "updated"],
+    (HERO, ["paypal", "coffee"]),
+    (MAJOR, ["install", "home_assistant", "version", "downloads"]),
+    (MINOR, ["stars", "issues", "tests", "checks", "license"]),
 ]
-# Rows that only make sense on a project's own README, not in a catalog listing.
-README_ONLY = {"install"}
+APP_LAYOUT = [
+    (HERO, ["paypal", "coffee"]),
+    (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
+    (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
+    (MINOR, ["arch", "mounts", "stage", "ingress", "privileged", "apparmor", "options", "image_size"]),
+]
+# Badges that only make sense in a project's own README, not in a catalog listing. The catalog
+# names its licenses in one closing note instead of a badge per entry.
+README_ONLY = {"paypal", "coffee", "install", "license"}
 
 
 def _links(ctx):
-    return f"https://github.com/{ctx['repo']}"
+    return config.github_url(ctx["repo"])
 
 
 def has(ctx, fact):
@@ -173,10 +218,17 @@ def has(ctx, fact):
     return True if live is None else bool(live.get(fact))
 
 
-def released_more_than_once(ctx):
-    """A separate 'latest release' counter only adds something next to an older release."""
+def has_license(ctx):
+    """GitHub's detection decides when it is asked; offline, the license file of the checkout does."""
     live = ctx.get("live")
-    return True if live is None else live.get("releases", 0) > 1
+    if live is None:
+        return bool(ctx.get("licensed"))
+    return live.get("license") not in (None, "", "NOASSERTION")
+
+
+def latest_tag(ctx):
+    """Tag of the newest published release; None before the first release or without live facts."""
+    return (ctx.get("live") or {}).get("latest_tag")
 
 
 def measured(ctx, key):
@@ -204,37 +256,55 @@ def when(condition, badges):
     return badges if condition else []
 
 
+def version(ctx):
+    """The newest release; before the first one (or offline) the version the metadata declares."""
+    tag = latest_tag(ctx)
+    shown = tag.removeprefix("v") if tag else str(ctx["data"]["version"])
+    return [static("version", shown, "info", f"{_links(ctx)}/releases/tag/{tag}" if tag else f"{_links(ctx)}/releases")]
+
+
+def downloads(ctx):
+    """Release asset downloads of the newest release. Shown from the first release on, at zero too."""
+    tag = latest_tag(ctx)
+    path = f"/{quote(tag, safe='')}/total" if tag else "/latest/total"
+    return when(has(ctx, "releases"), [github(
+        "downloads", ctx["repo"], "downloads", f"{_links(ctx)}/releases", path, "info")])
+
+
+def home_assistant(ctx):
+    """Lowest supported Home Assistant version; a Compatibility workflow, when kept, proves it."""
+    minimum = ctx.get("minimum")
+    link = f"{_links(ctx)}/actions/workflows/compat.yml" if ctx.get("compat") else None
+    return [static("home assistant", f"≥ {minimum}", "info", link)] if minimum else []
+
+
 def _common_builders():
     return {
-        "version": lambda c: [static("version", str(c["data"]["version"]), "info", f"{_links(c)}/releases")],
-        "released": lambda c: when(has(c, "releases"),
-                                   [github("release-date-pre", c["repo"], "released", f"{_links(c)}/releases")]),
+        "paypal": lambda c: [support_badge("paypal")],
+        "coffee": lambda c: [support_badge("coffee")],
+        "home_assistant": home_assistant,
+        "version": version,
         "stars": lambda c: when(has(c, "stars"),
                                 [github("stars", c["repo"], "stars", f"{_links(c)}/stargazers")]),
-        "forks": lambda c: when(has(c, "forks") if c.get("live") else c["forks"],
-                                [github("forks", c["repo"], "forks", f"{_links(c)}/forks")]),
-        "issues": lambda c: when(has(c, "issues"),
-                                 [github("issues", c["repo"], "issues", f"{_links(c)}/issues")]),
-        "updated": lambda c: [github("last-commit", c["repo"], "updated", f"{_links(c)}/commits/main")],
+        "issues": lambda c: [github("issues", c["repo"], "issues", f"{_links(c)}/issues")],
+        "checks": lambda c: when(has(c, "builds"), [workflow(
+            c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
+        "license": lambda c: when(has_license(c), [github("license", c["repo"], "license", f"{_links(c)}#license")]),
     }
 
 
 def _app_builders():
-    def mounts(c):
-        return mount_badges(c["data"])
-
     def flag(label, value, color, condition):
         return lambda c: [static(label, value(c["data"]), color)] if condition(c["data"]) else []
 
     builders = _common_builders()
     builders.update({
-        "build": lambda c: when(has(c, "builds"), [workflow(
-            c["repo"], "ci.yml", "build", f"{_links(c)}/actions/workflows/ci.yml")]),
+        "install": lambda c: [install_badge()],
         "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
         "image_size": image_sizes,
         "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
         "arch": lambda c: [static("arch", " · ".join(sorted(c["data"]["arch"], key=architecture_rank)), "ok")],
-        "mounts": mounts,
+        "mounts": lambda c: mount_badges(c["data"]),
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
         "ingress": flag("ingress", lambda d: "enabled", "accent", lambda d: d.get("ingress")),
         "privileged": flag("privileged", lambda d: ", ".join(d["privileged"]), "write",
@@ -242,61 +312,42 @@ def _app_builders():
         "apparmor": flag("apparmor", lambda d: "disabled", "write", lambda d: d.get("apparmor") is False),
         "options": flag("options", lambda d: str(option_count(d["options"])), "info",
                         lambda d: d.get("options")),
-        "install": lambda c: [install_badge()],
     })
     return builders
 
 
 def _integration_builders():
-    def minimum_version(c):
-        minimum = c["hacs"].get("homeassistant")
-        return [static("home assistant", f"≥ {minimum}", "info")] if minimum else []
-
     builders = _common_builders()
     builders.update({
-        "checks": lambda c: when(has(c, "builds"), [workflow(
-            c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
-        # Release ZIP downloads are the closest thing to an install count GitHub offers; they are
-        # shown from the first release on, even while the counter is still at zero.
-        "downloads": lambda c: when(has(c, "releases"), [github(
-            "downloads", c["repo"], "downloads", f"{_links(c)}/releases", "/total", "info")]),
-        "latest_downloads": lambda c: when(released_more_than_once(c), [github(
-            "downloads", c["repo"], "latest release", f"{_links(c)}/releases/latest", "/latest/total", "info")]),
-        "compatibility": lambda c: when(c.get("compat") and has(c, "builds"), [workflow(
-            c["repo"], "compat.yml", "HA releases", f"{_links(c)}/actions/workflows/compat.yml")]),
-        "home_assistant": minimum_version,
-        "setup": lambda c: [static("setup", "UI config flow", "ok")] if c["data"].get("config_flow") else [],
-        "quality_scale": lambda c: [static("quality scale", c["data"]["quality_scale"], "ok")]
-        if c["data"].get("quality_scale") else [],
-        "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
-        "zip_size": lambda c: measurement(c, "zip_size", "ZIP size", "ok"),
         "install": lambda c: [hacs_badge(c["repo"])],
+        "downloads": downloads,
+        "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
     })
     return builders
 
 
-def build_rows(layout, builders, context, with_install=True):
+def build_rows(layout, builders, context, standalone=True):
+    """Rows of badges for a layout; a catalog listing (`standalone=False`) skips README-only badges."""
     rows = []
-    for names in layout:
-        row = []
+    for tier, names in layout:
+        badges = []
         for name in names:
-            if name in README_ONLY and not with_install:
+            if name in README_ONLY and not standalone:
                 continue
-            row += builders[name](context)
-        rows.append(row)
+            badges += builders[name](context)
+        rows.append(Row(tier, badges))
     return rows
 
 
-def app_rows(data, repo, folder, with_install=True, forks=0, live=None, measured_values=None):
-    context = {"data": data, "repo": repo, "folder": folder, "forks": forks, "live": live,
-               "metrics": measured_values}
-    return build_rows(APP_LAYOUT, _app_builders(), context, with_install)
+def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False):
+    context = {"data": data, "repo": repo, "live": live, "metrics": measured_values, "licensed": licensed,
+               "minimum": data.get("homeassistant")}
+    return build_rows(APP_LAYOUT, _app_builders(), context, standalone)
 
 
-def integration_rows(manifest, hacs, repo, with_install=True, forks=0, live=None, measured_values=None,
-                     compat=False):
+def integration_rows(manifest, hacs, repo, standalone=True, live=None, measured_values=None, compat=False,
+                     licensed=False):
     """`compat` marks projects that keep the Compatibility workflow (tests against real releases)."""
-    context = {"data": manifest, "hacs": hacs, "repo": repo, "forks": forks, "live": live,
-               "metrics": measured_values, "compat": compat}
-    return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, with_install)
-
+    context = {"data": manifest, "repo": repo, "live": live, "metrics": measured_values, "compat": compat,
+               "licensed": licensed, "minimum": hacs.get("homeassistant")}
+    return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, standalone)

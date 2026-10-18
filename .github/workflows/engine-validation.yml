@@ -16,6 +16,8 @@ jobs:
   templates:
     name: Shared templates and metadata
     runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.plan.outputs.projects }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -25,37 +27,20 @@ jobs:
         with:
           packages: pytest==8.4.2
       - run: python -m unittest discover -s .github/tests -v
-  app:
-    name: App / ${{ matrix.project }}
+      - id: plan
+        run: echo "projects=$(python .scripts/plan.py)" >> "$GITHUB_OUTPUT"
+  project:
+    name: ${{ matrix.kind }} / ${{ matrix.project }}
+    needs: templates
     runs-on: ubuntu-latest
     timeout-minutes: 90
     strategy:
       fail-fast: false
-      matrix:
-        project:
-          - Home-Assistant-Rsync-Local-Addon
-          - Home-Assistant-git-exporter-Addon
+      matrix: ${{ fromJSON(needs.templates.outputs.projects) }}
     steps:
       - uses: actions/checkout@v7
         with:
           repository: seb5594/${{ matrix.project }}
-          persist-credentials: false
-      - uses: actions/checkout@v7
-        with:
-          path: .engine
-          persist-credentials: false
-      - uses: ./.engine/.actions/project
-        with:
-          publish: 'false'
-          token: ${{ github.token }}
-  integration:
-    name: Integration / HACS
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          repository: seb5594/hass-pulseaudio_loopback_extended-integration
           persist-credentials: false
       - uses: actions/checkout@v7
         with:

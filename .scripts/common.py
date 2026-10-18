@@ -1,5 +1,6 @@
 """Helpers shared by the engine scripts: image names, release flags and subprocess wrappers."""
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -15,9 +16,18 @@ def image_repository(owner, slug):
     return f"ghcr.io/{owner.lower()}/hass-{slug}"
 
 
-def release_flags():
-    """Extra `gh release create` flags; RELEASE_DRAFT=true keeps a release private."""
-    return ["--draft"] if os.environ.get("RELEASE_DRAFT", "").lower() == "true" else []
+# App versions carry a dash suffix (1.0.0-beta4), integrations a PEP 440 one (1.0.0b1).
+PRERELEASE = re.compile(r"-|(?:a|b|rc)\d+$")
+
+
+def is_prerelease(version):
+    return bool(PRERELEASE.search(version))
+
+
+def release_flags(version=""):
+    """Extra `gh release create` flags: pre-release versions are marked, RELEASE_DRAFT=true keeps a release private."""
+    flags = ["--prerelease"] if is_prerelease(version) else []
+    return flags + (["--draft"] if os.environ.get("RELEASE_DRAFT", "").lower() == "true" else [])
 
 
 ANNOTATION_TAIL_LINES = 15

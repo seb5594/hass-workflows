@@ -6,15 +6,18 @@ call it. Each module has one job.
 | Module | Job |
 | --- | --- |
 | `config.py` | Owner, repository names, events, platforms, donation links, engine root: the only place for constants |
-| `templating.py` | Fills `{{PLACEHOLDER}}` / `__PLACEHOLDER__` templates and fails on missing, unused or repeated names |
-| `callers.py` | Renders, pins, syncs and checks the one workflow each repository keeps |
-| `badgekit.py` | Badge builders and the layout lists that decide what appears where |
+| `templating.py` | Expands `# include: NAME` snippets and fills `{{PLACEHOLDER}}` / `__PLACEHOLDER__` templates; fails on missing, unused or repeated names |
+| `projectmeta.py` | The one model of a checkout: kind, folder, metadata, repository |
+| `managed.py` | Renders, syncs and checks the files every repository keeps: workflows, Dependabot, Renovate, funding, entrypoint |
+| `brand.py` | Picks the README picture: logo, else icon, with `@2x` and dark variants |
+| `plan.py` | The job matrix of the engine's own validation, from `config.PROJECTS` |
+| `badgekit.py` | Badge builders, the three row sizes and the layout lists that decide what appears where |
 | `live.py` | Current counts (stars, issues, releases, downloads, runs) so empty badges are omitted |
 | `excerpt.py` | First README paragraph as a short description |
 | `remote.py` | Reads project metadata from GitHub at an exact commit, without cloning |
 | `github_api.py` | The single HTTP client: retries, tokens, JSON and text |
 | `gitops.py` | Commit, push and repository_dispatch used by catalog, hub and the README refresh |
-| `readme.py` | Badge block below the title; thanks and license as the last two sections |
+| `readme.py` | Header (name, logo, separator, badges) at the top; thanks and license as the last two sections |
 | `licenses.py` | Finds and names the license file; the license section of projects and the note of catalogs and hub |
 | `project.py` | Entry point of the project action: inspect, validate, build, package, release, refresh |
 | `legacy.py` | Architectures only the previous base images cover (armv7, armhf, i386): their base and package pins |
@@ -34,4 +37,4 @@ project push ──► project action ──► validate · build/package · rel
 
 Shared rules are written once: a new badge is one entry in `APP_LAYOUT` or `INTEGRATION_LAYOUT`, a
 new repository name one line in `config.py`, a new caller family one template plus one entry in
-`CALLERS`. Tests for each module sit in [`.github/tests`](../.github/tests).
+`WORKFLOWS`, a step several workflows share one file in `.templates/snippets`. Tests for each module sit in [`.github/tests`](../.github/tests).

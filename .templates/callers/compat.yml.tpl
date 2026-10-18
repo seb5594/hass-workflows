@@ -15,22 +15,13 @@ permissions:
 
 jobs:
   releases:
-    # Repository secrets are not passed to untrusted fork pull requests.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # include: fork-guard
     runs-on: ubuntu-latest
     outputs:
       releases: ${{ steps.releases.outputs.releases }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@v7
-        with:
-          repository: __ENGINE_REPOSITORY__
-          ref: __ENGINE_SHA__
-          token: ${{ secrets.ORCHESTRATION_PAT }}
-          path: .engine
-          persist-credentials: false
+      # include: checkout-project
+      # include: checkout-engine
       - id: releases
         run: echo "releases=$(python .engine/.scripts/ha_matrix.py list)" >> "$GITHUB_OUTPUT"
 
@@ -45,16 +36,8 @@ jobs:
       matrix:
         release: ${{ fromJSON(needs.releases.outputs.releases) }}
     steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@v7
-        with:
-          repository: __ENGINE_REPOSITORY__
-          ref: __ENGINE_SHA__
-          token: ${{ secrets.ORCHESTRATION_PAT }}
-          path: .engine
-          persist-credentials: false
+      # include: checkout-project
+      # include: checkout-engine
       - uses: ./.engine/.actions/setup-python
         with:
           packages: uv
