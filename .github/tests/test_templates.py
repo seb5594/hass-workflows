@@ -104,10 +104,10 @@ class HeaderStructure(unittest.TestCase):
         self.assertIn('href="https://buymeacoffee.com/seb5594"', support_row)
         self.assertLess(support_row.index("PayPal"), support_row.index("Buy%20Me%20a%20Coffee"))
 
-    def test_middle_row_lists_hacs_minimum_version_release_and_downloads(self):
+    def test_middle_row_lists_hacs_minimum_version_and_release(self):
         row = paragraphs(self.header())[1]
         labels = re.findall(r"label=([^&]+)", row)
-        self.assertEqual(labels, ["HACS", "home%20assistant", "version", "downloads"])
+        self.assertEqual(labels, ["HACS", "home%20assistant", "version"])
         self.assertIn("message=%E2%89%A5%202026.9.0", row)
         self.assertIn("owner=seb5594&amp;repository=demo-integration&amp;category=integration", row)
 
@@ -115,9 +115,14 @@ class HeaderStructure(unittest.TestCase):
         row = paragraphs(self.header(hacs={}))[1]
         self.assertNotIn("home%20assistant", row)
 
+    def test_facts_row_puts_downloads_before_issues_and_checks(self):
+        row = paragraphs(self.header())[2]
+        labels = re.findall(r"label=([^&]+)", row)
+        self.assertEqual(labels, ["stars", "downloads", "issues", "checks"])
+
     def test_offline_rendering_keeps_the_unconditional_badges(self):
         row = paragraphs(self.header())[2]
-        for kept in ("label=stars", "label=issues", "label=checks"):
+        for kept in ("label=stars", "label=downloads", "label=issues", "label=checks"):
             self.assertIn(kept, row)
         self.assertNotIn("label=tests", row)
         self.assertNotIn("label=license", row)
