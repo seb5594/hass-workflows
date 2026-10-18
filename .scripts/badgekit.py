@@ -1,6 +1,6 @@
 """Build Shields.io badges and arrange them in rows of three sizes."""
 import html
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from urllib.parse import quote, urlencode
 
 import config
@@ -88,7 +88,7 @@ def workflow(repo, filename, label, link=None):
 
 def support_badge(name):
     alt, left, right, color, logo, logo_color, link = config.SUPPORT[name]
-    return static(left, right, color, link, logo, logo_color)
+    return replace(static(left, right, color, link, logo, logo_color), alt=alt)
 
 
 def support_badges():

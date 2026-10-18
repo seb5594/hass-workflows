@@ -404,5 +404,21 @@ class PublishDecision(unittest.TestCase):
         self.assertFalse(project.should_publish({**self.base, "IS_TEMPLATE": "true"}))
 
 
+class ScheduledRuns(unittest.TestCase):
+    """The weekly run refreshes README facts; it must not rebuild every architecture of an app."""
+
+    def project(self, kind):
+        return projectmeta.Project(kind, Path("."), Path("."), {}, {})
+
+    def test_apps_build_images_except_on_the_weekly_schedule(self):
+        app = self.project(projectmeta.APP)
+        self.assertTrue(project.builds_images(app, {"EVENT_NAME": "push"}))
+        self.assertTrue(project.builds_images(app, {"EVENT_NAME": "workflow_dispatch"}))
+        self.assertFalse(project.builds_images(app, {"EVENT_NAME": "schedule"}))
+
+    def test_integrations_have_no_images(self):
+        self.assertFalse(project.builds_images(self.project(projectmeta.INTEGRATION), {"EVENT_NAME": "push"}))
+
+
 if __name__ == "__main__":
     unittest.main()

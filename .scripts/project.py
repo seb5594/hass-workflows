@@ -30,6 +30,11 @@ def should_publish(env=os.environ):
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
 
 
+def builds_images(project, env=os.environ):
+    """Apps build and push their images on pushes; the weekly schedule only refreshes the README."""
+    return project.kind == projectmeta.APP and env.get("EVENT_NAME") != "schedule"
+
+
 def refresh_readme(project, env=os.environ):
     """Store this run's measurements, rewrite the README badges with live values and push both.
 
@@ -145,7 +150,11 @@ def main(command):
         print(f"directory={project.folder.as_posix()}")
         print(f"version={project.version}")
         print(f"slug={project.slug}")
-        print(f"publish={str(should_publish()).lower()}")
+        publish, images = should_publish(), builds_images(project)
+        print(f"publish={str(publish).lower()}")
+        print(f"images={str(images).lower()}")
+        # Integrations release (a no-op once the version exists); apps only when they built images.
+        print(f"release={str(publish and (images or project.kind == projectmeta.INTEGRATION)).lower()}")
     elif command == "validate":
         validate(project)
     elif command == "build" and project.kind == projectmeta.APP:
