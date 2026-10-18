@@ -11,10 +11,15 @@ import metrics
 import validate_app
 from common import run, run_captured
 
-ENTRYPOINT_SMOKE_TEST = "bash -n /entrypoint.sh /run.sh && test -x /run.sh"
-# Every s6 run/finish script must parse and be executable.
-S6_SMOKE_TEST = ("find /etc/s6-overlay/s6-rc.d -type f \\( -name run -o -name finish \\) "
-                 "-exec bash -n {} \\; -exec test -x {} \\;")
+# What proves a built image is startable, by startup style. Apps started from a run.sh service
+# have no generic check; their .github/tests/runtime.sh verifies the image instead.
+SMOKE_TESTS = {
+    validate_app.ENTRYPOINT: "bash -n /entrypoint.sh /run.sh && test -x /run.sh",
+    # Every s6 run/finish script must parse and be executable.
+    validate_app.S6: ("find /etc/s6-overlay/s6-rc.d -type f \\( -name run -o -name finish \\) "
+                      "-exec bash -n {} \\; -exec test -x {} \\;"),
+    validate_app.RUN_SCRIPT: None,
+}
 UTILS_TEST = (
     "printf '%s' '{\"data\":{\"title\":\"CI\"}}' > /tmp/sample.json; "
     "/utils/jsonToYaml.py /tmp/sample.json data; grep -q 'title: CI' /tmp/sample.yaml; "
@@ -38,8 +43,8 @@ def main(app, arch, platform):
             "--build-arg", f"BUILD_ARCH={arch}", "--build-arg", f"BUILD_VERSION={config['version']}"]
     args += legacy.build_args(arch, (folder / "Dockerfile").read_text())
     run(*args, app)
-    run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image,
-        "-c", S6_SMOKE_TEST if validate_app.s6_services(folder) else ENTRYPOINT_SMOKE_TEST)
+    if smoke_test := SMOKE_TESTS[validate_app.startup_style(folder, config)]:
+        run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image, "-c", smoke_test)
     metrics.record(f"image_size.{arch}", image_size(image))
     if arch != "amd64":
         return

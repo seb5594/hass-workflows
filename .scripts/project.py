@@ -1,5 +1,4 @@
 """Discover, validate, build and publish one app or integration."""
-import json
 import os
 import re
 import subprocess
@@ -7,29 +6,18 @@ import sys
 import tomllib
 from pathlib import Path
 
-import yaml
-
-import callers
 import config
 import gitops
 import live
+import managed
 import metrics
+import projectmeta
 import readme
 from common import run, run_captured
 from config import PLATFORMS
 
 ENGINE = config.ENGINE_ROOT
 YAMLLINT_RULES = "{extends: relaxed, rules: {line-length: disable, truthy: disable}}"
-
-
-def discover(root=Path(".")):
-    apps = [p for p in root.glob("*/config.yaml") if not p.parts[0].startswith(".")]
-    integrations = list(root.glob("custom_components/*/manifest.json"))
-    if len(apps) + len(integrations) != 1:
-        raise ValueError("Expected exactly one app config.yaml or integration manifest.json")
-    if apps:
-        return "app", apps[0].parent, yaml.safe_load(apps[0].read_text())
-    return "integration", integrations[0].parent, json.loads(integrations[0].read_text())
 
 
 def should_publish(env=os.environ):
@@ -42,7 +30,7 @@ def should_publish(env=os.environ):
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
 
 
-def refresh_readme(kind, metadata, env=os.environ):
+def refresh_readme(project, env=os.environ):
     """Store this run's measurements, rewrite the README badges with live values and push both.
 
     Badges without a value (no releases yet, zero stars, nothing measured) are left out, so the
@@ -54,9 +42,9 @@ def refresh_readme(kind, metadata, env=os.environ):
         print("README badges are refreshed from the default branch only.")
         return
     owner = env.get("GITHUB_REPOSITORY", "").partition("/")[0]
-    metrics.update_snapshot(slug=metadata.get("slug") if kind == "app" else None, owner=owner)
+    metrics.update_snapshot(slug=project.slug if project.kind == projectmeta.APP else None, owner=owner)
     try:
-        facts = live.fetch(readme.repository())
+        facts = live.fetch(project.repository)
         readme.update(live=facts)
     except RuntimeError as error:
         print(f"::warning::README badges were not refreshed: {error}")
@@ -130,23 +118,12 @@ def run_integration_tests(directory):
         run("node", "--test", *frontend)
 
 
-def check_callers(kind):
-    """Integrations with tests against real Home Assistant also keep the compatibility caller."""
-    callers.check(kind)
-    if kind == "integration" and Path(".github/ha_tests").is_dir():
-        callers.check("compat")
-
-
-def validate(kind, folder):
+def validate(project):
     readme.verify()
-    check_callers(kind)
-    run("cmp", str(ENGINE / ".templates/dependabot.yml"), ".github/dependabot.yml")
-    if Path(".github/renovate.json").exists():
-        run("cmp", str(ENGINE / ".templates/renovate/renovate.json"), ".github/renovate.json")
-    if kind == "app":
+    managed.check(project.kind)
+    if project.kind == projectmeta.APP:
+        folder = project.folder
         run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
-        if (folder / "entrypoint.sh").exists():
-            run("cmp", str(ENGINE / ".templates/entrypoint.sh"), str(folder / "entrypoint.sh"))
         run("yamllint", "-d", YAMLLINT_RULES, ".github/workflows", str(folder / "config.yaml"))
         if scripts := shell_scripts([folder, Path(".github/tests")]):
             run("shellcheck", "-x", *scripts)
@@ -162,28 +139,28 @@ def validate(kind, folder):
 
 
 def main(command):
-    kind, folder, metadata = discover()
+    project = projectmeta.discover()
     if command == "inspect":
-        print(f"kind={kind}")
-        print(f"directory={folder.as_posix()}")
-        print(f"version={metadata['version']}")
-        print(f"slug={metadata.get('slug', metadata.get('domain'))}")
+        print(f"kind={project.kind}")
+        print(f"directory={project.folder.as_posix()}")
+        print(f"version={project.version}")
+        print(f"slug={project.slug}")
         print(f"publish={str(should_publish()).lower()}")
     elif command == "validate":
-        validate(kind, folder)
-    elif command == "build" and kind == "app":
-        for arch in metadata["arch"]:
-            run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(folder), arch, PLATFORMS[arch])
-    elif command == "package" and kind == "integration":
+        validate(project)
+    elif command == "build" and project.kind == projectmeta.APP:
+        for arch in project.metadata["arch"]:
+            run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(project.folder), arch, PLATFORMS[arch])
+    elif command == "package" and project.kind == projectmeta.INTEGRATION:
         run(sys.executable, str(ENGINE / ".scripts/package_integration.py"))
     elif command == "release":
-        script = "release_app.py" if kind == "app" else "package_integration.py"
-        args = [str(folder)] if kind == "app" else ["--release"]
+        script, args = (("release_app.py", [str(project.folder)]) if project.kind == projectmeta.APP
+                        else ("package_integration.py", ["--release"]))
         run(sys.executable, str(ENGINE / ".scripts" / script), *args)
     elif command == "refresh-readme":
-        refresh_readme(kind, metadata)
+        refresh_readme(project)
     else:
-        raise ValueError(f"Invalid command {command!r} for {kind}")
+        raise ValueError(f"Invalid command {command!r} for {project.kind}")
 
 
 if __name__ == "__main__":

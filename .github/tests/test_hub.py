@@ -59,7 +59,7 @@ class ExcerptTests(unittest.TestCase):
 class HubTests(unittest.TestCase):
     def setUp(self):
         facts = patch.object(live, "fetch", return_value={
-            "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
+            "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0,
             "builds": 0})
         facts.start()
         self.addCleanup(facts.stop)

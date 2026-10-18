@@ -1,0 +1,7 @@
+- uses: actions/checkout@v7
+  with:
+    repository: __ENGINE_REPOSITORY__
+    ref: __ENGINE_SHA__
+    token: ${{ secrets.ORCHESTRATION_PAT }}
+    path: .engine
+    persist-credentials: false

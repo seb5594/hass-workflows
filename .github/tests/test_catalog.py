@@ -20,7 +20,7 @@ class CatalogTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         facts = patch.object(catalog.live, "fetch", return_value={
-            "stars": 1, "forks": 0, "issues": 0, "releases": 1, "downloads": 0, "latest_downloads": 0,
+            "stars": 1, "forks": 0, "issues": 0, "releases": 1, "downloads": 0,
             "builds": 1})
         facts.start()
         self.addCleanup(facts.stop)
@@ -96,7 +96,7 @@ class IntegrationCatalog(unittest.TestCase):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 
-    FACTS = {"license": "", "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0, "latest_downloads": 0,
+    FACTS = {"license": "", "stars": 0, "forks": 0, "issues": 0, "releases": 0, "downloads": 0,
              "builds": 0}
 
     def describe(self, **facts):

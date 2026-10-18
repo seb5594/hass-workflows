@@ -31,13 +31,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
-      - uses: actions/checkout@v7
-        with:
-          repository: __ENGINE_REPOSITORY__
-          ref: __ENGINE_SHA__
-          token: ${{ secrets.ORCHESTRATION_PAT }}
-          path: .engine
-          persist-credentials: false
+      # include: checkout-engine
       - uses: ./.engine/.actions/hub
         with:
           # Reads the catalogs even while they are private; only public projects end up listed.

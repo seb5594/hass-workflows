@@ -1,61 +1,56 @@
-"""Generated parts of a project README: the badge block below the title, thanks and license at the end."""
-import json
+"""Generated parts of a project README: the header above the introduction, thanks and license at the end.
+
+The header holds the centered display name, the logo (or icon), a separator and the badge rows.
+Everything after it, the introduction included, is written by hand and never touched.
+"""
+import html
+import re
 import sys
 from pathlib import Path
 
-import yaml
-
 import badgekit
+import brand
 import licenses
+import live as live_facts
 import metrics
+import projectmeta
 
-START = "<!-- badges:begin (generated from project metadata) -->"
-END = "<!-- badges:end -->"
+START = "<!-- header:begin (generated from project metadata) -->"
+END = "<!-- header:end -->"
 SUPPORT_START = "<!-- support:begin (generated, shared text) -->"
 SUPPORT_END = "<!-- support:end -->"
 LICENSE_START = "<!-- license:begin (generated from the license file) -->"
 LICENSE_END = "<!-- license:end -->"
 COMPAT_WORKFLOW = Path(".github/workflows/compat.yml")
 
+# What READMEs started with before the header existed: a hand-placed logo, the title and the old
+# badge block. All of it is replaced by the header, which carries the same information.
+LEGACY_PREAMBLE = re.compile(
+    r'\A\s*(?:<p align="center">\s*(?:<img[^>]*>|<picture>.*?</picture>)\s*</p>\s*)?'
+    r"(?:# [^\n]*\n\s*)?"
+    r"(?:<!-- badges:begin.*?<!-- badges:end -->\s*)?", re.S)
 
-def repository_of(url):
-    """Reduce any GitHub URL to owner/name."""
-    path = url.removeprefix("https://github.com/")
-    return "/".join(path.split("/")[:2])
 
-
-def render(root=Path("."), live=None):
-    configs = list(root.glob("*/config.yaml"))
-    manifests = list(root.glob("custom_components/*/manifest.json"))
-    if len(configs) + len(manifests) != 1:
-        raise ValueError("Expected exactly one app or integration metadata file")
-    measured = metrics.load(root)
-    if configs:
-        data = yaml.safe_load(configs[0].read_text())
-        rows = badgekit.app_rows(data, repository_of(data["url"]), configs[0].parent, live=live,
-                                 measured_values=measured)
+def header(root=Path("."), live=None):
+    """The generated header block of the project in `root`."""
+    project = projectmeta.discover(root)
+    common = {"live": live, "measured_values": metrics.load(root),
+              "licensed": licenses.license_file(root) is not None}
+    if project.kind == projectmeta.APP:
+        rows = badgekit.app_rows(project.metadata, project.repository, **common)
     else:
-        manifest = json.loads(manifests[0].read_text())
-        hacs = json.loads((root / "hacs.json").read_text())
-        rows = badgekit.integration_rows(manifest, hacs, repository_of(manifest["documentation"]), live=live,
-                                         measured_values=measured, compat=(root / COMPAT_WORKFLOW).exists())
-    return f"{START}\n{badgekit.render(rows)}\n{END}"
-
-
-def repository(root=Path(".")):
-    """owner/name of the project in `root`, taken from its metadata."""
-    configs = list(root.glob("*/config.yaml"))
-    if configs:
-        return repository_of(yaml.safe_load(configs[0].read_text())["url"])
-    manifest = next(root.glob("custom_components/*/manifest.json"))
-    return repository_of(json.loads(manifest.read_text())["documentation"])
+        rows = badgekit.integration_rows(project.metadata, project.hacs, project.repository,
+                                         compat=(root / COMPAT_WORKFLOW).exists(), **common)
+    parts = [f'<h1 align="center">{html.escape(project.name)}</h1>', brand.render(project), "---",
+             badgekit.render_header(rows)]
+    return f"{START}\n" + "\n\n".join(part for part in parts if part) + f"\n{END}"
 
 
 def verify(root=Path(".")):
-    """The README must contain exactly one badge block; its content is refreshed by the pipeline."""
+    """The README must contain exactly one header block; its content is refreshed by the pipeline."""
     source = (root / "README.md").read_text()
     if source.count(START) != 1 or source.count(END) != 1:
-        raise ValueError("README needs exactly one generated badge block; run .scripts/readme.py")
+        raise ValueError("README needs exactly one generated header block; run .scripts/readme.py")
 
 
 def replace_block(source, start_marker, end_marker, block):
@@ -72,6 +67,13 @@ def remove_block(source, start_marker, end_marker):
     return f"{head}\n\n{tail}" if tail else f"{head}\n"
 
 
+def place_header(source, block):
+    """Replace the header, or take over from the title and badge block READMEs used to start with."""
+    if START in source:
+        return replace_block(source, START, END, block)
+    return block + "\n\n" + source[LEGACY_PREAMBLE.match(source).end():]
+
+
 def closing_blocks(root):
     """Thanks first, license last: both always form the end of the README."""
     blocks = [f"{SUPPORT_START}\n{badgekit.support_section()}\n{SUPPORT_END}"]
@@ -81,17 +83,10 @@ def closing_blocks(root):
 
 
 def update(root=Path("."), live=None):
-    """Write the badge block and the closing blocks; returns True when README.md changed."""
+    """Write the header and the closing blocks; returns True when README.md changed."""
     readme = root / "README.md"
     source = original = readme.read_text()
-    block = render(root, live)
-    if START not in source:
-        # First run: place the block directly below the main heading.
-        head, _, rest = source.partition("\n")
-        source = f"{head}\n\n{block}\n{rest}"
-    else:
-        verify(root)
-        source = replace_block(source, START, END, block)
+    source = place_header(source, header(root, live))
     for start_marker, end_marker in ((SUPPORT_START, SUPPORT_END), (LICENSE_START, LICENSE_END)):
         source = remove_block(source, start_marker, end_marker)
     source = source.rstrip("\n") + f"\n\n{closing_blocks(root)}\n"
@@ -101,8 +96,17 @@ def update(root=Path("."), live=None):
     return True
 
 
+def current_facts(root):
+    """Live repository facts for a local run; without network access every badge is kept."""
+    try:
+        return live_facts.fetch(projectmeta.discover(root).repository)
+    except (RuntimeError, OSError) as error:
+        print(f"Rendering without live facts: {error}", file=sys.stderr)
+        return None
+
+
 if __name__ == "__main__":
     if "--check" in sys.argv:
         verify()
     else:
-        update(live=None)
+        update(live=None if "--offline" in sys.argv else current_facts(Path(".")))

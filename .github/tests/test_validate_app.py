@@ -5,6 +5,7 @@ from pathlib import Path
 
 from support import ENGINE  # noqa: F401
 
+import common
 import legacy
 import validate_app
 
@@ -130,6 +131,43 @@ class StartupStyle(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "entrypoint.sh or s6"):
                 validate_app.check_startup_style(self.app(tmp, s6=False), {"init": True})
             validate_app.check_startup_style(self.app(tmp, s6=False, entrypoint=True), {"init": True})
+
+    def test_run_script_apps_need_init_false_and_run_sh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.app(tmp, s6=False)
+            self.assertEqual(validate_app.startup_style(app, {"init": False}), validate_app.RUN_SCRIPT)
+            with self.assertRaisesRegex(AssertionError, "need a run.sh"):
+                validate_app.check_startup_style(app, {"init": False})
+            (app / "run.sh").write_text("#!/usr/bin/with-contenv bashio\n")
+            validate_app.check_startup_style(app, {"init": False})
+            (app / "entrypoint.sh").write_text("#!/bin/bash\n")
+            with self.assertRaisesRegex(AssertionError, "remove entrypoint.sh"):
+                validate_app.check_startup_style(app, {"init": False})
+
+    def test_styles_are_told_apart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(validate_app.startup_style(self.app(tmp), {"init": False}), validate_app.S6)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(validate_app.startup_style(self.app(tmp, s6=False), {"init": True}),
+                             validate_app.ENTRYPOINT)
+
+
+class Versions(unittest.TestCase):
+    def test_numeric_versions_with_an_optional_prerelease_suffix_are_accepted(self):
+        for version in ("1.74.3", "1.18", "1.0.0-beta4", "2.0.0-beta.4", "1.0.0-rc1"):
+            self.assertTrue(validate_app.VERSION.fullmatch(version), version)
+
+    def test_other_versions_are_rejected(self):
+        for version in ("v1.0.0", "1", "1.0.0-", "1.0.0 beta", "latest"):
+            self.assertFalse(validate_app.VERSION.fullmatch(version), version)
+
+    def test_prereleases_of_apps_and_integrations_are_recognised(self):
+        for version in ("1.0.0-beta4", "1.0.0b1", "2.1.0rc2", "0.3.0a1"):
+            self.assertTrue(common.is_prerelease(version), version)
+        for version in ("1.0.0", "1.74.3"):
+            self.assertFalse(common.is_prerelease(version), version)
+        self.assertEqual(common.release_flags("1.0.0-beta4"), ["--prerelease"])
+        self.assertEqual(common.release_flags("1.0.0"), [])
 
 
 if __name__ == "__main__":

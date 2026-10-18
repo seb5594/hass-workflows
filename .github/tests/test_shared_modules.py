@@ -84,7 +84,8 @@ class LiveFacts(unittest.TestCase):
 
     ANSWERS = {
         "/pulls": '[{"number": 9}]',
-        "/releases": '[{"draft": false, "assets": [{"download_count": 4}]}, {"draft": true, "assets": []}]',
+        "/releases": '[{"draft": false, "tag_name": "v1.2.0", "assets": [{"download_count": 4}]}, '
+        '{"draft": true, "tag_name": "v1.3.0", "assets": []}]',
         "/actions/workflows/": '{"total_count": 7}',
     }
 
@@ -97,7 +98,7 @@ class LiveFacts(unittest.TestCase):
         with mock.patch.object(github_api, "_request", side_effect=self.answer) as request:
             facts = live.fetch("seb5594/demo", token="secret")
         self.assertEqual(facts, {"license": "MIT", "stars": 2, "forks": 1, "issues": 3, "releases": 1,
-                                 "downloads": 4, "latest_downloads": 4, "builds": 7})
+                                 "latest_tag": "v1.2.0", "downloads": 4, "builds": 7})
         self.assertTrue(all(call.args[2] == "secret" for call in request.call_args_list))
 
     def test_a_missing_workflow_means_nothing_there(self):
@@ -129,16 +130,17 @@ class FailureAnnotations(unittest.TestCase):
 class BadgeOrdering(unittest.TestCase):
     def test_architectures_follow_the_canonical_order(self):
         data = {"arch": ["i386", "armhf", "amd64", "aarch64"], "version": "1", "map": []}
-        row = badgekit.render([badgekit.app_rows(data, "o/n", None)[badgekit.APP_LAYOUT.index(["arch"])]])
+        rows = badgekit.app_rows(data, "o/n")
+        row = badgekit.render([next(row.badges for row in rows if any("label=arch" in str(b) for b in row.badges))])
         self.assertIn("amd64%20%C2%B7%20aarch64%20%C2%B7%20armhf%20%C2%B7%20i386", row)
 
     def test_mounts_are_one_sorted_badge_and_mark_writable_folders(self):
         readonly = badgekit.mount_badges({"map": ["share:ro", "config:ro", "all_addon_configs:ro"]})
         self.assertEqual(len(readonly), 1)
-        self.assertIn("mounts%20%28read-only%29", readonly[0])
-        self.assertIn("app%20configs%20%C2%B7%20config%20%C2%B7%20share", readonly[0])
+        self.assertIn("mounts%20%28read-only%29", str(readonly[0]))
+        self.assertIn("app%20configs%20%C2%B7%20config%20%C2%B7%20share", str(readonly[0]))
         mixed = badgekit.mount_badges({"map": [{"type": "config", "read_only": False}, "share:ro"]})
-        self.assertIn("config%20%28rw%29%20%C2%B7%20share", mixed[0])
+        self.assertIn("config%20%28rw%29%20%C2%B7%20share", str(mixed[0]))
         self.assertEqual(len(badgekit.mount_badges({"map": ["config:ro"], "devices": ["/dev/sda1"]})), 2)
 
 

@@ -8,13 +8,13 @@ import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
-import metrics
 import config
 import gitops
+import metrics
+import projectmeta
 from common import release_flags, run
 
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?")
-PRERELEASE = re.compile(r"(?:a|b|rc)\d+$")
 ARCHIVE_DATE = (2020, 1, 1, 0, 0, 0)
 
 
@@ -37,21 +37,18 @@ def publish(tag, manifest, out):
         # Published versions are immutable; bump the manifest for the next release.
         print(f"{tag} already exists; keeping its assets unchanged.")
         return
-    flags = ["--prerelease"] if PRERELEASE.search(manifest["version"]) else []
     run("gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
         "--title", f"{manifest['name']} {manifest['version']}", "--generate-notes",
-        *flags, *release_flags(), *map(str, sorted(out.iterdir())))
+        *release_flags(manifest["version"]), *map(str, sorted(out.iterdir())))
 
 
 def main(options):
-    manifests = list(Path("custom_components").glob("*/manifest.json"))
-    assert len(manifests) == 1, "Exactly one integration is expected"
-    folder = manifests[0].parent
-    manifest = json.loads(manifests[0].read_text())
-    domain, version = manifest["domain"], manifest["version"]
+    project = projectmeta.discover()
+    assert project.kind == projectmeta.INTEGRATION, "Packaging needs an integration"
+    folder, manifest, hacs = project.folder, project.metadata, project.hacs
+    domain, version = project.slug, project.version
     assert domain == folder.name
     assert VERSION.fullmatch(version), "Use X.Y.Z or a PEP 440 a/b/rc pre-release"
-    hacs = json.loads(Path("hacs.json").read_text())
     assert hacs["zip_release"] is True and hacs["filename"] == f"{domain}.zip"
     tag = f"v{version}"
     ref = os.environ.get("GITHUB_REF", "")
