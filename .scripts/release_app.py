@@ -9,7 +9,7 @@ import yaml
 
 import config
 import gitops
-from common import image_repository, image_tag, is_prerelease, release_flags, run
+from common import image_repository, image_tag, is_prerelease, release_flags, release_title, run
 
 
 def release_exists(tag, repo):
@@ -35,7 +35,7 @@ def push_architecture_images(app_config, folder, repository, assets):
 def create_release(app_config, folder, repo, tag, assets):
     notes = folder / "CHANGELOG.md"
     args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
-            "--title", f"{app_config['name']} {app_config['version']}", *release_flags(app_config["version"])]
+            "--title", release_title(app_config["version"]), *release_flags(app_config["version"])]
     args += ["--notes-file", str(notes)] if notes.exists() else ["--generate-notes"]
     run(*args, *map(str, sorted(assets.glob("*.json"))))
 

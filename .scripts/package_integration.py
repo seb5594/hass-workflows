@@ -12,7 +12,7 @@ import config
 import gitops
 import metrics
 import projectmeta
-from common import release_flags, run
+from common import generated_notes, release_flags, release_title, run
 
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?")
 ARCHIVE_DATE = (2020, 1, 1, 0, 0, 0)
@@ -30,6 +30,12 @@ def write_archive(path, files, folder, prefix):
         assert prefix + "manifest.json" in archive.namelist()
 
 
+def checksum_line(archives):
+    """The closing line of the release notes: each archive with its SHA-256."""
+    return "; ".join(f"SHA256 `{path.name}`: `{hashlib.sha256(path.read_bytes()).hexdigest()}`"
+                     for path in sorted(archives))
+
+
 def publish(tag, manifest, out):
     repo = os.environ["GITHUB_REPOSITORY"]
     if subprocess.run(["gh", "release", "view", tag, "--repo", repo],
@@ -37,9 +43,11 @@ def publish(tag, manifest, out):
         # Published versions are immutable; bump the manifest for the next release.
         print(f"{tag} already exists; keeping its assets unchanged.")
         return
+    archives = sorted(out.glob("*.zip"))
+    notes = f"{generated_notes(repo, tag, os.environ['GITHUB_SHA'])}\n\n{checksum_line(archives)}".lstrip()
     run("gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
-        "--title", f"{manifest['name']} {manifest['version']}", "--generate-notes",
-        *release_flags(manifest["version"]), *map(str, sorted(out.iterdir())))
+        "--title", release_title(manifest["version"]), "--notes-file", "-",
+        *release_flags(manifest["version"]), *map(str, archives), input=notes, text=True)
 
 
 def main(options):
@@ -64,10 +72,7 @@ def main(options):
     # One ZIP serves HACS and manual installs: its content is the component folder itself.
     write_archive(out / hacs["filename"], files, folder, "")
     metrics.record("zip_size", (out / hacs["filename"]).stat().st_size)
-    checksums = "".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n"
-                        for p in sorted(out.glob("*.zip")))
-    (out / "SHA256SUMS.txt").write_text(checksums)
-    print(checksums)
+    print(checksum_line(out.glob("*.zip")))
     if "--release" in options:
         publish(tag, manifest, out)
         gitops.notify(config.EVENTS["integrations"], config.INTEGRATIONS_CATALOG,
