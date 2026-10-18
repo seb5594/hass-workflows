@@ -187,8 +187,8 @@ def hacs_badge(repo):
 # ---------------------------------------------------------------------------------------------
 INTEGRATION_LAYOUT = [
     (HERO, ["paypal", "coffee"]),
-    (MAJOR, ["install", "home_assistant", "version", "downloads"]),
-    (MINOR, ["stars", "issues", "tests", "checks", "license"]),
+    (MAJOR, ["install", "home_assistant", "version"]),
+    (MINOR, ["stars", "downloads", "issues", "tests", "checks", "license"]),
 ]
 APP_LAYOUT = [
     (HERO, ["paypal", "coffee"]),

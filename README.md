@@ -72,8 +72,8 @@ The badge rows come in three sizes, set by the `HERO`, `MAJOR` and `MINOR` tiers
 | Row | Size | Integration | App |
 | --- | --- | --- | --- |
 | 1 | 2x | Support PayPal, Support Buy Me a Coffee | the same |
-| 2 | 1.4x | HACS install, minimum Home Assistant, newest release, its downloads | install, minimum Home Assistant, newest release, GHCR pulls |
-| 3 | normal | stars (when above zero), open issues, tests (when measured), checks, license (when present) | architectures, stage, ingress, mounts, privileges, image size |
+| 2 | 1.4x | HACS install, minimum Home Assistant, newest release | install, minimum Home Assistant, newest release, GHCR pulls |
+| 3 | normal | stars (when above zero), downloads of the newest release, open issues, tests (when measured), checks, license (when present) | architectures, stage, ingress, mounts, privileges, image size |
 | 4 | normal | | the facts of row 3 of the integration, with runtime tests |
 
 The rows share one centered paragraph, separated by line breaks, so they stay close together.
