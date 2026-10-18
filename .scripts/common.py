@@ -24,6 +24,33 @@ def is_prerelease(version):
     return bool(PRERELEASE.search(version))
 
 
+STAGE_NAMES = {"a": "Alpha", "b": "Beta", "rc": "RC"}
+PEP440_STAGE = re.compile(r"\d+\.\d+\.\d+(a|b|rc)(\d+)")
+DASHED_STAGE = re.compile(r"\d+\.\d+(?:\.\d+)?-([A-Za-z]+)[.-]?(\d+)?")
+
+
+def release_title(version):
+    """The title of a GitHub release: `v1.2.0`, or for a pre-release only its stage, e.g. `Beta 3`.
+
+    The numeric part of a pre-release version only keeps the git tag a proper version; the
+    release itself is known by its stage.
+    """
+    if found := PEP440_STAGE.fullmatch(version):
+        return f"{STAGE_NAMES[found[1]]} {found[2]}"
+    if found := DASHED_STAGE.fullmatch(version):
+        name = "RC" if found[1].lower() == "rc" else found[1].capitalize()
+        return f"{name} {found[2]}" if found[2] else name
+    return f"v{version}"
+
+
+def generated_notes(repo, tag, target):
+    """GitHub's automatic release notes for a tag that is about to be created."""
+    return subprocess.run(
+        ["gh", "api", f"repos/{repo}/releases/generate-notes", "-f", f"tag_name={tag}",
+         "-f", f"target_commitish={target}", "--jq", ".body"],
+        check=True, capture_output=True, text=True).stdout.strip()
+
+
 def release_flags(version=""):
     """Extra `gh release create` flags: pre-release versions are marked, RELEASE_DRAFT=true keeps a release private."""
     flags = ["--prerelease"] if is_prerelease(version) else []
