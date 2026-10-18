@@ -39,8 +39,8 @@ def make_integration(root, hacs=None, **manifest):
 
 
 def paragraphs(header):
-    """The centered paragraphs of a header, one per badge row."""
-    return re.findall(r'<p align="center">\n(.*?)\n</p>', header, re.S)
+    """The badge rows of a header: its last centered paragraph, split at the line breaks."""
+    return re.findall(r'<p align="center">\n(.*?)\n</p>', header, re.S)[-1].split("<br>")
 
 
 class ProjectDiscovery(unittest.TestCase):
@@ -233,7 +233,6 @@ class AppHeader(unittest.TestCase):
             self.assertNotIn("i386", block)
             for removed in ("label=startup", "label=boot", "label=supervisor", "label=base"):
                 self.assertNotIn(removed, block)
-            self.assertIn("message=2", block)  # leaf option count, not group count
 
     def test_app_rows_share_the_integration_tiers(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -243,7 +242,25 @@ class AppHeader(unittest.TestCase):
             heights = [set(re.findall(r'height="(\d+)"', row)) for row in rows]
             self.assertEqual(heights, [{"40"}, {"28"}, {"20"}, {"20"}])
             self.assertIn("supervisor_add_addon_repository", rows[1])
-            self.assertIn("label=arch", rows[3])
+            self.assertIn("label=arch", rows[2])
+            self.assertIn("label=issues", rows[3])
+
+    def test_app_details_follow_arch_stage_ingress_mounts_and_leave_out_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_app(root)
+            details = paragraphs(readme.header(root))[2]
+            labels = re.findall(r"label=([^&]+)", details)
+            self.assertEqual(labels, ["arch", "stage", "ingress", "mounts"])
+            self.assertNotIn("label=options", readme.header(root))
+
+    def test_rows_sit_in_one_paragraph_so_they_stay_close(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            make_app(root)
+            block = readme.header(root)
+            self.assertEqual(block.count("</p>"), 1)
+            self.assertEqual(block.count("<br>"), 3)
 
     def test_measurements_come_from_the_committed_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:

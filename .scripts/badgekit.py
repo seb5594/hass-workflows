@@ -116,10 +116,13 @@ def render(rows):
 
 
 def render_header(rows):
-    """Centered README form: one paragraph per row, drawn in the size of the row's tier."""
-    return "\n\n".join(
-        '<p align="center">\n  ' + "\n  ".join(badge.html(row.tier) for badge in row.badges) + "\n</p>"
-        for row in rows if row.badges)
+    """Centered README form: all rows in one paragraph, each drawn in the size of its tier.
+
+    One paragraph with line breaks keeps the rows close together; separate paragraphs would add
+    the full paragraph margin between them.
+    """
+    lines = ["\n  ".join(badge.html(row.tier) for badge in row.badges) for row in rows if row.badges]
+    return '<p align="center">\n  ' + "<br>\n  ".join(lines) + "\n</p>" if lines else ""
 
 
 def plain(rows):
@@ -164,13 +167,6 @@ def architecture_rank(arch):
     return list(config.PLATFORMS).index(arch) if arch in config.PLATFORMS else len(config.PLATFORMS)
 
 
-def option_count(options):
-    """Count leaf settings so nested option groups are not reported as one entry."""
-    if isinstance(options, dict):
-        return sum(option_count(value) for value in options.values())
-    return 1
-
-
 def install_badge():
     redirect = ("https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?"
                 + urlencode({"repository_url": CATALOG_URL}, quote_via=quote))
@@ -197,8 +193,8 @@ INTEGRATION_LAYOUT = [
 APP_LAYOUT = [
     (HERO, ["paypal", "coffee"]),
     (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
+    (MINOR, ["arch", "stage", "ingress", "mounts", "privileged", "apparmor", "image_size"]),
     (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
-    (MINOR, ["arch", "mounts", "stage", "ingress", "privileged", "apparmor", "options", "image_size"]),
 ]
 # Badges that only make sense in a project's own README, not in a catalog listing. The catalog
 # names its licenses in one closing note instead of a badge per entry.
@@ -310,8 +306,6 @@ def _app_builders():
         "privileged": flag("privileged", lambda d: ", ".join(d["privileged"]), "write",
                            lambda d: d.get("privileged")),
         "apparmor": flag("apparmor", lambda d: "disabled", "write", lambda d: d.get("apparmor") is False),
-        "options": flag("options", lambda d: str(option_count(d["options"])), "info",
-                        lambda d: d.get("options")),
     })
     return builders
 
