@@ -186,15 +186,15 @@ def hacs_badge(repo):
 # Unknown names fail loudly; builders that have nothing to show simply return no badge.
 # ---------------------------------------------------------------------------------------------
 INTEGRATION_LAYOUT = [
-    (HERO, ["paypal", "coffee"]),
     (MAJOR, ["install", "home_assistant", "version"]),
     (MINOR, ["stars", "downloads", "issues", "tests", "checks", "license"]),
+    (HERO, ["paypal", "coffee"]),
 ]
 APP_LAYOUT = [
-    (HERO, ["paypal", "coffee"]),
     (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
     (MINOR, ["arch", "stage", "ingress", "mounts", "privileged", "apparmor", "image_size"]),
     (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
+    (HERO, ["paypal", "coffee"]),
 ]
 # Badges that only make sense in a project's own README, not in a catalog listing. The catalog
 # names its licenses in one closing note instead of a badge per entry.
