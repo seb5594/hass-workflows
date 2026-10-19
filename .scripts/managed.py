@@ -8,6 +8,7 @@ KIND is one of WORKFLOWS below. DIR defaults to the current directory. GitHub re
 from each repository, so they cannot be shared by reference; generating them from templates keeps
 them identical everywhere and lets CI fail on drift.
 """
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -76,11 +77,22 @@ def render_workflow(workflow, sha):
                                   "ENGINE_SHA": sha}, templating.DUNDER, once=False)
 
 
+def renovate_config():
+    """The shared Renovate preset, written out in full.
+
+    A repository cannot extend the preset of this private engine: Renovate does not load private
+    presets for public repositories and reports "Cannot find preset's package". Each repository
+    therefore carries the complete preset, generated from default.json.
+    """
+    preset = json.loads((config.ENGINE_ROOT / "default.json").read_text())
+    return json.dumps(preset, indent=2) + "\n"
+
+
 def shared_files():
     """Identical in every repository, whatever it contains."""
     return {
         ".github/dependabot.yml": read_template("dependabot.yml"),
-        ".github/renovate.json": read_template("renovate/renovate.json"),
+        ".github/renovate.json": renovate_config(),
         ".github/FUNDING.yml": templating.fill(read_template("FUNDING.yml"), {
             "COFFEE_USER": config.COFFEE_USER, "PAYPAL_URL": config.PAYPAL_URL}),
     }

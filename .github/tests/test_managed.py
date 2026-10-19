@@ -1,4 +1,5 @@
 """Protect the files every repository keeps in step with the engine, and the snippets behind them."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -99,6 +100,17 @@ class ManagedFiles(unittest.TestCase):
             files = managed.expected(kind, SHA, root)
             for path in (".github/dependabot.yml", ".github/renovate.json", ".github/FUNDING.yml"):
                 self.assertIn(path, files, kind)
+
+    def test_renovate_config_is_the_complete_preset_not_a_reference_to_it(self):
+        text = managed.expected("integration", SHA, self.repository("integration"))[".github/renovate.json"]
+        found = json.loads(text)
+        self.assertEqual(found, json.loads((config.ENGINE_ROOT / "default.json").read_text()))
+        self.assertNotIn("github>", text)
+        self.assertEqual(found["branchPrefix"], "feature-")
+
+    def test_the_engine_keeps_the_same_renovate_config_itself(self):
+        own = (config.ENGINE_ROOT / ".github/renovate.json").read_text()
+        self.assertEqual(own, managed.renovate_config())
 
     def test_funding_comes_from_the_donation_links(self):
         text = managed.expected("integration", SHA, self.repository("integration"))[".github/FUNDING.yml"]
