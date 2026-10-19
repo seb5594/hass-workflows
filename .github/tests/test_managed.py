@@ -107,6 +107,17 @@ class ManagedFiles(unittest.TestCase):
         self.assertEqual(found, json.loads((config.ENGINE_ROOT / "default.json").read_text()))
         self.assertNotIn("github>", text)
         self.assertEqual(found["branchPrefix"], "feature-")
+        # Only the default branch is a base: a base branch configured elsewhere, which a repository
+        # does not have, produced "Base branch does not exist" and branch names like feature-main-x.
+        self.assertEqual(found["baseBranchPatterns"], ["$default"])
+
+    def test_updates_that_are_decisions_rather_than_bumps_are_switched_off(self):
+        rules = json.loads(managed.renovate_config())["packageRules"]
+        disabled = {(tuple(rule.get("matchManagers", [])), tuple(rule.get("matchDepNames", [])))
+                    for rule in rules if rule.get("enabled") is False}
+        self.assertIn((("github-actions",), ("python",)), disabled)
+        self.assertIn((("github-actions",), ("ubuntu",)), disabled)
+        self.assertIn((("homeassistant-manifest",), ()), disabled)
 
     def test_the_engine_keeps_the_same_renovate_config_itself(self):
         own = (config.ENGINE_ROOT / ".github/renovate.json").read_text()
