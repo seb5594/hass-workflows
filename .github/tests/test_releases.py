@@ -41,16 +41,21 @@ class IntegrationRelease(unittest.TestCase):
         self.assertEqual(line, f"SHA256 `demo.zip`: `{hashlib.sha256(b'zip content').hexdigest()}`")
         self.assertNotIn("\n", line)
 
-    def publish(self, version, notes="## What's Changed\n* A change"):
+    def publish(self, version, notes="## What's Changed\n* A change", hacs=None, existing=None, stable=False):
+        """Run publish() with GitHub mocked; returns the (create) call and all `run` calls."""
+        def gh_json(*args):
+            return existing if args[1] == "view" else None
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             self.archive(out)
-            missing = mock.Mock(returncode=1)
             with mock.patch.dict(os.environ, {"GITHUB_REPOSITORY": "o/r", "GITHUB_SHA": "a" * 40}), \
-                    mock.patch.object(package_integration.subprocess, "run", return_value=missing), \
+                    mock.patch.object(package_integration, "gh_json", side_effect=gh_json), \
+                    mock.patch.object(package_integration, "stable_version_released", return_value=stable), \
                     mock.patch.object(package_integration, "generated_notes", return_value=notes), \
                     mock.patch.object(package_integration, "run") as run:
-                package_integration.publish(f"v{version}", {"name": "Demo", "version": version}, out)
+                package_integration.publish(f"v{version}", {"name": "Demo", "version": version},
+                                            hacs or {}, out)
+            self.run_calls = run.call_args_list
             return run.call_args
 
     def test_release_is_titled_by_its_version_and_ends_with_the_checksum(self):
@@ -73,6 +78,22 @@ class IntegrationRelease(unittest.TestCase):
         self.assertIn("--prerelease", args)
         self.assertIn("v1.0.0b3", args)
 
+    def test_a_first_beta_with_zip_release_is_published_as_a_regular_release(self):
+        zip_release = {"zip_release": True, "filename": "demo.zip"}
+        args = list(self.publish("1.0.0b3", hacs=zip_release, stable=False).args)
+        self.assertEqual(args[args.index("--title") + 1], "Beta 3")
+        self.assertNotIn("--prerelease", args)
+
+    def test_an_existing_release_keeps_its_assets_but_follows_the_marker_rule(self):
+        zip_release = {"zip_release": True, "filename": "demo.zip"}
+        self.publish("1.0.0b3", hacs=zip_release, existing={"isPrerelease": True}, stable=False)
+        self.assertEqual([call.args[:3] for call in self.run_calls], [("gh", "release", "edit")])
+        self.assertIn("--prerelease=false", self.run_calls[0].args)
+
+    def test_an_existing_release_in_line_with_the_rule_is_left_alone(self):
+        self.publish("1.0.0b3", existing={"isPrerelease": True})
+        self.assertEqual(self.run_calls, [])
+
     def test_a_release_without_generated_notes_still_ends_with_the_checksum(self):
         notes = self.publish("1.2.0", notes="").kwargs["input"]
         self.assertTrue(notes.startswith("SHA256 `demo.zip`"))
@@ -82,21 +103,45 @@ class HacsSettings(unittest.TestCase):
     ZIP = {"zip_release": True, "filename": "demo.zip"}
 
     def test_zip_release_is_optional(self):
-        self.assertEqual(package_integration.check_hacs({"name": "Demo"}, "demo", "1.0.0b3"), [])
+        package_integration.check_hacs({"name": "Demo"}, "demo")
 
     def test_a_zip_release_must_name_the_archive_the_engine_builds(self):
-        self.assertEqual(package_integration.check_hacs(self.ZIP, "demo", "1.0.0"), [])
+        package_integration.check_hacs(self.ZIP, "demo")
         with self.assertRaisesRegex(AssertionError, "demo.zip"):
-            package_integration.check_hacs({"zip_release": True, "filename": "other.zip"}, "demo", "1.0.0")
+            package_integration.check_hacs({"zip_release": True, "filename": "other.zip"}, "demo")
 
-    def test_zip_release_with_a_prerelease_warns_that_hacs_cannot_install_it(self):
-        warnings = package_integration.check_hacs(self.ZIP, "demo", "1.0.0b3")
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("stable releases only", warnings[0])
 
-    def test_no_warning_without_zip_release_or_for_stable_versions(self):
-        self.assertEqual(package_integration.check_hacs({}, "demo", "1.0.0-beta.1"), [])
-        self.assertEqual(package_integration.check_hacs(self.ZIP, "demo", "2.0.0"), [])
+class PrereleaseMarker(unittest.TestCase):
+    """HACS counts the ZIP of a stable release only, so a beta must not hide behind the marker alone."""
+    ZIP = {"zip_release": True, "filename": "demo.zip"}
+
+    def marked(self, hacs, version, stable):
+        with mock.patch.object(package_integration, "stable_version_released", return_value=stable):
+            return package_integration.marked_prerelease(hacs, version, "o/r")
+
+    def test_stable_versions_are_never_marked(self):
+        self.assertFalse(self.marked(self.ZIP, "1.0.0", stable=True))
+        self.assertFalse(self.marked({}, "1.0.0", stable=False))
+
+    def test_a_beta_without_any_stable_release_is_regular_while_zip_release_is_set(self):
+        self.assertFalse(self.marked(self.ZIP, "1.0.0b3", stable=False))
+
+    def test_a_beta_after_a_stable_release_is_marked(self):
+        self.assertTrue(self.marked(self.ZIP, "1.1.0b1", stable=True))
+
+    def test_a_project_without_zip_release_marks_its_betas(self):
+        self.assertTrue(self.marked({}, "1.0.0b3", stable=False))
+
+    def test_stable_versions_are_told_from_betas_by_their_tag(self):
+        releases = [{"tagName": "v1.0.0b3", "isDraft": False}, {"tagName": "v1.0.0b2", "isDraft": False}]
+        with mock.patch.object(package_integration, "gh_json", return_value=releases):
+            self.assertFalse(package_integration.stable_version_released("o/r"))
+        with mock.patch.object(package_integration, "gh_json",
+                               return_value=releases + [{"tagName": "v1.0.0", "isDraft": False}]):
+            self.assertTrue(package_integration.stable_version_released("o/r"))
+        with mock.patch.object(package_integration, "gh_json",
+                               return_value=[{"tagName": "v1.0.0", "isDraft": True}]):
+            self.assertFalse(package_integration.stable_version_released("o/r"))
 
 
 class AppRelease(unittest.TestCase):

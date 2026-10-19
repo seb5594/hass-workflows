@@ -51,10 +51,14 @@ def generated_notes(repo, tag, target):
         check=True, capture_output=True, text=True).stdout.strip()
 
 
-def release_flags(version=""):
-    """Extra `gh release create` flags: pre-release versions are marked, RELEASE_DRAFT=true keeps a release private."""
-    flags = ["--prerelease"] if is_prerelease(version) else []
-    return flags + (["--draft"] if os.environ.get("RELEASE_DRAFT", "").lower() == "true" else [])
+def release_flags(version="", prerelease=None):
+    """Extra `gh release create` flags: pre-release marker, and RELEASE_DRAFT=true keeps a release private.
+
+    The marker follows the version unless the caller decides otherwise with `prerelease`.
+    """
+    marked = is_prerelease(version) if prerelease is None else prerelease
+    return (["--prerelease"] if marked else []) + (
+        ["--draft"] if os.environ.get("RELEASE_DRAFT", "").lower() == "true" else [])
 
 
 ANNOTATION_TAIL_LINES = 15
