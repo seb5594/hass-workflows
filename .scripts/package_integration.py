@@ -30,23 +30,10 @@ def write_archive(path, files, folder, prefix):
         assert prefix + "manifest.json" in archive.namelist()
 
 
-def check_hacs(hacs, domain, version):
-    """Validate hacs.json against the archive the engine builds; returns warnings for CI.
-
-    `zip_release` is optional. With it HACS installs the ZIP of a *stable* release only: while a
-    repository has pre-releases alone, HACS falls back to the branch, builds a release URL that
-    does not exist and the download fails. Without it HACS copies the component folder from the
-    repository, which works at any time. The ZIP is built and attached to every release anyway,
-    for manual installs.
-    """
+def check_hacs(hacs, domain):
+    """`zip_release` is optional; when set, `filename` must be the archive the engine builds."""
     if hacs.get("zip_release"):
         assert hacs.get("filename") == f"{domain}.zip", f"hacs.json `filename` must be {domain}.zip"
-    warnings = []
-    if hacs.get("zip_release") and is_prerelease(version):
-        warnings.append("hacs.json sets zip_release, but this version is a pre-release: HACS installs "
-                        "ZIP releases from stable releases only, so installing fails until one exists. "
-                        "Remove `zip_release` and `filename` from hacs.json until then.")
-    return warnings
 
 
 def checksum_line(archives):
@@ -55,18 +42,46 @@ def checksum_line(archives):
                      for path in sorted(archives))
 
 
-def publish(tag, manifest, out):
+def gh_json(*args):
+    result = subprocess.run(["gh", *args], capture_output=True, text=True)
+    return json.loads(result.stdout) if result.returncode == 0 else None
+
+
+def stable_version_released(repo):
+    """Has a release of a stable version (not 1.0.0b3 and the like) been published?"""
+    releases = gh_json("release", "list", "--repo", repo, "--limit", "100", "--json", "tagName,isDraft") or []
+    return any(not release["isDraft"] and not is_prerelease(release["tagName"].removeprefix("v"))
+               for release in releases)
+
+
+def marked_prerelease(hacs, version, repo):
+    """Whether the release of `version` carries GitHub's pre-release marker.
+
+    HACS installs (and counts the downloads of) a `zip_release` ZIP from stable releases only.
+    Until a stable version exists, the newest beta is therefore published as a regular release;
+    afterwards betas are marked again, and HACS offers them behind its beta switch.
+    """
+    if not is_prerelease(version):
+        return False
+    return not (hacs.get("zip_release") and not stable_version_released(repo))
+
+
+def publish(tag, manifest, hacs, out):
     repo = os.environ["GITHUB_REPOSITORY"]
-    if subprocess.run(["gh", "release", "view", tag, "--repo", repo],
-                      capture_output=True).returncode == 0:
-        # Published versions are immutable; bump the manifest for the next release.
+    prerelease = marked_prerelease(hacs, manifest["version"], repo)
+    existing = gh_json("release", "view", tag, "--repo", repo, "--json", "isPrerelease")
+    if existing is not None:
+        # Published versions are immutable; bump the manifest for the next release. Only the
+        # pre-release marker may follow the rule above, e.g. for a beta released before it applied.
+        if existing["isPrerelease"] != prerelease:
+            run("gh", "release", "edit", tag, "--repo", repo, f"--prerelease={str(prerelease).lower()}")
         print(f"{tag} already exists; keeping its assets unchanged.")
         return
     archives = sorted(out.glob("*.zip"))
     notes = f"{generated_notes(repo, tag, os.environ['GITHUB_SHA'])}\n\n{checksum_line(archives)}".lstrip()
     run("gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
         "--title", release_title(manifest["version"]), "--notes-file", "-",
-        *release_flags(manifest["version"]), *map(str, archives), input=notes, text=True)
+        *release_flags(manifest["version"], prerelease), *map(str, archives), input=notes, text=True)
 
 
 def main(options):
@@ -76,8 +91,7 @@ def main(options):
     domain, version = project.slug, project.version
     assert domain == folder.name
     assert VERSION.fullmatch(version), "Use X.Y.Z or a PEP 440 a/b/rc pre-release"
-    for warning in check_hacs(hacs, domain, version):
-        print(f"::warning title=HACS zip_release::{warning}")
+    check_hacs(hacs, domain)
     archive = f"{domain}.zip"
     tag = f"v{version}"
     ref = os.environ.get("GITHUB_REF", "")
@@ -95,7 +109,7 @@ def main(options):
     metrics.record("zip_size", (out / archive).stat().st_size)
     print(checksum_line(out.glob("*.zip")))
     if "--release" in options:
-        publish(tag, manifest, out)
+        publish(tag, manifest, hacs, out)
         gitops.notify(config.EVENTS["integrations"], config.INTEGRATIONS_CATALOG,
                       os.environ.get("ORCHESTRATION_TOKEN"))
 
