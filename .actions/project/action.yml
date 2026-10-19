@@ -60,7 +60,7 @@ runs:
         category: integration
         repository: ${{ github.repository }}
         # Catalog-only requirements are not needed for custom HACS repositories.
-        ignore: brands topics
+        ignore: ${{ steps.project.outputs.hacs_ignore }}
         comment: 'false'
     - uses: docker/setup-qemu-action@v4
       if: steps.project.outputs.images == 'true'

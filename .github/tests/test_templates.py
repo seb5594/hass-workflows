@@ -439,6 +439,23 @@ class PublishDecision(unittest.TestCase):
         self.assertFalse(project.should_publish({**self.base, "IS_TEMPLATE": "true"}))
 
 
+class HacsChecks(unittest.TestCase):
+    def test_store_only_checks_are_always_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "LICENSE").write_text("MIT License\n")
+            self.assertEqual(project.hacs_ignored_checks(Path(tmp)), ["brands", "topics"])
+
+    def test_a_repository_without_a_license_file_skips_that_check_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(project.hacs_ignored_checks(Path(tmp)), ["brands", "topics", "license"])
+
+    def test_every_spelling_of_the_license_file_counts(self):
+        for name in ("LICENSE.md", "LICENCE", "LICENSE.txt"):
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / name).write_text("text\n")
+                self.assertNotIn("license", project.hacs_ignored_checks(Path(tmp)), name)
+
+
 class ScheduledRuns(unittest.TestCase):
     """The weekly run refreshes README facts; it must not rebuild every architecture of an app."""
 
