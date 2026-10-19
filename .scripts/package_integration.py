@@ -12,7 +12,7 @@ import config
 import gitops
 import metrics
 import projectmeta
-from common import generated_notes, release_flags, release_title, run
+from common import generated_notes, is_prerelease, release_flags, release_title, run
 
 VERSION = re.compile(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?")
 ARCHIVE_DATE = (2020, 1, 1, 0, 0, 0)
@@ -28,6 +28,25 @@ def write_archive(path, files, folder, prefix):
     with ZipFile(path) as archive:
         assert archive.testzip() is None
         assert prefix + "manifest.json" in archive.namelist()
+
+
+def check_hacs(hacs, domain, version):
+    """Validate hacs.json against the archive the engine builds; returns warnings for CI.
+
+    `zip_release` is optional. With it HACS installs the ZIP of a *stable* release only: while a
+    repository has pre-releases alone, HACS falls back to the branch, builds a release URL that
+    does not exist and the download fails. Without it HACS copies the component folder from the
+    repository, which works at any time. The ZIP is built and attached to every release anyway,
+    for manual installs.
+    """
+    if hacs.get("zip_release"):
+        assert hacs.get("filename") == f"{domain}.zip", f"hacs.json `filename` must be {domain}.zip"
+    warnings = []
+    if hacs.get("zip_release") and is_prerelease(version):
+        warnings.append("hacs.json sets zip_release, but this version is a pre-release: HACS installs "
+                        "ZIP releases from stable releases only, so installing fails until one exists. "
+                        "Remove `zip_release` and `filename` from hacs.json until then.")
+    return warnings
 
 
 def checksum_line(archives):
@@ -57,7 +76,9 @@ def main(options):
     domain, version = project.slug, project.version
     assert domain == folder.name
     assert VERSION.fullmatch(version), "Use X.Y.Z or a PEP 440 a/b/rc pre-release"
-    assert hacs["zip_release"] is True and hacs["filename"] == f"{domain}.zip"
+    for warning in check_hacs(hacs, domain, version):
+        print(f"::warning title=HACS zip_release::{warning}")
+    archive = f"{domain}.zip"
     tag = f"v{version}"
     ref = os.environ.get("GITHUB_REF", "")
     if ref.startswith("refs/tags/"):
@@ -70,8 +91,8 @@ def main(options):
     files = sorted(p for p in folder.rglob("*") if p.is_file()
                    and "__pycache__" not in p.parts and p.suffix not in {".pyc", ".pyo"})
     # One ZIP serves HACS and manual installs: its content is the component folder itself.
-    write_archive(out / hacs["filename"], files, folder, "")
-    metrics.record("zip_size", (out / hacs["filename"]).stat().st_size)
+    write_archive(out / archive, files, folder, "")
+    metrics.record("zip_size", (out / archive).stat().st_size)
     print(checksum_line(out.glob("*.zip")))
     if "--release" in options:
         publish(tag, manifest, out)

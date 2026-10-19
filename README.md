@@ -61,6 +61,8 @@ The current Home Assistant base image ships amd64 and aarch64 only. An app that 
 
 Integrations run HACS checks (skipped for private and template repositories, which HACS cannot read), Python lint and tests (pytest when `requirements-dev.txt` exists, otherwise unittest, plus `*.test.cjs` frontend tests through Node). Every CI run produces a verified ZIP artifact. A new manifest version publishes the ZIP as a GitHub release whose notes end with the ZIP's SHA-256 (there is no checksum file); versions such as `1.0.0b1` become pre-releases.
 
+`zip_release` in `hacs.json` is optional. HACS installs a ZIP release from the newest *stable* release only; a repository that has pre-releases alone fails to install with it (HACS falls back to the branch and asks for a release URL that does not exist). Such a project leaves `zip_release` and `filename` out until its first stable release, and HACS copies the component folder from the repository instead. The ZIP is built and attached to every release either way, for manual installs; CI warns when `zip_release` is set on a pre-release version.
+
 A release is titled by its version only (`v1.2.0`, without the project name). A pre-release carries just its stage as the title, `Beta 3` for `1.0.0b3` or `1.0.0-beta.3`: the numeric part only keeps the git tag a proper version.
 
 The build and smoke-test phase executes once per architecture. Publishing pushes the tested images instead of rebuilding them. A version already released on `main` remains unchanged; a matching `vVERSION` tag can republish app images deliberately. Starting the workflow by hand offers a `draft` switch that keeps the release private for review.
