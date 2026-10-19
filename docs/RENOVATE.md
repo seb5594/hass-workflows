@@ -22,6 +22,10 @@ edit `default.json` and run `managed.py sync` in each repository.
 Renovate names its branches `feature-<topic>`, for example `feature-github-actions` or
 `feature-alpine-base-and-packages`, one stable name per group of updates.
 
+Only the default branch is a base branch (`baseBranchPatterns: ["$default"]`). The GitHub app can carry
+base branches of its own from its portal settings; a branch a repository does not have shows up as
+"Base branch does not exist" in the dashboard and puts `main` into every branch name.
+
 ## What the preset updates
 
 - GitHub Actions in workflows, grouped into one pull request.
@@ -29,7 +33,8 @@ Renovate names its branches `feature-<topic>`, for example `feature-github-actio
 - Alpine packages pinned as `name=version`, via the Repology data source. Mark each one with
   `# renovate: datasource=repology depName=alpine_3_24/<package>` on the line above it.
 - Other pinned tools marked the same way, such as `git-secrets` (`datasource=github-tags`).
-- The engine's own Python (`python-version` of the setup action) is not updated: it is raised on purpose.
+- The engine's own Python (`python-version` of the setup action) and the `runs-on` Ubuntu version are not updated: both are raised on purpose.
+- `requirements` in a `manifest.json` are not updated: changing what users install is a release decision.
 - The base image tag `3.24-2026.08.0` moves within its Alpine release only (`3.24-2026.10.0`); the floating tag `3.24` is never proposed.
 
 Renovate never changes `version` in `config.yaml`, the changelog, or `manifest.json`. Raise the
