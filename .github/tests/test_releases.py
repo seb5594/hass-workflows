@@ -78,6 +78,27 @@ class IntegrationRelease(unittest.TestCase):
         self.assertTrue(notes.startswith("SHA256 `demo.zip`"))
 
 
+class HacsSettings(unittest.TestCase):
+    ZIP = {"zip_release": True, "filename": "demo.zip"}
+
+    def test_zip_release_is_optional(self):
+        self.assertEqual(package_integration.check_hacs({"name": "Demo"}, "demo", "1.0.0b3"), [])
+
+    def test_a_zip_release_must_name_the_archive_the_engine_builds(self):
+        self.assertEqual(package_integration.check_hacs(self.ZIP, "demo", "1.0.0"), [])
+        with self.assertRaisesRegex(AssertionError, "demo.zip"):
+            package_integration.check_hacs({"zip_release": True, "filename": "other.zip"}, "demo", "1.0.0")
+
+    def test_zip_release_with_a_prerelease_warns_that_hacs_cannot_install_it(self):
+        warnings = package_integration.check_hacs(self.ZIP, "demo", "1.0.0b3")
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("stable releases only", warnings[0])
+
+    def test_no_warning_without_zip_release_or_for_stable_versions(self):
+        self.assertEqual(package_integration.check_hacs({}, "demo", "1.0.0-beta.1"), [])
+        self.assertEqual(package_integration.check_hacs(self.ZIP, "demo", "2.0.0"), [])
+
+
 class AppRelease(unittest.TestCase):
     def create(self, version):
         with tempfile.TemporaryDirectory() as tmp:
