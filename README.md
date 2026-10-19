@@ -14,7 +14,7 @@
 | [Catalog action](.actions/catalog/action.yml), [hub action](.actions/hub/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) and the [hub](docs/HUB.md) |
 | [Setup action](.actions/setup-python/action.yml) | Python plus the one pinned PyYAML every other action and the engine checks reuse |
 | [Scripts](.scripts/) | All logic, see [Architecture](docs/ARCHITECTURE.md) |
-| [Renovate preset](default.json) | Shared dependency rules, see [Renovate preparation](docs/RENOVATE.md) |
+| [Renovate preset](default.json) | Shared dependency rules, copied into every repository, see [Renovate](docs/RENOVATE.md) |
 | [Templates](.templates/) | Caller workflows (one per family), the [snippets](.templates/snippets/) they share, README texts and the other [managed files](#managed-files) |
 
 ## Conventions for projects
@@ -40,7 +40,8 @@ GitHub only reads workflows, Dependabot, Renovate and funding settings from the 
 | --- | --- |
 | `.github/workflows/ci.yml`, `update.yml` | [`.templates/callers`](.templates/callers/), built from [snippets](.templates/snippets/) (`# include: NAME`) for the steps several workflows share |
 | `.github/workflows/compat.yml` | Integrations with `.github/ha_tests` only |
-| `.github/dependabot.yml`, `.github/renovate.json` | [`.templates`](.templates/) |
+| `.github/dependabot.yml` | [`.templates`](.templates/) |
+| `.github/renovate.json` | The whole [`default.json`](default.json), see [Renovate](docs/RENOVATE.md) |
 | `.github/FUNDING.yml` | Built from the donation links in [`config.py`](.scripts/config.py), the same ones the README badges use |
 | `<app>/entrypoint.sh` | Shared startup code of apps that do not run on s6 |
 | `.github/DEVELOPMENT.md` | Catalogs only: how the generated catalog is maintained |
