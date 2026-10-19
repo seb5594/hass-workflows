@@ -8,6 +8,7 @@ from pathlib import Path
 
 import config
 import gitops
+import licenses
 import live
 import managed
 import metrics
@@ -28,6 +29,22 @@ def should_publish(env=os.environ):
         return False
     ref = env.get("REF", "")
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
+
+
+# Checks of the HACS action that only the default store needs, not a custom repository.
+HACS_CATALOG_CHECKS = ("brands", "topics")
+
+
+def hacs_ignored_checks(root=Path(".")):
+    """HACS checks to skip: the store-only ones, plus `license` while there is no license file.
+
+    A missing license is reported as a warning instead of failing the whole pipeline; it only
+    matters for the default store, and adding a license is the owner's decision.
+    """
+    checks = list(HACS_CATALOG_CHECKS)
+    if licenses.license_file(root) is None:
+        checks.append("license")
+    return checks
 
 
 def builds_images(project, env=os.environ):
@@ -155,6 +172,12 @@ def main(command):
         print(f"images={str(images).lower()}")
         # Integrations release (a no-op once the version exists); apps only when they built images.
         print(f"release={str(publish and (images or project.kind == projectmeta.INTEGRATION)).lower()}")
+        ignored = hacs_ignored_checks()
+        print(f"hacs_ignore={' '.join(ignored)}")
+        if project.kind == projectmeta.INTEGRATION and "license" in ignored:
+            # stderr: stdout of this command is the step's GITHUB_OUTPUT.
+            print("::warning title=No license::The repository has no license file. HACS requires one "
+                  "for its default store only, so the check is skipped here.", file=sys.stderr)
     elif command == "validate":
         validate(project)
     elif command == "build" and project.kind == projectmeta.APP:
