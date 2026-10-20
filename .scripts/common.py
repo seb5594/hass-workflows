@@ -25,7 +25,7 @@ def is_prerelease(version):
 
 
 STAGE_NAMES = {"a": "Alpha", "b": "Beta", "rc": "RC"}
-PEP440_STAGE = re.compile(r"\d+\.\d+\.\d+(a|b|rc)(\d+)")
+PEP440_STAGE = re.compile(r"\d+\.\d+\.\d+(?:\.\d+)?(a|b|rc)(\d+)")
 DASHED_STAGE = re.compile(r"\d+\.\d+(?:\.\d+)?-([A-Za-z]+)[.-]?(\d+)?")
 
 

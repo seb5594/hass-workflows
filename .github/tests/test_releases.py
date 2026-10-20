@@ -18,6 +18,10 @@ class ReleaseTitles(unittest.TestCase):
         self.assertEqual(common.release_title("1.2.0"), "v1.2.0")
         self.assertEqual(common.release_title("1.74.3"), "v1.74.3")
 
+    def test_a_build_number_does_not_change_the_title(self):
+        self.assertEqual(common.release_title("2026.10.20.0"), "v2026.10.20.0")
+        self.assertEqual(common.release_title("2026.10.20.0b2"), "Beta 2")
+
     def test_prereleases_are_titled_by_their_stage(self):
         for version, title in (("1.0.0b3", "Beta 3"), ("1.0.0a1", "Alpha 1"), ("2.1.0rc2", "RC 2"),
                                ("1.0.0-beta4", "Beta 4"), ("1.0.0-beta.4", "Beta 4"),
@@ -26,6 +30,20 @@ class ReleaseTitles(unittest.TestCase):
 
     def test_the_title_never_contains_the_project_name_or_the_numeric_base(self):
         self.assertNotIn("1.0.0", common.release_title("1.0.0b3"))
+
+
+class IntegrationVersions(unittest.TestCase):
+    def test_accepted_shapes(self):
+        for version in ("1.2.0", "1.0.0b3", "2.1.0rc2", "2026.10.20.0", "2026.7.14.3", "2026.10.20.1a1"):
+            self.assertTrue(package_integration.VERSION.fullmatch(version), version)
+
+    def test_rejected_shapes(self):
+        for version in ("1.2", "1.2.3.4.5", "1.2.0-beta", "v1.2.0", "2026.10.20."):
+            self.assertFalse(package_integration.VERSION.fullmatch(version), version)
+
+    def test_a_build_number_is_not_a_prerelease(self):
+        self.assertFalse(common.is_prerelease("2026.10.20.3"))
+        self.assertTrue(common.is_prerelease("2026.10.20.3b1"))
 
 
 class IntegrationRelease(unittest.TestCase):
