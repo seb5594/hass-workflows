@@ -14,7 +14,8 @@ import metrics
 import projectmeta
 from common import generated_notes, is_prerelease, release_flags, release_title, run
 
-VERSION = re.compile(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?")
+# X.Y.Z, or X.Y.Z.B for projects that keep a build number such as 2026.10.20.0.
+VERSION = re.compile(r"\d+\.\d+\.\d+(?:\.\d+)?(?:(?:a|b|rc)\d+)?")
 ARCHIVE_DATE = (2020, 1, 1, 0, 0, 0)
 
 
@@ -90,7 +91,7 @@ def main(options):
     folder, manifest, hacs = project.folder, project.metadata, project.hacs
     domain, version = project.slug, project.version
     assert domain == folder.name
-    assert VERSION.fullmatch(version), "Use X.Y.Z or a PEP 440 a/b/rc pre-release"
+    assert VERSION.fullmatch(version), "Use X.Y.Z or X.Y.Z.B, optionally with a PEP 440 a/b/rc pre-release"
     check_hacs(hacs, domain)
     archive = f"{domain}.zip"
     tag = f"v{version}"
