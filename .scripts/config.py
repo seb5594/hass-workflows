@@ -1,4 +1,5 @@
 """Names, URLs and constants shared by every engine script; change them here only."""
+import os
 from pathlib import Path
 
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -6,7 +7,9 @@ ENGINE_ROOT = Path(__file__).resolve().parents[1]
 OWNER = "seb5594"
 USER_AGENT = f"{OWNER}-hass-workflows"
 
-DEFAULT_BRANCH = "main"
+# The default branch of the repository the workflow runs for (the action passes it in); badges and
+# picture links in the README point to it. Local runs fall back to "main".
+DEFAULT_BRANCH = os.environ.get("DEFAULT_BRANCH") or "main"
 
 ENGINE_REPOSITORY = f"{OWNER}/hass-workflows"
 APPS_CATALOG = f"{OWNER}/Home-Assistant-Apps"
