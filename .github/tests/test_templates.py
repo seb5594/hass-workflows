@@ -12,6 +12,7 @@ import badgekit
 import project
 import projectmeta
 import readme
+import config
 
 APP_CONFIG = (
     "name: Sample\nslug: sample\nversion: '2.3.4'\n"
@@ -100,40 +101,40 @@ class HeaderStructure(unittest.TestCase):
         self.assertLess(block.index("<h1"), block.index("\n---\n"))
         self.assertLess(block.index("\n---\n"), block.index("label=Support"))
 
-    def test_rows_end_with_the_large_support_row(self):
+    def test_rows_start_with_the_large_support_row(self):
         rows = paragraphs(self.header())
         self.assertEqual(len(rows), 3)
         heights = [set(re.findall(r'height="(\d+)"', row)) for row in rows]
-        self.assertEqual(heights, [{"28"}, {"20"}, {"40"}])
+        self.assertEqual(heights, [{"40"}, {"28"}, {"20"}])
         self.assertEqual(badgekit.HERO.height, 2 * badgekit.MINOR.height)
         self.assertIn("style=for-the-badge", rows[0])
-        self.assertIn("style=flat", rows[1])
-        self.assertIn("style=for-the-badge", rows[2])
+        self.assertIn("style=for-the-badge", rows[1])
+        self.assertIn("style=flat", rows[2])
 
     def test_support_row_links_paypal_me_and_coffee(self):
-        support_row = paragraphs(self.header())[2]
+        support_row = paragraphs(self.header())[0]
         self.assertIn('href="https://paypal.me/seb5594"', support_row)
         self.assertIn('href="https://buymeacoffee.com/seb5594"', support_row)
         self.assertLess(support_row.index("PayPal"), support_row.index("Buy%20Me%20a%20Coffee"))
 
     def test_middle_row_lists_hacs_minimum_version_and_release(self):
-        row = paragraphs(self.header())[0]
+        row = paragraphs(self.header())[1]
         labels = re.findall(r"label=([^&]+)", row)
         self.assertEqual(labels, ["HACS", "home%20assistant", "version"])
         self.assertIn("message=%E2%89%A5%202026.9.0", row)
         self.assertIn("owner=seb5594&amp;repository=demo-integration&amp;category=integration", row)
 
     def test_without_a_minimum_version_that_badge_is_omitted(self):
-        row = paragraphs(self.header(hacs={}))[0]
+        row = paragraphs(self.header(hacs={}))[1]
         self.assertNotIn("home%20assistant", row)
 
     def test_facts_row_puts_downloads_before_issues_and_checks(self):
-        row = paragraphs(self.header())[1]
+        row = paragraphs(self.header())[2]
         labels = re.findall(r"label=([^&]+)", row)
         self.assertEqual(labels, ["stars", "downloads", "issues", "checks"])
 
     def test_offline_rendering_keeps_the_unconditional_badges(self):
-        row = paragraphs(self.header())[1]
+        row = paragraphs(self.header())[2]
         for kept in ("label=stars", "label=downloads", "label=issues", "label=checks"):
             self.assertIn(kept, row)
         self.assertNotIn("label=tests", row)
@@ -257,17 +258,17 @@ class AppHeader(unittest.TestCase):
             make_app(root)
             rows = paragraphs(readme.header(root))
             heights = [set(re.findall(r'height="(\d+)"', row)) for row in rows]
-            self.assertEqual(heights, [{"28"}, {"20"}, {"20"}, {"40"}])
-            self.assertIn("supervisor_add_addon_repository", rows[0])
-            self.assertIn("label=arch", rows[1])
-            self.assertIn("label=issues", rows[2])
-            self.assertIn("label=Support", rows[3])
+            self.assertEqual(heights, [{"40"}, {"28"}, {"20"}, {"20"}])
+            self.assertIn("label=Support", rows[0])
+            self.assertIn("supervisor_add_addon_repository", rows[1])
+            self.assertIn("label=arch", rows[2])
+            self.assertIn("label=issues", rows[3])
 
     def test_app_details_follow_arch_stage_ingress_mounts_and_leave_out_options(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             make_app(root)
-            details = paragraphs(readme.header(root))[1]
+            details = paragraphs(readme.header(root))[2]
             labels = re.findall(r"label=([^&]+)", details)
             self.assertEqual(labels, ["arch", "stage", "ingress", "mounts"])
             self.assertNotIn("label=options", readme.header(root))
@@ -292,6 +293,38 @@ class AppHeader(unittest.TestCase):
             self.assertIn("label=image%20pulls&amp;message=1.2k", block)
             self.assertIn("message=amd64%2016.0%20%C2%B7%20armv7%2012.0%20MiB", block)
             self.assertIn("label=runtime%20tests&amp;message=12%20passed", block)
+
+    def test_a_prerelease_shows_only_its_stage(self):
+        data = {"version": "1.0.0-alpha.10", "arch": ["amd64"]}
+        for live, tag in ((None, ""), ({"latest_tag": "v1.0.0-alpha.10", "releases": 1}, "v1.0.0-alpha.10")):
+            rows = badgekit.app_rows(data, "o/n", live=live)
+            block = badgekit.render(badgekit.plain(rows))
+            self.assertIn("label=version&message=Alpha%2010", block, tag)
+            self.assertNotIn("1.0.0-alpha", block.replace("tag/v1.0.0-alpha.10", ""), tag)
+
+    def test_a_stable_release_keeps_its_number(self):
+        rows = badgekit.app_rows({"version": "1.4.0", "arch": ["amd64"]}, "o/n")
+        self.assertIn("label=version&message=1.4.0", badgekit.render(badgekit.plain(rows)))
+
+    def test_architectures_and_sizes_share_one_badge(self):
+        data = {"version": "1", "arch": ["aarch64", "amd64", "armv7"]}
+        rows = badgekit.app_rows(data, "o/n", measured_values={"image_size": {"amd64": 16 * 1024 * 1024,
+                                                                                  "aarch64": 19 * 1024 * 1024}})
+        block = badgekit.render(badgekit.plain(rows))
+        self.assertIn("label=arch%20%26%20size&message=amd64%2016.0%20%C2%B7%20aarch64%2019.0%20MiB%20%C2%B7%20armv7", block)
+        self.assertNotIn("label=image%20size", block)
+        self.assertEqual(block.count("label=arch"), 1)
+
+    def test_stars_issues_and_license_lead_to_the_catalog_only_in_a_project_readme(self):
+        live = {"stars": 3, "license": "MIT", "issues": 1, "builds": 1, "releases": 0}
+        own = badgekit.render(badgekit.plain(badgekit.app_rows({"version": "1", "arch": ["amd64"]}, "o/app", live=live)))
+        listed = badgekit.render(badgekit.plain(badgekit.app_rows(
+            {"version": "1", "arch": ["amd64"]}, "o/app", standalone=False, live=live)))
+        hub = config.github_url(config.APPS_CATALOG)
+        for link in ("/stargazers", "/issues", "#license"):
+            self.assertIn(f"({hub}{link})", own)
+            self.assertNotIn(f"({hub}{link})", listed)
+        self.assertIn(f"({config.github_url('o/app')}/actions/workflows/ci.yml)", own)
 
     def test_catalog_listings_leave_out_support_and_install(self):
         rows = badgekit.app_rows({"version": "1", "arch": ["amd64"]}, "o/n", standalone=False)

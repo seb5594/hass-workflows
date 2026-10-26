@@ -5,6 +5,7 @@ from urllib.parse import quote, urlencode
 
 import config
 import metrics
+from common import is_prerelease, release_title
 
 
 STYLE = "flat"
@@ -186,15 +187,15 @@ def hacs_badge(repo):
 # Unknown names fail loudly; builders that have nothing to show simply return no badge.
 # ---------------------------------------------------------------------------------------------
 INTEGRATION_LAYOUT = [
+    (HERO, ["paypal", "coffee"]),
     (MAJOR, ["install", "home_assistant", "version"]),
     (MINOR, ["stars", "downloads", "issues", "tests", "checks", "license"]),
-    (HERO, ["paypal", "coffee"]),
 ]
 APP_LAYOUT = [
-    (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
-    (MINOR, ["arch", "stage", "ingress", "mounts", "privileged", "apparmor", "image_size"]),
-    (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
     (HERO, ["paypal", "coffee"]),
+    (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
+    (MINOR, ["architectures", "stage", "ingress", "mounts", "privileged", "apparmor"]),
+    (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
 ]
 # Badges that only make sense in a project's own README, not in a catalog listing. The catalog
 # names its licenses in one closing note instead of a badge per entry.
@@ -203,6 +204,17 @@ README_ONLY = {"paypal", "coffee", "install", "license"}
 
 def _links(ctx):
     return config.github_url(ctx["repo"])
+
+
+def _community_links(ctx):
+    """Where stars, issues and the license point.
+
+    An app is part of the catalog: people star it, report problems and read the license there. The
+    catalog's own listing links every entry to its repository instead, so only a project README
+    (standalone) is redirected, and only for apps, which name their catalog in the context.
+    """
+    hub = ctx.get("hub")
+    return config.github_url(hub) if hub and ctx.get("standalone") else _links(ctx)
 
 
 def has(ctx, fact):
@@ -239,23 +251,37 @@ def measurement(ctx, key, label, color="ok", suffix=""):
     return [static(label, f"{value}{suffix}", color)] if value is not None else []
 
 
-def image_sizes(ctx):
-    """One compact badge, e.g. 'amd64 16.8 · aarch64 19.9 MiB', in canonical architecture order."""
-    sizes = measured(ctx, "image_size")
+def architectures(ctx):
+    """One badge for the supported architectures and their image sizes: 'amd64 16.8 · aarch64 19.9 MiB'.
+
+    Architectures come in canonical order. Until the pipeline has measured the images the badge
+    names the architectures alone, so the information is never missing.
+    """
+    sizes = measured(ctx, "image_size") or {}
+    declared = sorted(ctx["data"]["arch"], key=architecture_rank)
     if not sizes:
-        return []
-    parts = [f"{arch} {sizes[arch].removesuffix(' MiB')}" for arch in sorted(sizes, key=architecture_rank)]
-    return [static("image size", " · ".join(parts) + " MiB", "ok")]
+        return [static("arch", " · ".join(declared), "ok")]
+    known = [arch for arch in declared if arch in sizes]
+    unmeasured = [arch for arch in declared if arch not in sizes]
+    parts = [f"{arch} {sizes[arch].removesuffix(' MiB')}" for arch in known]
+    message = " · ".join(parts) + " MiB" + "".join(f" · {arch}" for arch in unmeasured)
+    return [static("arch & size", message, "ok")]
 
 
 def when(condition, badges):
     return badges if condition else []
 
 
-def version(ctx):
-    """The newest release; before the first one (or offline) the version the metadata declares."""
+def version(ctx, stage_only=False):
+    """The newest release; before the first one (or offline) the version the metadata declares.
+
+    With `stage_only` a pre-release shows its stage alone ("Alpha 10"): the numbers in front of
+    it never change while the stage counts up.
+    """
     tag = latest_tag(ctx)
     shown = tag.removeprefix("v") if tag else str(ctx["data"]["version"])
+    if stage_only and is_prerelease(shown):
+        shown = release_title(shown)
     return [static("version", shown, "info", f"{_links(ctx)}/releases/tag/{tag}" if tag else f"{_links(ctx)}/releases")]
 
 
@@ -281,11 +307,11 @@ def _common_builders():
         "home_assistant": home_assistant,
         "version": version,
         "stars": lambda c: when(has(c, "stars"),
-                                [github("stars", c["repo"], "stars", f"{_links(c)}/stargazers")]),
-        "issues": lambda c: [github("issues", c["repo"], "issues", f"{_links(c)}/issues")],
+                                [github("stars", c["repo"], "stars", f"{_community_links(c)}/stargazers")]),
+        "issues": lambda c: [github("issues", c["repo"], "issues", f"{_community_links(c)}/issues")],
         "checks": lambda c: when(has(c, "builds"), [workflow(
             c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
-        "license": lambda c: when(has_license(c), [github("license", c["repo"], "license", f"{_links(c)}#license")]),
+        "license": lambda c: when(has_license(c), [github("license", c["repo"], "license", f"{_community_links(c)}#license")]),
     }
 
 
@@ -296,10 +322,10 @@ def _app_builders():
     builders = _common_builders()
     builders.update({
         "install": lambda c: [install_badge()],
+        "version": lambda c: version(c, stage_only=True),
         "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
-        "image_size": image_sizes,
         "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
-        "arch": lambda c: [static("arch", " · ".join(sorted(c["data"]["arch"], key=architecture_rank)), "ok")],
+        "architectures": architectures,
         "mounts": lambda c: mount_badges(c["data"]),
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
         "ingress": flag("ingress", lambda d: "enabled", "accent", lambda d: d.get("ingress")),
@@ -335,7 +361,7 @@ def build_rows(layout, builders, context, standalone=True):
 
 def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False):
     context = {"data": data, "repo": repo, "live": live, "metrics": measured_values, "licensed": licensed,
-               "minimum": data.get("homeassistant")}
+               "minimum": data.get("homeassistant"), "hub": config.APPS_CATALOG, "standalone": standalone}
     return build_rows(APP_LAYOUT, _app_builders(), context, standalone)
 
 
