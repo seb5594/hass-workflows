@@ -66,10 +66,14 @@ class VersionArguments(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "default: MAKE_VERSION"):
             validate_app.check_static_versions(LEGACY.replace("ARG MAKE_VERSION=4.4.1-r4\n", ""), ["amd64"])
 
-    def test_legacy_architectures_need_a_legacy_pin_for_every_package(self):
+    def test_a_marked_pin_needs_no_legacy_twin(self):
+        validate_app.check_static_versions(LEGACY.replace("ARG MAKE_VERSION_LEGACY=4.4.1-r3\n", ""), self.ARCHES)
+
+    def test_an_unmarked_pin_needs_a_legacy_twin(self):
+        unmarked = LEGACY.replace("# renovate: datasource=repology depName=alpine_3_24/make\n", "").replace(
+            "ARG MAKE_VERSION_LEGACY=4.4.1-r3\n", "")
         with self.assertRaisesRegex(AssertionError, "MAKE_VERSION_LEGACY"):
-            validate_app.check_static_versions(
-                LEGACY.replace("ARG MAKE_VERSION_LEGACY=4.4.1-r3\n", ""), self.ARCHES)
+            validate_app.check_static_versions(unmarked, self.ARCHES)
 
     def test_legacy_architectures_cannot_use_literal_pins(self):
         with self.assertRaisesRegex(AssertionError, "git=2.54.0-r0"):
@@ -88,6 +92,32 @@ class LegacyBuilds(unittest.TestCase):
         self.assertEqual(args[::2], ["--build-arg"] * 3)
         self.assertEqual(options, {"BUILD_FROM": "ghcr.io/home-assistant/i386-base:3.22-2025.11.1",
                                    "GIT_VERSION": "2.49.1-r0", "MAKE_VERSION": "4.4.1-r3"})
+
+    INDEX = {("main", "x86"): "P:git\nV:2.49.1-r0\n\nP:make\nV:4.4.1-r3\n\nP:bash\nV:5.2-r0\n",
+             ("community", "x86"): "P:rsync\nV:3.4.1-r0\n"}
+
+    def fetch(self, release, repository, apk_arch):
+        self.assertEqual(release, "3.22")
+        return self.INDEX[(repository, apk_arch)]
+
+    def test_pins_of_the_current_alpine_are_found_by_their_marker(self):
+        self.assertEqual(legacy.pinned_packages(LEGACY), {"GIT_VERSION": "git", "MAKE_VERSION": "make"})
+
+    def test_the_index_of_the_older_alpine_gives_the_exact_versions(self):
+        without_twins = "\n".join(line for line in LEGACY.splitlines() if "_LEGACY" not in line and "alpine_3_22" not in line)
+        self.assertEqual(legacy.resolve("i386", without_twins, self.fetch), {"GIT_VERSION": "2.49.1-r0", "MAKE_VERSION": "4.4.1-r3"})
+
+    def test_a_twin_wins_over_the_lookup(self):
+        twin = LEGACY.replace("GIT_VERSION_LEGACY=2.49.1-r0", "GIT_VERSION_LEGACY=2.0-r9")
+        self.assertEqual(legacy.resolve("i386", twin, self.fetch)["GIT_VERSION"], "2.0-r9")
+
+    def test_a_package_the_older_alpine_lacks_is_reported(self):
+        other = LEGACY.replace("alpine_3_24/make", "alpine_3_24/nothing").replace("ARG MAKE_VERSION_LEGACY=4.4.1-r3\n", "")
+        with self.assertRaisesRegex(AssertionError, "no package nothing"):
+            legacy.resolve("armv7", other.replace("x86", "armv7"), lambda r, repo, arch: self.INDEX[(repo, "x86")])
+
+    def test_an_index_is_read_into_packages_and_versions(self):
+        self.assertEqual(legacy.parse_index("C:Q1\nP:a\nV:1-r0\n\nP:b\nV:2-r1\nD:x y\n"), {"a": "1-r0", "b": "2-r1"})
 
     def test_only_arguments_with_a_default_are_found(self):
         self.assertEqual(legacy.defaults("ARG A=1\nARG B\n  ARG C=x-y\nRUN echo ARG D=4\n"), {"A": "1", "C": "x-y"})
@@ -172,3 +202,44 @@ class Versions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseFiles(unittest.TestCase):
+    CONFIG = {"version": "1.2.0", "schema": {"a": "str", "group": {"b": "bool?", "items": [{"c": "str"}]}}}
+
+    def app(self, tmp, changelog="# Changelog\n\n## 1.2.0\n\n* x\n", pictures=True):
+        app = Path(tmp) / "demo"
+        app.mkdir()
+        (app / "CHANGELOG.md").write_text(changelog)
+        for name in ("icon.png", "logo.png") if pictures else ():
+            (app / name).write_bytes(b"x")
+        return app
+
+    DOCKERFILE = "ARG BUILD_VERSION=1.2.0\n"
+
+    def test_a_complete_release_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            validate_app.check_release_files(self.app(tmp), self.CONFIG, self.DOCKERFILE)
+
+    def test_the_versions_have_to_agree(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(AssertionError, "BUILD_VERSION 1.1.0"):
+            validate_app.check_release_files(self.app(tmp), self.CONFIG, "ARG BUILD_VERSION=1.1.0\n")
+
+    def test_the_changelog_needs_an_entry_for_the_version(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(AssertionError, "no entry for 1.2.0"):
+            validate_app.check_release_files(self.app(tmp, "# Changelog\n\n## 1.1.0\n"), self.CONFIG, self.DOCKERFILE)
+
+    def test_the_pictures_are_required(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(AssertionError, "icon.png"):
+            validate_app.check_release_files(self.app(tmp, pictures=False), self.CONFIG, self.DOCKERFILE)
+
+    def test_every_option_needs_a_translated_name(self):
+        english = "configuration:\n  a: {name: A}\n  group:\n    name: G\n    fields:\n      b: {name: B}\n      items: {name: I, fields: {c: {name: C}}}\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.app(tmp)
+            (app / "translations").mkdir()
+            (app / "translations/en.yaml").write_text(english)
+            validate_app.check_translations(app, self.CONFIG)
+            (app / "translations/de.yaml").write_text(english.replace("      b: {name: B}\n", ""))
+            with self.assertRaisesRegex(AssertionError, "de.yaml does not translate: group.b"):
+                validate_app.check_translations(app, self.CONFIG)

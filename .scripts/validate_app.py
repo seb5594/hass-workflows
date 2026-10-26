@@ -92,8 +92,70 @@ def check_static_versions(dockerfile, arches=()):
     if any(legacy.is_legacy(arch) for arch in arches):
         literal = [p for p in apk_packages(dockerfile) if not re.search(r"=\$", p)]
         assert not literal, f"Pin through ARG so legacy architectures can override: {', '.join(literal)}"
-        absent = [name for name in variables if not defaults.get(name + legacy.SUFFIX)]
-        assert not absent, f"Add a legacy pin for: {', '.join(name + legacy.SUFFIX for name in absent)}"
+        resolvable = set(legacy.pinned_packages(dockerfile))
+        absent = [name for name in variables
+                  if name not in resolvable and not defaults.get(name + legacy.SUFFIX)]
+        assert not absent, ("Mark the pin for Renovate (`# renovate: datasource=repology depName=alpine_3_24/<package>`) "
+                            f"or add a legacy pin for: {', '.join(name + legacy.SUFFIX for name in absent)}")
+
+
+def schema_keys(schema, path=""):
+    """Dotted paths of every option in a schema; the items of a list of mappings count as one level."""
+    keys = []
+    for key, value in (schema or {}).items():
+        keys.append(f"{path}{key}")
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            value = value[0]
+        if isinstance(value, dict):
+            keys += schema_keys(value, f"{path}{key}.")
+    return keys
+
+
+def translated_keys(fields, path=""):
+    keys = []
+    for key, value in (fields or {}).items():
+        keys.append(f"{path}{key}")
+        if isinstance(value, dict) and isinstance(value.get("fields"), dict):
+            keys += translated_keys(value["fields"], f"{path}{key}.")
+    return keys
+
+
+def check_translations(app, config):
+    """Every option has a name in every language the app ships."""
+    folder = app / "translations"
+    if not folder.is_dir():
+        return
+    wanted = schema_keys(config.get("schema"))
+    for file in sorted(folder.glob("*.yaml")):
+        configuration = (yaml.safe_load(file.read_text()) or {}).get("configuration") or {}
+        missing = [key for key in wanted if key not in translated_keys(configuration)]
+        assert not missing, f"{file.name} does not translate: {', '.join(missing)}"
+        entries = {}
+
+        def collect(fields, path=""):
+            for key, value in (fields or {}).items():
+                entries[f"{path}{key}"] = value
+                if isinstance(value, dict):
+                    collect(value.get("fields"), f"{path}{key}.")
+
+        collect(configuration)
+        blank = [key for key in wanted if not entries[key].get("name")]
+        assert not blank, f"{file.name} needs a name for: {', '.join(blank)}"
+
+
+def check_release_files(app, config, dockerfile):
+    """What a release needs besides the code: the version in step everywhere, a changelog entry, the pictures."""
+    version = str(config["version"])
+    declared = re.search(r"^ARG BUILD_VERSION=(\S+)", dockerfile, re.M)
+    assert declared, "Dockerfile must declare ARG BUILD_VERSION=<version>"
+    assert declared.group(1) == version, \
+        f"Dockerfile says BUILD_VERSION {declared.group(1)} but config.yaml says {version}"
+    changelog = app / "CHANGELOG.md"
+    assert changelog.is_file(), "Add a CHANGELOG.md"
+    assert re.search(rf"^#+\s*\[?{re.escape(version)}\]?\b", changelog.read_text(), re.M), \
+        f"CHANGELOG.md has no entry for {version}"
+    for picture in ("icon.png", "logo.png"):
+        assert (app / picture).is_file(), f"Add {picture}"
 
 
 def main(folder):
@@ -105,7 +167,10 @@ def main(folder):
     assert "(dev)" not in config["name"], "Release app names must not contain (dev)"
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
     check_startup_style(app, config)
-    check_static_versions((app / "Dockerfile").read_text(), config["arch"])
+    dockerfile = (app / "Dockerfile").read_text()
+    check_static_versions(dockerfile, config["arch"])
+    check_release_files(app, config, dockerfile)
+    check_translations(app, config)
     print(f"Validated {config['name']} {config['version']}")
 
 
