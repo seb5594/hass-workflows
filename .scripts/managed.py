@@ -43,6 +43,10 @@ WORKFLOWS = {
                                       "EVENT": config.EVENTS["integrations"]}),
     "hub": Workflow("hub", ".github/workflows/update.yml", {"EVENT": config.EVENTS["hub"]}),
 }
+# Apps that package a released image keep this workflow: it follows the upstream releases.
+UPSTREAM = Workflow("upstream", ".github/workflows/upstream.yml", {})
+FOLLOWED_PIN = re.compile(r"^# renovate: datasource=docker depName=(?:docker\.io|ghcr\.io)/\S+\nARG \w+=v?\d+\.\d+\.\d+$",
+                          re.M)
 # Integrations with tests against a real Home Assistant core also keep this workflow.
 COMPATIBILITY = Workflow("compat", ".github/workflows/compat.yml", {})
 
@@ -103,9 +107,13 @@ def expected(kind, sha, root=Path(".")):
     files = shared_files()
     files[WORKFLOWS[kind].target] = render_workflow(WORKFLOWS[kind], sha)
     if kind == "app":
-        entrypoint = projectmeta.discover(root).folder / "entrypoint.sh"
+        folder = projectmeta.discover(root).folder
+        entrypoint = folder / "entrypoint.sh"
         if entrypoint.exists():  # apps on the base image's s6-overlay start without one
             files[entrypoint.relative_to(root).as_posix()] = read_template("entrypoint.sh")
+        dockerfile = folder / "Dockerfile"
+        if dockerfile.is_file() and FOLLOWED_PIN.search(dockerfile.read_text()):
+            files[UPSTREAM.target] = render_workflow(UPSTREAM, sha)
     elif kind == "integration" and (root / ".github/ha_tests").is_dir():
         files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
     elif kind in CATALOG_NOTES:

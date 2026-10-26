@@ -50,8 +50,10 @@ def main(app, arch, platform):
         return
     runtime = Path(".github/tests/runtime.sh")
     if runtime.exists():
+        # The whole test folder is mounted too, so that a runtime script can run test files that sit next to it.
         output = run_captured("docker", "run", "--rm", "--entrypoint", "/bin/bash",
-                              "-v", f"{runtime.resolve()}:/runtime.sh:ro", image, "/runtime.sh")
+                              "-v", f"{runtime.resolve()}:/runtime.sh:ro",
+                              "-v", f"{runtime.resolve().parent}:/tests:ro", image, "/runtime.sh")
         # Runtime scripts report every scenario as a "PASS: <name>" line.
         metrics.record("runtime_tests", len(re.findall(r"^PASS:", output, re.M)))
     if (folder / "root/utils/jsonToYaml.py").exists():
