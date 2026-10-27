@@ -14,6 +14,12 @@ SUFFIXED = "# renovate: datasource=docker depName=docker.io/oven/bun\nARG BUN_VE
 
 
 class Versions(unittest.TestCase):
+    def test_calendar_builds_increment_per_day_and_never_go_backwards(self):
+        self.assertEqual(upstream.next_version("2026-10-27", today="2026-10-27"), "2026-10-27.2")
+        self.assertEqual(upstream.next_version("2026-10-27.9", today="2026-10-27"), "2026-10-27.10")
+        self.assertEqual(upstream.next_version("2026-10-27.9", today="2026-10-28"), "2026-10-28")
+        self.assertEqual(upstream.next_version("2026-10-27.2", today="2026-10-26"), "2026-10-27.3")
+
     def test_prereleases_count_up_and_releases_get_a_patch_number(self):
         self.assertEqual(upstream.next_version("1.0.0-alpha.9"), "1.0.0-alpha.10")
         self.assertEqual(upstream.next_version("1.0.0-dev3"), "1.0.0-dev4")
