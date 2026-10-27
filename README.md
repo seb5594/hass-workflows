@@ -67,6 +67,12 @@ The Compatibility workflow lists the releases at or above the minimum in `hacs.j
 
 Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP`. The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
 
+Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
+then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a
+later day and never moves backwards. Date separators do not mark a pre-release. Existing
+numeric and pre-release version formats keep their behavior; `stage: experimental` remains
+an app metadata choice.
+
 The current Home Assistant base image ships amd64 and aarch64 only. An app that lists armv7, armhf or i386 as well builds those on the previous generation of base images (`ghcr.io/home-assistant/ARCH-base:3.22-2025.11.1`, see [`legacy.py`](.scripts/legacy.py)), whose Alpine is older. Each apk pin is therefore a build argument with a legacy twin (`ARG GIT_VERSION=2.54.0-r0` next to `ARG GIT_VERSION_LEGACY=2.49.1-r0`); the build hands the legacy value to the Dockerfile on those architectures, and validation insists on a twin for every pinned package. Only these prebuilt images exist for them: a local build by the Supervisor does not know the twins.
 
 Integrations run the HACS checks (skipped for private and template repositories, which HACS cannot read; the `brands` and `topics` checks only the default store needs are always skipped, and so is `license` while the repository has no license file, which a warning points out), Python lint and tests (pytest when `requirements-dev.txt` exists, otherwise unittest, plus `*.test.cjs` frontend tests through Node). Every CI run produces a verified ZIP artifact. A new manifest version publishes the ZIP as a GitHub release whose notes end with the ZIP's SHA-256 (there is no checksum file); versions such as `1.0.0b1` become pre-releases (see `zip_release` below).
