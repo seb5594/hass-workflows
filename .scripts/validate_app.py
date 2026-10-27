@@ -50,7 +50,8 @@ def s6_services(app):
 
 
 ENTRYPOINT, RUN_SCRIPT, S6 = "entrypoint", "run", "s6"
-VERSION = re.compile(r"\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?")
+VERSION = re.compile(r"(?:\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:\.(?:[2-9]|[1-9]\d+))?|"
+                     r"\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)")
 
 
 def startup_style(app, config):
@@ -163,7 +164,7 @@ def main(folder):
     config = yaml.safe_load((app / "config.yaml").read_text())
     assert config["slug"] == app.name, "App directory and slug must agree"
     assert VERSION.fullmatch(str(config["version"])), \
-        "Use a numeric version, optionally with a pre-release suffix like -beta.4"
+        "Use a numeric version or YYYY-MM-DD with optional .2, .3, ... build suffix"
     assert "(dev)" not in config["name"], "Release app names must not contain (dev)"
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
     check_startup_style(app, config)
