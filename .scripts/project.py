@@ -144,11 +144,14 @@ def validate(project):
     readme.verify()
     managed.check(project.kind)
     if project.kind == projectmeta.APP:
-        folder = project.folder
-        run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
-        run("yamllint", "-d", YAMLLINT_RULES, ".github/workflows", str(folder / "config.yaml"))
-        if scripts := shell_scripts([folder, Path(".github/tests")]):
+        folders = [app.folder for app in projectmeta.app_projects(project.root)]
+        for folder in folders:
+            run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
+        run("yamllint", "-d", YAMLLINT_RULES, ".github/workflows",
+            *(str(folder / "config.yaml") for folder in folders))
+        if scripts := shell_scripts([*folders, Path(".github/tests")]):
             run("shellcheck", "-x", *scripts)
+        run_project_checks()
         return
     run("flake8", "custom_components", "--count", "--select=E9,F63,F7,F82",
         "--show-source", "--statistics")
@@ -181,12 +184,16 @@ def main(command):
     elif command == "validate":
         validate(project)
     elif command == "build" and project.kind == projectmeta.APP:
-        for arch in project.metadata["arch"]:
-            run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(project.folder), arch, PLATFORMS[arch])
+        for app in projectmeta.app_projects(project.root):
+            prefix = "" if app.slug == project.slug else f"app.{app.slug}."
+            for arch in app.metadata["arch"]:
+                run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(app.folder), arch,
+                    PLATFORMS[arch], env={**os.environ, "APP_METRICS_PREFIX": prefix})
     elif command == "package" and project.kind == projectmeta.INTEGRATION:
         run(sys.executable, str(ENGINE / ".scripts/package_integration.py"))
     elif command == "release":
-        script, args = (("release_app.py", [str(project.folder)]) if project.kind == projectmeta.APP
+        script, args = (("release_app.py", [str(app.folder) for app in projectmeta.app_projects(project.root)])
+                        if project.kind == projectmeta.APP
                         else ("package_integration.py", ["--release"]))
         run(sys.executable, str(ENGINE / ".scripts" / script), *args)
     elif command == "refresh-readme":

@@ -1,5 +1,6 @@
 """Build one declared architecture, smoke-test the image and record its metrics."""
 import re
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -45,7 +46,8 @@ def main(app, arch, platform):
     run(*args, app)
     if smoke_test := SMOKE_TESTS[validate_app.startup_style(folder, config)]:
         run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image, "-c", smoke_test)
-    metrics.record(f"image_size.{arch}", image_size(image))
+    prefix = os.environ.get("APP_METRICS_PREFIX", "")
+    metrics.record(f"{prefix}image_size.{arch}", image_size(image))
     if arch != "amd64":
         return
     runtime = Path(".github/tests/runtime.sh")
@@ -55,7 +57,7 @@ def main(app, arch, platform):
                               "-v", f"{runtime.resolve()}:/runtime.sh:ro",
                               "-v", f"{runtime.resolve().parent}:/tests:ro", image, "/runtime.sh")
         # Runtime scripts report every scenario as a "PASS: <name>" line.
-        metrics.record("runtime_tests", len(re.findall(r"^PASS:", output, re.M)))
+        metrics.record(f"{prefix}runtime_tests", len(re.findall(r"^PASS:", output, re.M)))
     if (folder / "root/utils/jsonToYaml.py").exists():
         run("docker", "run", "--rm", "--entrypoint", "/bin/bash", image, "-c", UTILS_TEST)
 
