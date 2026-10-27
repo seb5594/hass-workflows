@@ -107,13 +107,14 @@ def expected(kind, sha, root=Path(".")):
     files = shared_files()
     files[WORKFLOWS[kind].target] = render_workflow(WORKFLOWS[kind], sha)
     if kind == "app":
-        folder = projectmeta.discover(root).folder
-        entrypoint = folder / "entrypoint.sh"
-        if entrypoint.exists():  # apps on the base image's s6-overlay start without one
-            files[entrypoint.relative_to(root).as_posix()] = read_template("entrypoint.sh")
-        dockerfile = folder / "Dockerfile"
-        if dockerfile.is_file() and FOLLOWED_PIN.search(dockerfile.read_text()):
-            files[UPSTREAM.target] = render_workflow(UPSTREAM, sha)
+        for app in projectmeta.app_projects(root):
+            folder = app.folder
+            entrypoint = folder / "entrypoint.sh"
+            if entrypoint.exists():  # apps on the base image's s6-overlay start without one
+                files[entrypoint.relative_to(root).as_posix()] = read_template("entrypoint.sh")
+            dockerfile = folder / "Dockerfile"
+            if dockerfile.is_file() and FOLLOWED_PIN.search(dockerfile.read_text()):
+                files[UPSTREAM.target] = render_workflow(UPSTREAM, sha)
     elif kind == "integration" and (root / ".github/ha_tests").is_dir():
         files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
     elif kind in CATALOG_NOTES:
