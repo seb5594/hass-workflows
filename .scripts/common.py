@@ -21,6 +21,8 @@ PRERELEASE = re.compile(r"-|(?:a|b|rc)\d+$")
 
 
 def is_prerelease(version):
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:\.\d+)?", version):
+        return False
     return bool(PRERELEASE.search(version))
 
 
