@@ -29,7 +29,9 @@ import re
 import subprocess
 import sys
 import urllib.request
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PIN = re.compile(
     r"^# renovate: datasource=docker depName=(?P<registry>docker\.io|ghcr\.io)/(?P<repository>[\w.-]+/[\w.-]+)\n"
@@ -86,8 +88,13 @@ def newest_release(registry, repository):
     return max(releases, key=as_tuple)
 
 
-def next_version(version):
+def next_version(version, today=None):
     """The version after this one: pre-releases count up, releases get a new patch number."""
+    calendar = re.fullmatch(r"(\d{4}-\d{2}-\d{2})(?:\.(\d+))?", version)
+    if calendar:
+        today = today or datetime.now(ZoneInfo("Europe/Berlin")).date().isoformat()
+        day = max(calendar[1], today)  # Never move a published version backwards.
+        return f"{day}.{int(calendar[2] or '1') + 1}" if day == calendar[1] else day
     pre_release = re.fullmatch(r"(\d+\.\d+\.\d+-(?:alpha\.|dev))(\d+)", version)
     if pre_release:
         return f"{pre_release[1]}{int(pre_release[2]) + 1}"
