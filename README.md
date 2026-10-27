@@ -19,6 +19,15 @@
 
 ## Conventions for projects
 
+Related apps may share one release by declaring an ordered, exhaustive list in
+`.github/apps.json`, for example `{"apps": ["untuyaos3", "untuyaos3_wifi"]}`. Every
+listed app must have the same version and repository URL, and no detected app may
+be omitted. The first app supplies the README header and release notes. The normal
+project caller validates and builds every member, publishes each multi-architecture
+image, and attaches all image references to one GitHub release. Repositories without
+this file retain the single-app rule. Project checks in `.github/checks/` also run
+for apps; companion image measurements cannot overwrite the primary app's badges.
+
 | Path in the project | Meaning |
 | --- | --- |
 | `.github/workflows/ci.yml` | The caller. Must equal the template for the pinned engine commit; CI fails on drift |
