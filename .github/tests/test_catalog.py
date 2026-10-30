@@ -71,6 +71,33 @@ class CatalogTests(unittest.TestCase):
     def test_repository_metadata_names_the_maintainer_handle(self):
         self.assertIn("maintainer: seb5594", catalog.repository_yaml())
 
+    def test_plural_bundle_discovery_excludes_catalog_and_private_sources(self):
+        public = {"name": "Home-Assistant-Anti-Tuya-Apps", "owner": {"login": "seb5594"}}
+        with patch.object(catalog.github_api, "fetch_json", return_value=[public,
+                {**public, "name": "Home-Assistant-Apps"},
+                {**public, "name": "Home-Assistant-Secret-Apps", "private": True}]):
+            self.assertEqual(catalog.discover_repositories(set()), [public])
+        self.assertEqual(catalog.project_path(public['name']), 'Anti-Tuya')
+
+    def test_bundle_has_three_distinct_documented_entries_on_its_actual_branch(self):
+        for slug, name in [('tuya_breaker', 'Tuya Breaker'), ('untuyaos3_wifi', 'Anti Tuya WiFi Helper')]:
+            app = self.source / slug
+            app.mkdir()
+            (app / 'config.yaml').write_text(f'name: {name}\nversion: "1.1.0-beta.2"\nslug: {slug}\n'
+                                            f'description: About {name}\narch: [amd64, aarch64]\n')
+            (app / 'README.md').write_text(f'# {name}\n\nSetup instructions for {name}.\n')
+        entry = {'path': 'Anti-Tuya', 'url': 'https://github.com/seb5594/Home-Assistant-Anti-Tuya-Apps',
+                 'repository': 'seb5594/Home-Assistant-Anti-Tuya-Apps', 'branch': 'dev',
+                 'excerpt': 'Do not use this bundle-wide introduction.', 'commit': 'a'*40,
+                 'items': catalog.app_metadata(self.source)}
+        rendered = catalog.render_catalog([entry])
+        self.assertEqual(rendered.count('### ['), 3)
+        self.assertEqual(rendered.count('[README & setup]'), 3)
+        self.assertIn('Setup instructions for Anti Tuya WiFi Helper.', rendered)
+        self.assertIn('/blob/dev/tuya_breaker/CHANGELOG.md', rendered)
+        self.assertIn('/tree/' + 'a'*40 + '/untuyaos3_wifi', rendered)
+        self.assertNotIn('bundle-wide introduction', rendered)
+
 
 class IntegrationCatalog(unittest.TestCase):
     def setUp(self):

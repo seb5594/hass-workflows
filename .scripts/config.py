@@ -37,7 +37,7 @@ EVENTS = {"apps": "update-addons", "integrations": "update-integrations", "hub":
 # Every repository the engine serves, by catalog kind. Drives the engine's own validation matrix.
 PROJECTS = {
     "apps": ["Home-Assistant-Rsync-Local-Addon", "Home-Assistant-git-exporter-Addon",
-             "Home-Assistant-Playstation-VR-Camera-Loader-App"],
+             "Home-Assistant-Playstation-VR-Camera-Loader-App", "Home-Assistant-Anti-Tuya-Apps"],
     "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
                      "hass-vacuum_mapguard-integration", "Home-Assistant-Integration-Template"],
 }
