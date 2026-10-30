@@ -146,3 +146,12 @@ class BadgeOrdering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppVersionReset(unittest.TestCase):
+    def test_declared_app_version_wins_over_historical_bundle_releases(self):
+        rows=badgekit.app_rows({'version':'1.0.0','arch':['amd64']},'owner/app',
+                              live={'latest_tag':'v1.2.0-beta.1','releases':2})
+        rendered=badgekit.render(badgekit.plain(rows))
+        self.assertIn('message=1.0.0',rendered)
+        self.assertNotIn('message=Beta',rendered)

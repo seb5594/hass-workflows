@@ -273,13 +273,21 @@ def when(condition, badges):
 
 
 def version(ctx, stage_only=False):
-    """The newest release; before the first one (or offline) the version the metadata declares.
+    """Declared app snapshots or the newest integration release, with metadata fallback.
 
     With `stage_only` a pre-release shows its stage alone ("Alpha 10"): the numbers in front of
     it never change while the stage counts up.
     """
-    tag = latest_tag(ctx)
-    shown = tag.removeprefix("v") if tag else str(ctx["data"]["version"])
+    tag = latest_tag(ctx) or ""
+    declared = str(ctx["data"]["version"])
+    if ctx.get('declared_app_version'):
+        # A catalog installs this config, including intentional version resets.
+        # Never label it with a different historical release from the same repository.
+        if tag.removeprefix('v') != declared:
+            tag = ''
+        shown = declared
+    else:
+        shown = tag.removeprefix("v") if tag else declared
     if stage_only and is_prerelease(shown):
         shown = release_title(shown)
     return [static("version", shown, "info", f"{_links(ctx)}/releases/tag/{tag}" if tag else f"{_links(ctx)}/releases")]
@@ -322,7 +330,7 @@ def _app_builders():
     builders = _common_builders()
     builders.update({
         "install": lambda c: [install_badge()],
-        "version": lambda c: version(c, stage_only=True),
+        "version": lambda c: version({**c, "declared_app_version": True}, stage_only=True),
         "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
         "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
         "architectures": architectures,
