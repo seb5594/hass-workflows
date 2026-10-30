@@ -82,9 +82,9 @@ def github(metric, repo, label, link=None, suffix="", color=None):
     return Badge(label, f"github/{metric}/{repo}{suffix}", params, link)
 
 
-def workflow(repo, filename, label, link=None):
+def workflow(repo, filename, label, link=None, branch=None):
     return Badge(label, f"github/actions/workflow/status/{repo}/{filename}",
-                 {"branch": config.DEFAULT_BRANCH, "label": label}, link)
+                 {"branch": branch or config.DEFAULT_BRANCH, "label": label}, link)
 
 
 def support_badge(name):
@@ -310,7 +310,7 @@ def _common_builders():
                                 [github("stars", c["repo"], "stars", f"{_community_links(c)}/stargazers")]),
         "issues": lambda c: [github("issues", c["repo"], "issues", f"{_community_links(c)}/issues")],
         "checks": lambda c: when(has(c, "builds"), [workflow(
-            c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml")]),
+            c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml", branch=c.get("branch"))]),
         "license": lambda c: when(has_license(c), [github("license", c["repo"], "license", f"{_community_links(c)}#license")]),
     }
 
@@ -359,9 +359,9 @@ def build_rows(layout, builders, context, standalone=True):
     return rows
 
 
-def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False):
+def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False, branch=None):
     context = {"data": data, "repo": repo, "live": live, "metrics": measured_values, "licensed": licensed,
-               "minimum": data.get("homeassistant"), "hub": config.APPS_CATALOG, "standalone": standalone}
+               "minimum": data.get("homeassistant"), "hub": config.APPS_CATALOG, "standalone": standalone, "branch":branch}
     return build_rows(APP_LAYOUT, _app_builders(), context, standalone)
 
 

@@ -89,7 +89,8 @@ class CatalogTests(unittest.TestCase):
         entry = {'path': 'Anti-Tuya', 'url': 'https://github.com/seb5594/Home-Assistant-Anti-Tuya-Apps',
                  'repository': 'seb5594/Home-Assistant-Anti-Tuya-Apps', 'branch': 'dev',
                  'excerpt': 'Do not use this bundle-wide introduction.', 'commit': 'a'*40,
-                 'items': catalog.app_metadata(self.source)}
+                 'metrics':{'image_size':{'amd64':999999999},'runtime_tests':999},
+                 'live':{'builds':1}, 'items': catalog.app_metadata(self.source)}
         rendered = catalog.render_catalog([entry])
         self.assertEqual(rendered.count('### ['), 3)
         self.assertEqual(rendered.count('[README & setup]'), 3)
@@ -97,6 +98,8 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('/blob/dev/tuya_breaker/CHANGELOG.md', rendered)
         self.assertIn('/tree/' + 'a'*40 + '/untuyaos3_wifi', rendered)
         self.assertNotIn('bundle-wide introduction', rendered)
+        self.assertIn('branch=dev',rendered)
+        self.assertNotIn('999',rendered)
 
 
 class IntegrationCatalog(unittest.TestCase):
