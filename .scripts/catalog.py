@@ -36,7 +36,7 @@ CATALOG_REPOSITORY = config.CATALOGS[KIND]
 EXCLUDED_REPOSITORIES = set()
 EXCERPT_MAX_CHARS = 500
 NAME_PATTERNS = {
-    "apps": r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:App|Addon)$",
+    "apps": r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:Apps?|Addon)$",
     "integrations": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?i:integration)$",
 }
 NAME_PATTERN = re.compile(NAME_PATTERNS[KIND])
@@ -97,7 +97,8 @@ def app_metadata(folder):
             raise ValueError(f"Invalid app slug in {config_file}")
         if not isinstance(data.get("arch"), list) or not data["arch"] or not set(data["arch"]) <= set(config.PLATFORMS):
             raise ValueError(f"Invalid architectures in {config_file}")
-        apps.append({**data, "path": config_file.parent.relative_to(folder).as_posix()})
+        apps.append({**data, "path": config_file.parent.relative_to(folder).as_posix(),
+                     "excerpt": readme_excerpt(config_file.parent, data["description"], EXCERPT_MAX_CHARS)})
     if not apps:
         raise ValueError(f"No Home Assistant app configuration found in {folder.name}.")
     return apps
@@ -225,7 +226,7 @@ def entry_heading(entry):
 
 def changelog_link(entry, item):
     folder = "" if KIND == "integrations" else f"{item['path']}/"
-    return f"[Changelog]({entry['url']}/blob/main/{folder}CHANGELOG.md)"
+    return f"[Changelog]({entry['url']}/blob/{entry.get('branch', 'main')}/{folder}CHANGELOG.md)"
 
 
 def render_item(entry, item):
@@ -239,6 +240,17 @@ def render_item(entry, item):
 def render_catalog(entries):
     sections = []
     for entry in entries:
+        if KIND == "apps" and len(entry["items"]) > 1:
+            # One pinned source submodule; a separate documented entry per installable app.
+            for item in entry["items"]:
+                folder = item['path'].strip('/')
+                source = f"{entry['url']}/tree/{entry['commit']}" + (f"/{folder}" if folder else "")
+                sections += [f"### [{item['name']}]({source}) ({item['version']})", "",
+                             f"> {item.get('excerpt') or item['description']}", "",
+                             render_item(entry, item), "",
+                             f"[README & setup]({source}) · "
+                             f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""]
+            continue
         sections += [entry_heading(entry), "", f"> {entry['excerpt']}", ""]
         for item in entry["items"]:
             sections += [render_item(entry, item), ""]

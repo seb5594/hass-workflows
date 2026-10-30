@@ -54,7 +54,7 @@ COMPATIBILITY = Workflow("compat", ".github/workflows/compat.yml", {})
 CATALOG_NOTES = {
     "catalog-apps": {
         "OUTPUT": "the README, `repository.yaml` and the submodules",
-        "NAMES": "`Home-Assistant-<project>-App` or `Home-Assistant-<project>-Addon`",
+        "NAMES": "`Home-Assistant-<project>-App`, `Home-Assistant-<project>-Apps` or `Home-Assistant-<project>-Addon`",
         "REQUIREMENT": "with at least one app configuration, at the root or in a nested folder",
         "TITLE": "app", "EVENT": config.EVENTS["apps"],
         "PINNING": ("Each run pins the latest default-branch commit of every listed app as a Git "
