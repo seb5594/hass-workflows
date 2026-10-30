@@ -98,6 +98,7 @@ def app_metadata(folder):
         if not isinstance(data.get("arch"), list) or not data["arch"] or not set(data["arch"]) <= set(config.PLATFORMS):
             raise ValueError(f"Invalid architectures in {config_file}")
         apps.append({**data, "path": config_file.parent.relative_to(folder).as_posix(),
+                     "metrics":metrics.load(config_file.parent),
                      "excerpt": readme_excerpt(config_file.parent, data["description"], EXCERPT_MAX_CHARS)})
     if not apps:
         raise ValueError(f"No Home Assistant app configuration found in {folder.name}.")
@@ -212,7 +213,8 @@ def item_rows(item, entry):
                                          compat=item.get("compat", False))
     else:
         rows = badgekit.app_rows(item, entry["repository"], standalone=False, live=entry.get("live"),
-                                 measured_values=entry.get("metrics"))
+                                 measured_values=item.get("metrics", {}) if len(entry["items"])>1 else entry.get("metrics"),
+                                 branch=entry.get("branch"))
     return badgekit.plain(rows)
 
 
