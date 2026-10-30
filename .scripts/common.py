@@ -1,4 +1,6 @@
 """Helpers shared by the engine scripts: image names, release flags and subprocess wrappers."""
+import json
+from pathlib import Path
 import os
 import re
 import shlex
@@ -13,7 +15,16 @@ def image_tag(slug, version, arch=None):
 
 
 def image_repository(owner, slug):
-    return f"ghcr.io/{owner.lower()}/hass-{slug}"
+    # A repository move may need a fresh GHCR package without changing the HA slug.
+    # Existing projects keep their original registry names unless explicitly mapped.
+    path = Path('.github/images.json')
+    aliases = json.loads(path.read_text()) if path.exists() else {}
+    if not isinstance(aliases, dict) or any(not isinstance(key,str) or not isinstance(value,str)
+            or not re.fullmatch(r'[a-z0-9]+(?:[._-][a-z0-9]+)*',value) for key,value in aliases.items()):
+        raise ValueError('.github/images.json must map app slugs to lowercase GHCR package names')
+    if len(set(aliases.values())) != len(aliases):
+        raise ValueError('App registry package names must be distinct')
+    return f"ghcr.io/{owner.lower()}/{aliases.get(slug, 'hass-'+slug)}"
 
 
 # App versions carry a dash suffix (1.0.0-beta4), integrations a PEP 440 one (1.0.0b1).
