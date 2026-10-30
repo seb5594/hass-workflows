@@ -57,6 +57,7 @@ def main(app, *companions):
     exists = release_exists(tag, repo)
     if exists and not ref.startswith("refs/tags/"):
         print(f"{tag} is already released; no images are replaced.")
+        gitops.notify(config.EVENTS["apps"], config.APPS_CATALOG, os.environ.get("ORCHESTRATION_TOKEN"))
         return
     assets = Path("dist")
     assets.mkdir(exist_ok=True)

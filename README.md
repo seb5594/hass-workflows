@@ -121,3 +121,5 @@ Fork pull requests cannot access the private engine and are skipped. The central
 ## Honest project metrics
 
 Badges only show what can be measured. GitHub release badges count release assets, which is meaningful for integration ZIPs but not for apps, whose releases carry small image references; apps therefore show GHCR pulls instead. Local Home Assistant builds and installations are not counted anywhere. GitHub does not expose download country or continent data, so none is shown.
+
+App repositories may declare `.github/images.json` as a map from installed app slug to a GHCR package name (for example `{"tuya_breaker":"hass-tuya-breaker"}`). This lets a standalone repository publish to its own fresh package after a split while preserving its Home Assistant slug. The owner always remains the workflow repository owner; existing projects without this file retain their registry names. Published release tags/assets are never rewritten by an ordinary source-branch run.

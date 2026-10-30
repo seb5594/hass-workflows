@@ -15,6 +15,8 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from common import image_repository
+
 RUN_STORE = Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())) / "hass-metrics.json"
 SNAPSHOT = Path(".github/metrics.json")
 PACKAGE_PAGE = "https://github.com/users/{owner}/packages/container/package/{package}"
@@ -100,7 +102,7 @@ def update_snapshot(root=Path("."), slug=None, owner=None):
     """Fold this run's values into .github/metrics.json; returns True when the file changed."""
     values = recorded()
     if slug and owner:
-        values["image_pulls"] = package_pulls(owner, f"hass-{slug}")
+        values["image_pulls"] = package_pulls(owner, image_repository(owner,slug).rsplit("/",1)[1])
     path = root / SNAPSHOT
     previous = load(root)
     snapshot = merge(previous, values)
