@@ -101,6 +101,13 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('branch=dev',rendered)
         self.assertNotIn('999',rendered)
 
+    def test_standalone_entry_uses_the_app_readme_before_repository_language_navigation(self):
+        (self.source/'README.md').write_text('**English** · [Deutsch](README.de.md)\n')
+        (self.source/'rsync-local/README.md').write_text('# App\n\nA useful standalone app description.\n')
+        with patch.object(catalog,'git',return_value='a'*40):
+            entry=catalog.sync_repository(self.repo,self.modules,500)
+        self.assertEqual(entry['excerpt'],'A useful standalone app description.')
+
 
 class IntegrationCatalog(unittest.TestCase):
     def setUp(self):
