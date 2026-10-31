@@ -167,9 +167,16 @@ def sync_repository(repo, modules, limit):
     git("checkout", "--detach", sha, cwd=folder)
     git("submodule", "update", "--init", "--recursive", cwd=folder)
     items = app_metadata(folder)
+    # A standalone app's own README describes the installable component. The
+    # repository README may start with language navigation or project-wide prose.
+    summary_folder = folder
+    if len(items) == 1:
+        candidate = folder / items[0]['path']
+        if any(p.is_file() and p.name.casefold() == 'readme.md' for p in candidate.iterdir()):
+            summary_folder = candidate
     return {"repository": f"{OWNER}/{name}", "path": path, "branch": branch, "commit": sha,
             "url": config.github_url(f"{OWNER}/{name}"), "live": live.fetch(f"{OWNER}/{name}"),
-            "excerpt": readme_excerpt(folder, repo.get("description") or items[0]["description"], limit),
+            "excerpt": readme_excerpt(summary_folder, repo.get("description") or items[0]["description"], limit),
             "metrics": metrics.load(folder), "items": items}
 
 
