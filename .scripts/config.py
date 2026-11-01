@@ -36,10 +36,15 @@ EVENTS = {"apps": "update-addons", "integrations": "update-integrations", "hub":
 
 # Every repository the engine serves, by catalog kind. Drives the engine's own validation matrix.
 PROJECTS = {
-    "apps": ["Home-Assistant-Rsync-Local-Addon", "Home-Assistant-git-exporter-Addon",
-             "Home-Assistant-Playstation-VR-Camera-Loader-App", "Home-Assistant-UnTuyaOS3-App", "Home-Assistant-WiFi-Helper-App", "Home-Assistant-Tuya-Breaker-App"],
+    "apps": ["Home-Assistant-Rsync-Local-Addon", "Home-Assistant-Git-Exporter-Addon",
+             "Home-Assistant-Playstation-VR-Camera-Loader-App", "Home-Assistant-UnTuyaOS3-App",
+             "Home-Assistant-WiFi-Helper-App", "Home-Assistant-Tuya-Breaker-App",
+             "Home-Assistant-Gitea-MCP-Server-App", "Home-Assistant-Gitea-Runner-App",
+             "Home-Assistant-Gitea-Mirror-App", "Home-Assistant-Assist-AI-Router-App",
+             "Home-Assistant-App-Template"],
     "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
-                     "hass-vacuum_mapguard-integration", "Home-Assistant-Integration-Template"],
+                     "hass-vacuum_mapguard-integration", "hass-medication_tracker-integration",
+                     "Home-Assistant-Integration-Template"],
 }
 
 # Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
