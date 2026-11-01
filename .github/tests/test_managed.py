@@ -179,6 +179,23 @@ class ManagedFiles(unittest.TestCase):
             managed.check("integration", root)
 
 
+class UpstreamCredentials(unittest.TestCase):
+    def test_repository_writes_use_workflow_token_and_dispatch_ci(self):
+        import yaml
+        workflow = yaml.safe_load(managed.render_workflow(managed.UPSTREAM, SHA))
+        self.assertEqual(workflow['permissions']['contents'], 'write')
+        self.assertEqual(workflow['permissions']['actions'], 'write')
+        for name in ('follow', 'renovate'):
+            steps = workflow['jobs'][name]['steps']
+            checkouts = [step['with'] for step in steps if step.get('uses', '').startswith('actions/checkout@')]
+            self.assertEqual(checkouts[0]['token'], '${{ github.token }}')
+            self.assertEqual(checkouts[1]['token'], '${{ secrets.ORCHESTRATION_PAT }}')
+            commit = next(step for step in steps if step.get('name') == 'Commit the new version')
+            self.assertEqual(commit['env']['GH_TOKEN'], '${{ github.token }}')
+            self.assertIn('gh workflow run ci.yml --ref "$TARGET_BRANCH"', commit['run'])
+            self.assertIn("':!.engine'", commit['run'])
+
+
 class ProjectListing(unittest.TestCase):
     def test_every_listed_repository_is_unique(self):
         names = [name for names in config.PROJECTS.values() for name in names]
