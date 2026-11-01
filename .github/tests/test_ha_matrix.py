@@ -84,7 +84,7 @@ class Commands(InProject):
         self.write(".github/dev/pyproject.toml")
         command = ha_matrix.pytest_command("python", Path(".github/tests"), real=False)
         self.assertIn("no:homeassistant", command)
-        self.assertEqual(command[command.index("-c") + 1], ".github/dev/pyproject.toml")
+        self.assertEqual(Path(command[command.index("-c") + 1]), Path(".github/dev/pyproject.toml"))
 
     def test_the_real_suite_needs_the_plugin_and_automatic_asyncio(self):
         command = ha_matrix.pytest_command("python", Path(".github/ha_tests"), real=True)

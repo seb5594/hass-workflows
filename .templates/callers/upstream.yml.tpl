@@ -2,7 +2,7 @@ name: Follow upstream releases
 
 # A new release of the packaged software becomes a new version of the app by itself:
 # the engine script changes the pin in the Dockerfile and raises the app version
-# (see .scripts/upstream.py in the engine), and the commit starts the release pipeline.
+# (see .scripts/upstream.py in the engine), then explicitly starts the release pipeline.
 
 on:
   schedule:
@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   follow:
@@ -22,19 +23,25 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # A push made with the default token would not start the release pipeline.
-          token: ${{ secrets.ORCHESTRATION_PAT }}
+          # Repository writes use the scoped workflow token; the PAT only reads the engine.
+          token: ${{ github.token }}
       # include: checkout-engine
       - id: upstream
         run: python3 .engine/.scripts/upstream.py update
       - name: Commit the new version
         if: steps.upstream.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.upstream.outputs.version }}
+          TARGET_BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Update upstream to release ${{ steps.upstream.outputs.version }}"
+          git add -A -- . ':!.engine'
+          git commit -m "Update upstream to release $VERSION"
           git push
+          # Pushes with GITHUB_TOKEN do not trigger push workflows; dispatch does.
+          gh workflow run ci.yml --ref "$TARGET_BRANCH"
 
   renovate:
     # Renovate raises base image and package pins; each such pull request also needs a new app version.
@@ -46,7 +53,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
-          token: ${{ secrets.ORCHESTRATION_PAT }}
+          token: ${{ github.token }}
       # include: checkout-engine
       - id: bump
         env:
@@ -55,9 +62,14 @@ jobs:
           python3 .engine/.scripts/upstream.py bump "Dependencies: ${TITLE#chore(deps): }." --base "origin/${{ github.base_ref }}"
       - name: Commit the new version
         if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          TARGET_BRANCH: ${{ github.head_ref }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Raise the app version to ${{ steps.bump.outputs.version }}"
+          git add -A -- . ':!.engine'
+          git commit -m "Raise the app version to $VERSION"
           git push
+          gh workflow run ci.yml --ref "$TARGET_BRANCH"
