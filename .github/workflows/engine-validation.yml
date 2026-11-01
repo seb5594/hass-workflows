@@ -42,7 +42,7 @@ jobs:
         with:
           repository: seb5594/${{ matrix.project }}
           # Also reads private templates. With no ref, checkout selects each repository's default branch.
-          token: ${{ secrets.ORCHESTRATION_PAT }}
+          token: ${{ secrets.ORCHESTRATION_PAT || github.token }}
           persist-credentials: false
       - uses: actions/checkout@v7
         with:
