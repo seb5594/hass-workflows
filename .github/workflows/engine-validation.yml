@@ -50,6 +50,7 @@ jobs:
           persist-credentials: false
       # Validate the candidate templates in this disposable source checkout.
       # Source repositories still carry their previous engine's managed callers.
+      - uses: ./.engine/.actions/setup-python
       - name: Render candidate managed files
         env:
           PROJECT_KIND: ${{ matrix.kind }}
