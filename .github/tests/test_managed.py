@@ -76,7 +76,10 @@ class WorkflowTemplates(unittest.TestCase):
         self.assertEqual(text.count(f"ref: {SHA}"), 2)
         self.assertIn("ha_matrix.py list", text)
         self.assertIn("fromJSON(needs.releases.outputs.releases)", text)
-        self.assertIn('ha_matrix.py run "${{ matrix.release }}"', text)
+        self.assertIn('ha_matrix.py run --target-json "$HA_TARGET"', text)
+        self.assertIn('ha_matrix.py list --live --matrix', text)
+        self.assertIn("include: ${{ fromJSON(needs.releases.outputs.releases) }}", text)
+        self.assertIn("cron: '41 5 * * *'", text)
 
     def test_catalog_callers_name_their_own_event_and_kind(self):
         apps, integrations = (managed.render_workflow(managed.WORKFLOWS[kind], SHA)
