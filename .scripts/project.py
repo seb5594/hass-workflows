@@ -158,6 +158,7 @@ def validate(project):
     if (options := pycodestyle_options()) is not None:
         run(sys.executable, "-m", "pycodestyle", *options, "custom_components")
     run(sys.executable, str(ENGINE / ".scripts/package_integration.py"), "--check")
+    run(sys.executable, str(ENGINE / ".scripts/integration_checks.py"))
     run_project_checks()
     if directory := test_directory():
         run_integration_tests(directory)
