@@ -91,6 +91,7 @@ class Commands(InProject):
         self.assertNotIn("no:homeassistant", command)
         self.assertIn("hass_real_tests", command)
         self.assertIn("asyncio_mode=auto", command)
+        self.assertIn("import homeassistant; import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))", command)
 
     def test_a_finished_environment_is_reused(self):
         release = {"homeassistant": "2023.2.5", "plugin": "0.12.57", "python": "3.10"}

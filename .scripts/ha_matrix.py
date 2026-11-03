@@ -135,7 +135,12 @@ def pytest_command(interpreter, directory, real):
     """The pytest call for one suite; the regular one keeps the Home Assistant plugin out."""
     command = [str(interpreter), "-m", "pytest", "-q", "-p", "no:cacheprovider"]
     if real:
-        return [*command, "-p", "hass_real_tests", "-o", "asyncio_mode=auto", str(directory)]
+        # Core must initialize before pytest auto-loads plugins that import HTTPX.
+        # Since 2026.11, Core aliases httpx2 and rejects an already imported httpx.
+        return [str(interpreter), "-c",
+                "import homeassistant; import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+                "-q", "-p", "no:cacheprovider", "-p", "hass_real_tests",
+                "-o", "asyncio_mode=auto", str(directory)]
     config = next((p for p in (Path(".github/dev/pyproject.toml"), Path("pyproject.toml")) if p.exists()), None)
     options = ["-c", str(config), "--rootdir", "."] if config else []
     return [*command, "-p", "no:homeassistant", *options, str(directory)]
