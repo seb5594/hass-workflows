@@ -44,7 +44,7 @@ PROJECTS = {
              "Home-Assistant-App-Template"],
     "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
                      "hass-vacuum_mapguard-integration", "hass-medication_tracker-integration",
-                     "Home-Assistant-Integration-Template"],
+                     "hass-deepl_translator-integration", "Home-Assistant-Integration-Template"],
 }
 
 # Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
