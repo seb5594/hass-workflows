@@ -38,6 +38,22 @@ class Discovery(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 ha_discovery.discover()
 
+    def test_stable_keeps_matching_fixtures_when_latest_plugin_tracks_beta(self):
+        newer = {"version": "0.13.376", "requires_python": ">=3.14", "requires_dist": ["homeassistant==2026.11.0b4"]}
+        older = {**newer, "version": "0.13.375", "requires_dist": ["homeassistant==2026.10.4"]}
+
+        def fetch(package, version=None):
+            if package == "homeassistant":
+                return self.payload(["2026.10.4", "2026.11.0b4"]) if version is None else {"info": {"requires_python": ">=3.14"}}
+            if version:
+                return {"info": older if version == "0.13.375" else newer}
+            return {**self.payload(["0.13.375", "0.13.376"]), "info": newer}
+
+        with mock.patch.object(ha_discovery, "fetch", side_effect=fetch):
+            targets = ha_discovery.discover()
+        self.assertEqual([item["plugin"] for item in targets], ["0.13.375", "0.13.376"])
+        self.assertFalse(any(item["override_core"] for item in targets))
+
     def test_versions_sort_before_the_final_release(self):
         versions = ["2026.11.0", "2026.11.0rc1", "2026.11.0b10", "2026.11.0a1", "2026.11.0.dev1"]
         self.assertEqual(sorted(versions, key=ha_matrix.version_key), list(reversed(versions)))

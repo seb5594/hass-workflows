@@ -51,8 +51,28 @@ def discover():
                            or (channel == "a" and version.is_devrelease))]
         if candidates:
             chosen.append(max(candidates))
-    plugin = fetch("pytest-homeassistant-custom-component")["info"]
-    return [target(version, plugin) for version in sorted(set(chosen))]
+    payload = fetch("pytest-homeassistant-custom-component")
+    plugin = payload["info"]
+    stable_plugin = plugin
+    if not core_requirement(plugin).specifier.contains(stable, prereleases=True):
+        # Plugin releases can already track a beta while stable Core still needs
+        # its previous fixtures. Find the matching published plugin for stable.
+        candidates = sorted(published_versions(payload), reverse=True)
+        for candidate in candidates[:30]:
+            info = fetch("pytest-homeassistant-custom-component", str(candidate))["info"]
+            if core_requirement(info).specifier.contains(stable, prereleases=True):
+                stable_plugin = info
+                break
+    return [target(version, stable_plugin if version == stable else plugin)
+            for version in sorted(set(chosen))]
+
+
+def core_requirement(plugin):
+    requirement = next((Requirement(item) for item in plugin["requires_dist"]
+                        if Requirement(item).name == "homeassistant"), None)
+    if requirement is None:
+        raise ValueError("The test plugin no longer declares Home Assistant")
+    return requirement
 
 
 def target(version, plugin):
@@ -62,10 +82,7 @@ def target(version, plugin):
                    if all(spec.contains(f"3.{minor}.99") for spec in specs)), None)
     if python is None:
         raise ValueError(f"Cannot choose Python for Home Assistant {version}")
-    core_pin = next((Requirement(item) for item in plugin["requires_dist"]
-                     if Requirement(item).name == "homeassistant"), None)
-    if core_pin is None:
-        raise ValueError("The test plugin no longer declares Home Assistant")
+    core_pin = core_requirement(plugin)
     return {"homeassistant": str(version), "python": python, "plugin": plugin["version"],
             "preview": version.is_prerelease, "live": True,
             "override_core": not core_pin.specifier.contains(version, prereleases=True)}

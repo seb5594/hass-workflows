@@ -16,6 +16,8 @@ PyPI `requires_python` metadata selects Python; uv installs that minor's current
 Historical targets retain their tested plugin and dependency pins.
 
 Live targets use the newest published `pytest-homeassistant-custom-component` plugin.
+If that plugin already tracks a preview, stable Core instead uses a matching plugin
+from the latest 30 published plugin versions, when available.
 When Core is ahead of its exact dependency pin, uv explicitly overrides only the Core
 requirement. All other dependencies are resolved normally, and the installed Core
 version is checked before testing. A failure can therefore mean the test harness
