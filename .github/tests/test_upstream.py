@@ -63,7 +63,7 @@ class ManagedWorkflow(unittest.TestCase):
     def test_apps_with_a_followed_image_get_the_workflow_pinned_to_the_engine(self):
         files = self.files("ARG BUILD_FROM=x:1\n" + GHCR)
         self.assertIn("a" * 40, files[".github/workflows/upstream.yml"])
-        self.assertIn(".engine/.scripts/upstream.py update", files[".github/workflows/upstream.yml"])
+        self.assertIn("./.engine/.actions/follow-upstream", files[".github/workflows/upstream.yml"])
 
     def test_other_apps_do_not(self):
         self.assertNotIn(".github/workflows/upstream.yml", self.files("ARG BUILD_FROM=x:1\n"))
