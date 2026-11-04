@@ -91,12 +91,15 @@ class Commands(InProject):
         self.assertNotIn("no:homeassistant", command)
         self.assertIn("hass_real_tests", command)
         self.assertIn("asyncio_mode=auto", command)
+        self.assertIn("import homeassistant; import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))", command)
 
     def test_a_finished_environment_is_reused(self):
         release = {"homeassistant": "2023.2.5", "plugin": "0.12.57", "python": "3.10"}
         with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ, {"HASS_MATRIX_DIR": folder}):
             (Path(folder) / "2023.2.5").mkdir()
-            (Path(folder) / "2023.2.5/.prepared").touch()
+            (Path(folder) / "2023.2.5/.prepared").write_text(json.dumps(
+                {"release": release, "plugin_package": "pytest-homeassistant-custom-component",
+                 "domains": ["bluetooth"], "requirements": []}, sort_keys=True))
             with mock.patch.object(ha_matrix, "run") as run:
                 interpreter = ha_matrix.prepare(release, ["bluetooth"], [])
             run.assert_not_called()

@@ -25,7 +25,7 @@ jobs:
       # Same Python and PyYAML as every project run; pytest for the Home Assistant matrix tests.
       - uses: ./.actions/setup-python
         with:
-          packages: pytest==8.4.2
+          packages: pytest==8.4.2 packaging==26.0
       - run: python -m unittest discover -s .github/tests -v
       - id: plan
         run: echo "projects=$(python .scripts/plan.py)" >> "$GITHUB_OUTPUT"
@@ -48,6 +48,14 @@ jobs:
         with:
           path: .engine
           persist-credentials: false
+      # Validate the candidate templates in this disposable source checkout.
+      # Source repositories still carry their previous engine's managed callers.
+      - uses: ./.engine/.actions/setup-python
+      - name: Render candidate managed files
+        env:
+          PROJECT_KIND: ${{ matrix.kind }}
+          ENGINE_COMMIT: ${{ github.sha }}
+        run: python .engine/.scripts/managed.py sync "$PROJECT_KIND" "$ENGINE_COMMIT"
       - uses: ./.engine/.actions/project
         with:
           publish: 'false'
