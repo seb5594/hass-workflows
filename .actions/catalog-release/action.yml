@@ -1,0 +1,49 @@
+name: Validate and publish the integration hub package
+description: Validate and publish the integration hub package
+inputs:
+  token:
+    description: Scoped token for the caller repository
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Check whether this hub version is already released
+      id: release
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      shell: bash
+      run: |
+        tag="v$(python3 -c 'import json; print(json.load(open("custom_components/seb5594_integration_catalog/manifest.json"))["version"])')"
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        if gh release view "$tag" >/dev/null 2>&1; then
+          echo 'exists=true' >> "$GITHUB_OUTPUT"
+        else
+          echo 'exists=false' >> "$GITHUB_OUTPUT"
+        fi
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      if: steps.release.outputs.exists == 'false'
+      with:
+        python-version: '3.14'
+    - name: Validate before publishing
+      if: steps.release.outputs.exists == 'false'
+      shell: bash
+      run: |
+        pip install ruff uv packaging
+        ruff check --extend-exclude .engine .
+        python -m unittest discover -s tests -p 'test_*.py'
+        python .engine/.scripts/ha_matrix.py run --live --stable-only
+    - name: Build HACS package
+      if: steps.release.outputs.exists == 'false'
+      shell: bash
+      run: python scripts/build_release.py
+    - name: Publish tagged release and uploaded package
+      if: steps.release.outputs.exists == 'false'
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+      shell: bash
+      run: |
+        gh release create "$RELEASE_TAG" dist/seb5594_integration_catalog.zip dist/SHA256SUMS.txt \
+          --target "$RELEASE_COMMIT" --title "seb5594's Integration Hub $RELEASE_TAG" --generate-notes

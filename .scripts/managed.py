@@ -33,14 +33,12 @@ class Workflow:
 # kind -> the workflow that pins the engine; its template lives in .templates/callers
 WORKFLOWS = {
     "app": Workflow("project", ".github/workflows/ci.yml",
-                    {"KIND": "app", "TIMEOUT": "90", "PACKAGES": "  packages: write"}),
+                    {"TIMEOUT": "90", "PACKAGES": "  packages: write"}),
     "integration": Workflow("project", ".github/workflows/ci.yml",
-                            {"KIND": "integration", "TIMEOUT": "30", "PACKAGES": ""}),
+                            {"TIMEOUT": "30", "PACKAGES": ""}),
     "catalog-apps": Workflow("catalog", ".github/workflows/update.yml",
                              {"KIND": "apps", "TITLE": "app", "EVENT": config.EVENTS["apps"]}),
-    "catalog-integrations": Workflow("catalog", ".github/workflows/update.yml",
-                                     {"KIND": "integrations", "TITLE": "integration",
-                                      "EVENT": config.EVENTS["integrations"]}),
+    "catalog-integrations": Workflow("catalog-sync", ".github/workflows/update.yml", {}),
     "hub": Workflow("hub", ".github/workflows/update.yml", {"EVENT": config.EVENTS["hub"]}),
 }
 # Apps that package a released image keep this workflow: it follows the upstream releases.
@@ -49,6 +47,7 @@ FOLLOWED_PIN = re.compile(r"^# renovate: datasource=docker depName=(?:docker\.io
                           re.M)
 # Integrations with tests against a real Home Assistant core also keep this workflow.
 COMPATIBILITY = Workflow("compat", ".github/workflows/compat.yml", {})
+CATALOG_RELEASE = Workflow("catalog-release", ".github/workflows/release.yml", {})
 
 # What differs between the two catalogs in their maintenance notes.
 CATALOG_NOTES = {
@@ -59,14 +58,6 @@ CATALOG_NOTES = {
         "TITLE": "app", "EVENT": config.EVENTS["apps"],
         "PINNING": ("Each run pins the latest default-branch commit of every listed app as a Git "
                     "submodule, because the Supervisor installs from the repository tree."),
-    },
-    "catalog-integrations": {
-        "OUTPUT": "the README and `.github/catalog.json`",
-        "NAMES": "`hass-<project>-integration` or `Home-Assistant-<project>-Integration`",
-        "REQUIREMENT": "that contain `custom_components/<domain>/manifest.json`",
-        "TITLE": "integration", "EVENT": config.EVENTS["integrations"],
-        "PINNING": ("Integrations are only described, never cloned: each run reads their metadata at "
-                    "the current default-branch commit and records that commit in `.github/catalog.json`."),
     },
 }
 
@@ -117,6 +108,10 @@ def expected(kind, sha, root=Path(".")):
                 files[UPSTREAM.target] = render_workflow(UPSTREAM, sha)
     elif kind == "integration" and (root / ".github/ha_tests").is_dir():
         files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
+    elif kind == "catalog-integrations":
+        files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
+        files[CATALOG_RELEASE.target] = render_workflow(CATALOG_RELEASE, sha)
+        files[".github/workflows/ci.yml"] = read_template("callers/catalog-checks.yml.tpl")
     elif kind in CATALOG_NOTES:
         files[".github/DEVELOPMENT.md"] = templating.fill(
             read_template("catalog/DEVELOPMENT.md"), CATALOG_NOTES[kind], once=False)

@@ -64,7 +64,7 @@ class WorkflowTemplates(unittest.TestCase):
         self.assertNotIn("packages: write", integration)
         self.assertIn("timeout-minutes: 90", app)
         self.assertIn("timeout-minutes: 30", integration)
-        self.assertIn("name: Validate and release integration", integration)
+        self.assertIn("name: Home Assistant CI", integration)
 
     def test_secrets_are_withheld_from_fork_pull_requests(self):
         for workflow in (managed.WORKFLOWS["app"], managed.COMPATIBILITY):
@@ -74,10 +74,10 @@ class WorkflowTemplates(unittest.TestCase):
     def test_compat_caller_tests_every_release_of_the_matrix_in_its_own_job(self):
         text = managed.render_workflow(managed.COMPATIBILITY, SHA)
         self.assertEqual(text.count(f"ref: {SHA}"), 2)
-        self.assertIn("ha_matrix.py list", text)
+        self.assertIn("./.engine/.actions/ha-targets", text)
         self.assertIn("fromJSON(needs.releases.outputs.releases)", text)
-        self.assertIn('ha_matrix.py run --target-json "$HA_TARGET"', text)
-        self.assertIn('ha_matrix.py list --live --matrix', text)
+        self.assertIn('ha_matrix.py run --target-json "$HA_TARGET"', (config.ENGINE_ROOT / ".actions/ha-test/action.yml").read_text())
+        self.assertIn('ha_matrix.py list --live --matrix', (config.ENGINE_ROOT / ".actions/ha-targets/action.yml").read_text())
         self.assertIn("include: ${{ fromJSON(needs.releases.outputs.releases) }}", text)
         self.assertIn("cron: '41 5 * * *'", text)
 
@@ -85,7 +85,7 @@ class WorkflowTemplates(unittest.TestCase):
         apps, integrations = (managed.render_workflow(managed.WORKFLOWS[kind], SHA)
                               for kind in ("catalog-apps", "catalog-integrations"))
         self.assertIn("types: [update-addons]", apps)
-        self.assertIn("kind: integrations", integrations)
+        self.assertIn("./.engine/.actions/catalog-sync", integrations)
         self.assertIn("group: synchronize-integration-catalog", integrations)
 
 
@@ -151,13 +151,15 @@ class ManagedFiles(unittest.TestCase):
         managed.check("integration", root)
 
     def test_catalogs_describe_how_they_are_maintained(self):
-        notes = {kind: managed.expected(kind, SHA)[".github/DEVELOPMENT.md"]
-                 for kind in ("catalog-apps", "catalog-integrations")}
-        self.assertIn("Git submodule", notes["catalog-apps"])
-        self.assertIn("update-addons", notes["catalog-apps"])
-        self.assertIn("never cloned", notes["catalog-integrations"])
-        self.assertIn("Synchronize integration catalog", notes["catalog-integrations"])
-        self.assertNotIn("{{", "".join(notes.values()))
+        notes = managed.expected("catalog-apps", SHA)[".github/DEVELOPMENT.md"]
+        self.assertIn("Git submodule", notes)
+        self.assertIn("update-addons", notes)
+        files = managed.expected("catalog-integrations", SHA)
+        # The integration catalog owns its release-selection guide.
+        self.assertNotIn(".github/DEVELOPMENT.md", files)
+        self.assertIn("types: [update-integrations]", files[".github/workflows/update.yml"])
+        for filename in ("ci", "compat", "release"):
+            self.assertIn(f".github/workflows/{filename}.yml", files)
 
     def test_sync_writes_pins_and_detects_drift(self):
         root = self.repository("app")
@@ -193,7 +195,9 @@ class UpstreamCredentials(unittest.TestCase):
             checkouts = [step['with'] for step in steps if step.get('uses', '').startswith('actions/checkout@')]
             self.assertEqual(checkouts[0]['token'], '${{ github.token }}')
             self.assertEqual(checkouts[1]['token'], '${{ secrets.ORCHESTRATION_PAT }}')
-            commit = next(step for step in steps if step.get('name') == 'Commit the new version')
+            action = steps[-1]["uses"].removeprefix("./.engine/")
+            composite = yaml.safe_load((config.ENGINE_ROOT / action / "action.yml").read_text())
+            commit = next(step for step in composite["runs"]["steps"] if step.get("name") == "Commit the new version")
             self.assertEqual(commit['env']['GH_TOKEN'], '${{ github.token }}')
             self.assertIn('gh workflow run ci.yml --ref "$TARGET_BRANCH"', commit['run'])
             self.assertIn("':!.engine'", commit['run'])

@@ -3,9 +3,9 @@ name: Compatibility
 on:
   push:
     branches: [main, dev]
-    paths: ['custom_components/**', '.github/ha_tests/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
+    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
   pull_request:
-    paths: ['custom_components/**', '.github/ha_tests/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
+    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
   schedule:
     - cron: '41 5 * * *' # Daily: discover new stable and alpha/beta/RC packages from PyPI.
   workflow_dispatch:
@@ -27,14 +27,8 @@ jobs:
     steps:
       # include: checkout-project
       # include: checkout-engine
-      - uses: ./.engine/.actions/setup-python
-        with:
-          packages: packaging==26.0
       - id: releases
-        run: |
-          targets=$(python .engine/.scripts/ha_matrix.py list --live --matrix)
-          echo "releases=$targets" >> "$GITHUB_OUTPUT"
-          printf '### Home Assistant targets\n\n```json\n%s\n```\n' "$targets" >> "$GITHUB_STEP_SUMMARY"
+        uses: ./.engine/.actions/ha-targets
 
   test:
     needs: releases
@@ -49,10 +43,6 @@ jobs:
     steps:
       # include: checkout-project
       # include: checkout-engine
-      - uses: ./.engine/.actions/setup-python
+      - uses: ./.engine/.actions/ha-test
         with:
-          packages: uv
-      - name: Test selected Home Assistant release
-        env:
-          HA_TARGET: ${{ toJSON(matrix) }}
-        run: python .engine/.scripts/ha_matrix.py run --target-json "$HA_TARGET"
+          target: ${{ toJSON(matrix) }}
