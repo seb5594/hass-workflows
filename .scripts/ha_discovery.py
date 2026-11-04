@@ -51,6 +51,10 @@ def discover():
                            or (channel == "a" and version.is_devrelease))]
         if candidates:
             chosen.append(max(candidates))
+    # Core now publishes its own fixtures at the exact Core version, including betas.
+    official = set(published_versions(fetch("pytest-homeassistant")))
+    if all(version in official for version in chosen):
+        return [official_target(version) for version in sorted(set(chosen))]
     payload = fetch("pytest-homeassistant-custom-component")
     plugin = payload["info"]
     stable_plugin = plugin
@@ -63,8 +67,17 @@ def discover():
             if core_requirement(info).specifier.contains(stable, prereleases=True):
                 stable_plugin = info
                 break
-    return [target(version, stable_plugin if version == stable else plugin)
+    return [official_target(version) if version in official
+            else target(version, stable_plugin if version == stable else plugin)
             for version in sorted(set(chosen))]
+
+
+def official_target(version):
+    info = fetch("pytest-homeassistant", str(version))["info"]
+    result = target(version, info)
+    if result["override_core"]:
+        raise ValueError(f"pytest-homeassistant {version} requires a different Core")
+    return {**result, "plugin_package": "pytest-homeassistant"}
 
 
 def core_requirement(plugin):

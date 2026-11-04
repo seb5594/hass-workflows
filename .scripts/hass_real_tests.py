@@ -31,8 +31,19 @@ def expose_custom_components(root):
         package.__path__.append(folder)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_load_initial_conftests(early_config):
+    # Older project tests import the former fixture package. Reuse the exact official
+    # helper objects so both names share the same config-entry and callback classes.
+    if importlib.util.find_spec("pytest_homeassistant") is not None:
+        sys.modules["pytest_homeassistant_custom_component"] = importlib.import_module("pytest_homeassistant")
+
+
 def pytest_configure(config):
     expose_custom_components(config.rootpath)
+    if "pytest_homeassistant" in sys.modules:
+        # The official plugin initializes recorder before its helpers can be imported.
+        sys.modules["pytest_homeassistant_custom_component.common"] = importlib.import_module("pytest_homeassistant.common")
 
 
 @pytest.fixture(autouse=True)

@@ -15,7 +15,10 @@ and records them in its job summary. Workers use those objects without rediscove
 PyPI `requires_python` metadata selects Python; uv installs that minor's current patch.
 Historical targets retain their tested plugin and dependency pins.
 
-Live targets use the newest published `pytest-homeassistant-custom-component` plugin.
+When PyPI has a matching `pytest-homeassistant` release, the runner uses Core's
+official fixtures at that exact version, including previews and Bluetooth extras.
+It exposes the legacy helper import path for existing project tests. On older
+Core releases the runner uses `pytest-homeassistant-custom-component`.
 If that plugin already tracks a preview, stable Core instead uses a matching plugin
 from the latest 30 published plugin versions, when available.
 When Core is ahead of its exact dependency pin, uv explicitly overrides only the Core

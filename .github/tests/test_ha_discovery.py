@@ -21,6 +21,8 @@ class Discovery(unittest.TestCase):
                            "requires_dist": ["homeassistant==2026.10.4"]}}
 
         def fetch(package, version=None):
+            if package == "pytest-homeassistant":
+                return self.payload([])
             if package != "homeassistant":
                 return plugin
             return core if version is None else {"info": {"requires_python": ">=3.14.2"}}
@@ -38,11 +40,29 @@ class Discovery(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 ha_discovery.discover()
 
+    def test_official_fixtures_match_each_core_even_during_beta_week(self):
+        versions = ["2026.11.0", "2026.12.0b1"]
+
+        def fetch(package, version=None):
+            self.assertIn(package, {"homeassistant", "pytest-homeassistant"})
+            if version is None:
+                return self.payload(versions)
+            return {"info": {"version": version, "requires_python": ">=3.14.2",
+                             "requires_dist": [f"homeassistant=={version}"]}}
+
+        with mock.patch.object(ha_discovery, "fetch", side_effect=fetch):
+            targets = ha_discovery.discover()
+        self.assertEqual([item["plugin"] for item in targets], versions)
+        self.assertTrue(all(item["plugin_package"] == "pytest-homeassistant" and not item["override_core"]
+                            for item in targets))
+
     def test_stable_keeps_matching_fixtures_when_latest_plugin_tracks_beta(self):
         newer = {"version": "0.13.376", "requires_python": ">=3.14", "requires_dist": ["homeassistant==2026.11.0b4"]}
         older = {**newer, "version": "0.13.375", "requires_dist": ["homeassistant==2026.10.4"]}
 
         def fetch(package, version=None):
+            if package == "pytest-homeassistant":
+                return self.payload([])
             if package == "homeassistant":
                 return self.payload(["2026.10.4", "2026.11.0b4"]) if version is None else {"info": {"requires_python": ">=3.14"}}
             if version:
@@ -60,7 +80,9 @@ class Discovery(unittest.TestCase):
 
     def test_frozen_target_runs_without_rediscovery(self):
         target = {"homeassistant": "2026.11.0b2", "plugin": "0.13.375", "python": "3.14", "live": True}
-        with mock.patch.object(ha_matrix, "test_release", return_value={"real": True}) as test:
+        with mock.patch.object(ha_matrix.Path, "is_dir", return_value=True), mock.patch.object(
+            ha_matrix, "test_release", return_value={"real": True}
+        ) as test:
             self.assertEqual(ha_matrix.main(["run", "--target-json", json.dumps(target)]), 0)
         self.assertEqual(test.call_args.args[0], target)
 

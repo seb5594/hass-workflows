@@ -1,0 +1,22 @@
+name: Discover supported Home Assistant versions
+description: Discover supported Home Assistant versions
+outputs:
+  releases:
+    description: Frozen Home Assistant targets
+    value: ${{ steps.releases.outputs.releases }}
+runs:
+  using: composite
+  steps:
+    - uses: ./.engine/.actions/setup-python
+      with:
+        packages: packaging==26.0
+    - name: Check the integration catalog callers against the pinned engine
+      if: github.repository == 'seb5594/Home-Assistant-Integrations'
+      shell: bash
+      run: python .engine/.scripts/managed.py check catalog-integrations
+    - id: releases
+      shell: bash
+      run: |
+        targets=$(python .engine/.scripts/ha_matrix.py list --live --matrix)
+        echo "releases=$targets" >> "$GITHUB_OUTPUT"
+        printf '### Home Assistant targets\n\n```json\n%s\n```\n' "$targets" >> "$GITHUB_STEP_SUMMARY"
