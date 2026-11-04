@@ -11,7 +11,7 @@
 | Building block | Purpose |
 | --- | --- |
 | [Project action](.actions/project/action.yml) | Single CI and publishing entry point; detects the project type |
-| [Catalog action](.actions/catalog/action.yml), [hub action](.actions/hub/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) and the [hub](docs/HUB.md) |
+| [App catalog](.actions/catalog/action.yml), [integration catalog](.actions/catalog-sync/action.yml), [hub](.actions/hub/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) and the [hub](docs/HUB.md) |
 | [Setup action](.actions/setup-python/action.yml) | Python plus the one pinned PyYAML every other action and the engine checks reuse |
 | [Scripts](.scripts/) | All logic, see [Architecture](docs/ARCHITECTURE.md) |
 | [Renovate preset](default.json) | Shared dependency rules, copied into every repository, see [Renovate](docs/RENOVATE.md) |
@@ -67,7 +67,7 @@ Changing a template and re-running `sync` in every repository is the whole updat
 
 An integration that keeps the lowest possible Home Assistant version proves it. [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular `.github/tests` and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
 
-The Compatibility workflow lists the releases at or above the minimum in `hacs.json` and tests each in its own job, weekly and for every change to the integration. Locally: `python .engine/.scripts/ha_matrix.py run 2026.9.4`; `list` prints the releases as JSON. A release is added to the table together with the first test run that proves it works.
+The Compatibility workflow lists the releases at or above the minimum in `hacs.json` and tests each in its own job, daily and for relevant project changes. Each live run also resolves the current stable and preview versions from PyPI. See [compatibility testing](docs/COMPATIBILITY.md) for fixture selection and the frozen CI targets. Locally: `python .engine/.scripts/ha_matrix.py run 2026.9.4`; `list` prints the releases as JSON. A release is added to the table together with the first test run that proves it works.
 
 ## Release flow
 
