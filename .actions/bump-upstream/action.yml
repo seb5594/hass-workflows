@@ -1,0 +1,25 @@
+name: Bump the app after a Renovate dependency update
+description: Bump the app after a Renovate dependency update
+runs:
+  using: composite
+  steps:
+    - id: bump
+      env:
+        TITLE: ${{ github.event.pull_request.title }}
+      shell: bash
+      run: |
+        python3 .engine/.scripts/upstream.py bump "Dependencies: ${TITLE#chore(deps): }." --base "origin/${{ github.base_ref }}"
+    - name: Commit the new version
+      if: steps.bump.outputs.changed == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ steps.bump.outputs.version }}
+        TARGET_BRANCH: ${{ github.head_ref }}
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A -- . ':!.engine'
+        git commit -m "Raise the app version to $VERSION"
+        git push
+        gh workflow run ci.yml --ref "$TARGET_BRANCH"

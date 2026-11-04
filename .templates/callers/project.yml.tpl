@@ -1,4 +1,4 @@
-name: Validate and release __KIND__
+name: Home Assistant CI
 
 on:
   push:

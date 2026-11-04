@@ -96,6 +96,8 @@ def shell_scripts(directories):
 
 def run_project_checks():
     """Project-specific rules live next to the project in .github/checks/*.py."""
+    if Path("tools/sync_project.py").is_file() and not Path(".github/checks/check_apps.py").exists():
+        run(sys.executable, str(ENGINE / ".scripts/check_standalone_app.py"))
     for check in sorted(Path(".github/checks").glob("*.py")):
         run(sys.executable, str(check))
 

@@ -55,7 +55,13 @@ GitHub only reads workflows, Dependabot, Renovate and funding settings from the 
 | `<app>/entrypoint.sh` | Shared startup code of apps that do not run on s6 |
 | `.github/DEVELOPMENT.md` | Catalogs only: how the generated catalog is maintained |
 
-`python .engine/.scripts/managed.py sync <kind> <engine-sha>` inside a repository rewrites all of them (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Changing a template and re-running `sync` in every repository is the whole update procedure.
+`python .engine/.scripts/managed.py sync <kind> <engine-sha>` inside a repository rewrites all of them (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Public apps, integrations and the integration catalog share the **Home Assistant CI** name.
+The read-only compatibility workflow resolves stable and preview releases daily.
+The integration catalog keeps its release ZIP and feed semantics and its historical
+tests on external pull requests. Project-specific firmware, camera, router and
+store-promotion tests stay alongside the code that they exercise.
+
+Changing a template and re-running `sync` in every repository is the whole update procedure.
 
 ## Home Assistant compatibility
 
