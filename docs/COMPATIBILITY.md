@@ -17,6 +17,11 @@ Historical targets retain their tested plugin and dependency pins.
 
 When PyPI has a matching `pytest-homeassistant` release, the runner uses Core's
 official fixtures at that exact version, including previews and Bluetooth extras.
+From Core 2026.11.0 onward, if the matching fixture wheel is missing, discovery resolves
+the official Core release tag to a commit. The worker fetches only the package files,
+runs Core's own version-stamping script, and checks the fixture version and exact Core
+dependency before installing it alongside the published Core wheel. The matrix records
+the source commit. Once the matching wheel is published it takes precedence.
 It exposes the legacy helper import path for existing project tests. On older
 Core releases the runner uses `pytest-homeassistant-custom-component`.
 If that plugin already tracks a preview, stable Core instead uses a matching plugin
