@@ -40,6 +40,23 @@ class Discovery(unittest.TestCase):
             with self.assertRaises(TimeoutError):
                 ha_discovery.discover()
 
+    def test_stable_without_official_wheel_uses_its_own_tag(self):
+        version = "2026.11.0"
+        commit = "a" * 40
+        def fetch(package, release=None):
+            if package == "pytest-homeassistant":
+                return self.payload(["2026.11.0b6"])
+            self.assertEqual(package, "homeassistant")
+            return self.payload([version]) if release is None else {"info": {"requires_python": ">=3.14.2"}}
+
+        refs = f"{'b' * 40}\trefs/tags/{version}\n{commit}\trefs/tags/{version}^{{}}\n"
+        with mock.patch.object(ha_discovery, "fetch", side_effect=fetch), mock.patch.object(
+            ha_discovery.subprocess, "check_output", return_value=refs
+        ):
+            target, = ha_discovery.discover()
+        self.assertEqual((target["plugin"], target["fixture_commit"]), (version, commit))
+        self.assertFalse(target["override_core"])
+
     def test_official_fixtures_match_each_core_even_during_beta_week(self):
         versions = ["2026.11.0", "2026.12.0b1"]
 
