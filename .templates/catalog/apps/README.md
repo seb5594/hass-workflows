@@ -15,7 +15,7 @@ Use the blue button above, or open **Settings → Apps → App store → ⋮ →
 
 Image pull counts come from the public GHCR package pages and image sizes from the build pipeline; GitHub does not report installations or countries. See each app's documentation for the actual backup or export behavior.
 
-The catalog follows each source repository's current default branch and pins that commit as a Git submodule. [How catalog updates work](.github/DEVELOPMENT.md).
+The catalog follows each source repository's current default branch and pins that commit as a Git submodule. 📖 [How catalog updates work](.github/DEVELOPMENT.md).
 
 ## Support
 
