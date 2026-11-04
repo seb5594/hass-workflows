@@ -8,8 +8,8 @@ LINK = re.compile(r"!?\[[^\]]*\]\([^)]*\)")
 
 def only_links(line):
     """True for navigation lines such as '**Changelog** · **Download**'."""
-    return not re.sub(r"[\s*_·|•-]+", "", LINK.sub("", line)) or not re.sub(
-        r"[\s*_·|•-]+", "", re.sub(r"\*\*[^*]+\*\*", "", line))
+    labels = re.sub(r"\*\*[^*]+\*\*", "", LINK.sub("", line))
+    return not re.sub(r"[\s*_·|•-]+|🇬🇧|🇩🇪", "", labels)
 
 
 def first_paragraph(markdown, limit=500, fallback=""):

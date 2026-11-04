@@ -85,14 +85,14 @@ def closing_blocks(root):
 def update(root=Path("."), live=None):
     """Write the header and the closing blocks; returns True when README.md changed."""
     readme = root / "README.md"
-    source = original = readme.read_text()
+    source = original = readme.read_text(encoding="utf-8")
     source = place_header(source, header(root, live))
     for start_marker, end_marker in ((SUPPORT_START, SUPPORT_END), (LICENSE_START, LICENSE_END)):
         source = remove_block(source, start_marker, end_marker)
     source = source.rstrip("\n") + f"\n\n{closing_blocks(root)}\n"
     if source == original:
         return False
-    readme.write_text(source)
+    readme.write_text(source, encoding="utf-8")
     return True
 
 
