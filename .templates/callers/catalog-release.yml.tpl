@@ -1,0 +1,33 @@
+name: Publish hub release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'custom_components/seb5594_integration_catalog/**'
+      - '!custom_components/seb5594_integration_catalog/catalog.json'
+      - 'hacs.json'
+      - 'scripts/build_release.py'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-integration-hub-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+      # include: checkout-engine
+      - uses: ./.engine/.actions/catalog-release
+        with:
+          token: ${{ github.token }}

@@ -1,0 +1,17 @@
+name: Test against the selected Home Assistant release
+description: Test against the selected Home Assistant release
+inputs:
+  target:
+    description: Exact discovery matrix target as JSON
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./.engine/.actions/setup-python
+      with:
+        packages: uv
+    - name: Test selected Home Assistant release
+      env:
+        HA_TARGET: ${{ inputs.target }}
+      shell: bash
+      run: python .engine/.scripts/ha_matrix.py run --target-json "$HA_TARGET"

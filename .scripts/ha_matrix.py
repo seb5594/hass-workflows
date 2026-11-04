@@ -8,17 +8,20 @@ in it, when the project has them:
 * .github/tests     the regular suite, with the Home Assistant pytest plugin switched off
 * .github/ha_tests  tests against a real Home Assistant core
 
-The releases come from ha_releases.json; only those at or above the project's
-minimum in hacs.json are used.
+Historical releases come from ha_releases.json. --live adds the latest stable
+and upcoming alpha/dev, beta and RC packages from PyPI, honoring hacs.json's minimum.
 
 CLI:
     ha_matrix.py list [--minimum VERSION]    JSON list of releases (for a CI matrix)
+    ha_matrix.py list --live --matrix       frozen target objects for matrix.include
     ha_matrix.py run [RELEASE ...]           test the given releases (default: all of them)
+    ha_matrix.py run --target-json JSON     run one frozen discovery target
 Environment: HASS_MATRIX_DIR keeps the virtual environments between runs.
 """
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -27,6 +30,10 @@ from pathlib import Path
 RELEASES = Path(__file__).with_name("ha_releases.json")
 REGULAR_TESTS = Path(".github/tests")
 REAL_TESTS = Path(".github/ha_tests")
+
+
+def real_tests():
+    return REAL_TESTS if REAL_TESTS.is_dir() else Path("tests_ha")
 
 # pip requirements of the integrations a project depends on (bluetooth pulls in usb, ...).
 COMPONENT_REQUIREMENTS = """
@@ -49,7 +56,13 @@ print("\\n".join(dict.fromkeys(requirements)))
 
 
 def version_key(version):
-    return tuple(int(part) for part in version.split("."))
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?(?:\.dev(\d+))?", version)
+    if not match:
+        raise ValueError(f"Unsupported Home Assistant version: {version}")
+    major, minor, patch, stage, serial, dev = match.groups()
+    return (int(major), int(minor), int(patch),
+            {"a": 0, "b": 1, "rc": 2, None: 3}[stage] if dev is None else -1,
+            int(serial or dev or 0))
 
 
 def minimum_from_hacs(root=Path(".")):
@@ -91,20 +104,40 @@ def prepare(release, domains, requirements):
     base = Path(os.environ.get("HASS_MATRIX_DIR", Path(tempfile.gettempdir()) / "hass-matrix"))
     folder, marker = base / release["homeassistant"], base / release["homeassistant"] / ".prepared"
     interpreter = folder / "bin" / "python"
-    if marker.exists():
+    plugin_package = release.get("plugin_package", "pytest-homeassistant-custom-component")
+    if plugin_package == "pytest-homeassistant":
+        extras = sorted(set(domains) & {"bluetooth", "infrared", "radio_frequency"})
+        if extras:
+            plugin_package += "[" + ",".join(domain.replace("_", "-") for domain in extras) + "]"
+    fingerprint = json.dumps({"release": release, "plugin_package": plugin_package,
+                              "domains": domains, "requirements": requirements}, sort_keys=True)
+    if marker.exists() and marker.read_text() == fingerprint:
         return interpreter
     run(["uv", "venv", "--python", release["python"], "--clear", str(folder)], check=True)
     install = ["uv", "pip", "install", "--python", str(interpreter)]
+    if release.get("live"):
+        if release.get("override_core"):
+            print(f"Forward test: overriding the test plugin's Core pin with {release['homeassistant']}.",
+                  file=sys.stderr)
+        # Keep the selected Core installed during both dependency installations.
+        override = folder / "core-override.txt"
+        override.write_text(f"homeassistant=={release['homeassistant']}\n")
+        install += ["--override", str(override)]
     # tzdata and setuptools are missing from the oldest environments but required by the plugin;
     # "pins" holds dependencies that later releases broke for a release's own requirements.
-    run([*install, f"pytest-homeassistant-custom-component=={release['plugin']}",
-         "tzdata", "setuptools<70", *release.get("pins", [])], check=True)
+    legacy = [] if release.get("live") else ["setuptools<70"]
+    run([*install, f"{plugin_package}=={release['plugin']}",
+         f"homeassistant=={release['homeassistant']}", "tzdata", *legacy,
+         *release.get("pins", [])], check=True)
     needed = run([str(interpreter), "-c", COMPONENT_REQUIREMENTS, *domains],
                  capture_output=True, check=True).stdout.split("\n")
     needed = [item for item in (*needed, *requirements) if item]
     if needed:
         run([*install, *needed], check=True)
-    marker.touch()
+    run([str(interpreter), "-c", "import importlib.metadata,sys; "
+         "assert importlib.metadata.version('homeassistant') == sys.argv[1]",
+         release["homeassistant"]], check=True)
+    marker.write_text(fingerprint)
     return interpreter
 
 
@@ -112,23 +145,32 @@ def pytest_command(interpreter, directory, real):
     """The pytest call for one suite; the regular one keeps the Home Assistant plugin out."""
     command = [str(interpreter), "-m", "pytest", "-q", "-p", "no:cacheprovider"]
     if real:
-        return [*command, "-p", "hass_real_tests", "-o", "asyncio_mode=auto", str(directory)]
+        # Core must initialize before pytest auto-loads plugins that import HTTPX.
+        # Since 2026.11, Core aliases httpx2 and rejects an already imported httpx.
+        return [str(interpreter), "-c",
+                "import homeassistant; import pytest,sys; sys.exit(pytest.main(sys.argv[1:]))",
+                "-q", "-p", "no:cacheprovider", "-p", "hass_real_tests",
+                "-o", "asyncio_mode=auto", str(directory)]
     config = next((p for p in (Path(".github/dev/pyproject.toml"), Path("pyproject.toml")) if p.exists()), None)
     options = ["-c", str(config), "--rootdir", "."] if config else []
-    return [*command, "-p", "no:homeassistant", *options, str(directory)]
+    return [*command, "-p", "no:homeassistant", "-p", "no:pytest_homeassistant",
+            "-p", "no:respx", *options, str(directory)]
 
 
 def test_release(release, domains, requirements):
     """Run the available suites; returns {suite name: passed}."""
     interpreter = prepare(release, domains, requirements)
     results = {}
-    for name, directory, real in (("regular", REGULAR_TESTS, False), ("real", REAL_TESTS, True)):
+    for name, directory, real in (("regular", REGULAR_TESTS, False), ("real", real_tests(), True)):
         if directory.is_dir():
             environment = {**os.environ, "PYTHONPATH": str(Path(__file__).parent)} if real else None
             outcome = run(pytest_command(interpreter, directory, real), capture_output=True, env=environment)
             results[name] = outcome.returncode == 0
             if not results[name]:
-                print(outcome.stdout[-6000:], file=sys.stderr)
+                print(outcome.stdout[-12000:], file=sys.stderr)
+                print(outcome.stderr[-6000:], file=sys.stderr)
+            elif outcome.stdout:
+                print(outcome.stdout[-2000:], file=sys.stderr)
     return results
 
 
@@ -137,11 +179,35 @@ def main(arguments):
     parser.add_argument("command", choices=("list", "run"))
     parser.add_argument("selection", nargs="*", help="releases to run (default: all)")
     parser.add_argument("--minimum", default=None, help="lowest Home Assistant version (default: hacs.json)")
+    parser.add_argument("--live", action="store_true", help="discover current stable and upcoming releases from PyPI")
+    parser.add_argument("--stable-only", action="store_true", help="use the discovered stable release for publishing")
+    parser.add_argument("--matrix", action="store_true", help="emit complete target objects for matrix.include")
+    parser.add_argument("--target-json", help="run the exact target frozen by the discovery job")
     options = parser.parse_intermixed_args(arguments)
     minimum = options.minimum or minimum_from_hacs()
+    if options.stable_only and (not options.live or options.selection or options.target_json):
+        parser.error("--stable-only requires --live without an explicit target")
+    # The hub runs its historical baseline in ci.yml, including on fork pull requests.
     available = releases(minimum) if REAL_TESTS.is_dir() else []
+    if options.live and real_tests().is_dir():
+        from ha_discovery import discover
+        targets = {item["homeassistant"]: item for item in available}
+        for item in discover():
+            if not minimum or version_key(item["homeassistant"]) >= version_key(minimum):
+                targets[item["homeassistant"]] = item
+        available = sorted(targets.values(), key=lambda item: version_key(item["homeassistant"]))
+    if options.stable_only:
+        available = [item for item in available if item.get("live") and not item["preview"]]
+        if len(available) != 1:
+            parser.error("no supported stable Home Assistant target")
+    if options.target_json:
+        if options.command != "run" or options.live or options.selection:
+            parser.error("--target-json requires run without --live or positional releases")
+        if not real_tests().is_dir():
+            parser.error("frozen target requires a real Home Assistant test suite")
+        available = [json.loads(options.target_json)]
     if options.command == "list":
-        print(json.dumps([item["homeassistant"] for item in available]))
+        print(json.dumps(available if options.matrix else [item["homeassistant"] for item in available]))
         return 0
     chosen = [item for item in available if not options.selection or item["homeassistant"] in options.selection]
     unknown = set(options.selection) - {item["homeassistant"] for item in chosen}
