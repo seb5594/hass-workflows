@@ -120,11 +120,11 @@ def release_app(app, note):
     config_path.write_text(VERSION_LINE.sub(lambda m: f"{m[1]}{m[2]}{version}{m[4]}", config, count=1))
     dockerfile_path.write_text(BUILD_VERSION.sub(lambda m: f"{m[1]}{version}", dockerfile_path.read_text(), count=1))
 
-    changelog = changelog_path.read_text()
+    changelog = changelog_path.read_text(encoding="utf-8")
     heading = "# Changelog\n"
     if not changelog.startswith(heading):
         sys.exit("CHANGELOG.md must start with '# Changelog'.")
-    changelog_path.write_text(f"{heading}\n## {version}\n\n* {note}\n{changelog[len(heading):]}")
+    changelog_path.write_text(f"{heading}\n## {version}\n\n* {note}\n{changelog[len(heading):]}", encoding="utf-8")
     return version
 
 
@@ -152,7 +152,7 @@ def update(app):
         write_output(False, read_version((app / "config.yaml").read_text()))
         return
     dockerfile_path.write_text(dockerfile)
-    write_output(True, release_app(app, " ".join(notes)))
+    write_output(True, release_app(app, "📦 " + " ".join(notes)))
 
 
 def bump(app, note, base):

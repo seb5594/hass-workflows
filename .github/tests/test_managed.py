@@ -200,7 +200,7 @@ class UpstreamCredentials(unittest.TestCase):
             commit = next(step for step in composite["runs"]["steps"] if step.get("name") == "Commit the new version")
             self.assertEqual(commit['env']['GH_TOKEN'], '${{ github.token }}')
             self.assertIn('gh workflow run ci.yml --ref "$TARGET_BRANCH"', commit['run'])
-            self.assertIn("':!.engine'", commit['run'])
+            self.assertIn("git add -u -- '*/config.yaml' '*/Dockerfile' '*/CHANGELOG.md'", commit['run'])
 
 
 class ProjectListing(unittest.TestCase):
