@@ -174,11 +174,19 @@ def install_badge():
     return static("Home Assistant", "Add app repository", "18BCF2", redirect, "homeassistant")
 
 
+INSTALL_LABEL = "HACS · Marketplace"
+
+
 def hacs_badge(repo):
+    """Install badge for HACS (Home Assistant up to 2026.10) and the Marketplace (2026.11 and newer).
+
+    The link deliberately keeps the `hacs_repository` redirect: the Marketplace accepts it with the same
+    parameters, while the newer `marketplace_repository` redirect does not exist on older instances.
+    """
     owner, name = repo.split("/")
     redirect = ("https://my.home-assistant.io/redirect/hacs_repository/?"
                 + urlencode({"owner": owner, "repository": name, "category": "integration"}, quote_via=quote))
-    return static("HACS", "Add integration", "41BDF5", redirect, "homeassistantcommunitystore")
+    return static(INSTALL_LABEL, "Add integration", "41BDF5", redirect, "homeassistantcommunitystore")
 
 
 # ---------------------------------------------------------------------------------------------

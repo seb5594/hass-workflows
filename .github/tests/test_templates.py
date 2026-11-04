@@ -92,7 +92,7 @@ class HeaderStructure(unittest.TestCase):
             block = readme.header(root)
         self.assertLess(block.index("<h1"), block.index("brand/logo.png"))
         self.assertLess(block.index("brand/logo.png"), block.index("\n---\n"))
-        self.assertLess(block.index("\n---\n"), block.index("label=HACS"))
+        self.assertLess(block.index("\n---\n"), block.index("label=HACS%20%C2%B7%20Marketplace"))
 
     def test_name_is_centered_and_followed_by_a_separator(self):
         block = self.header()
@@ -120,9 +120,14 @@ class HeaderStructure(unittest.TestCase):
     def test_middle_row_lists_hacs_minimum_version_and_release(self):
         row = paragraphs(self.header())[1]
         labels = re.findall(r"label=([^&]+)", row)
-        self.assertEqual(labels, ["HACS", "home%20assistant", "version"])
+        self.assertEqual(labels, ["HACS%20%C2%B7%20Marketplace", "home%20assistant", "version"])
         self.assertIn("message=%E2%89%A5%202026.9.0", row)
         self.assertIn("owner=seb5594&amp;repository=demo-integration&amp;category=integration", row)
+
+    def test_install_badge_links_the_redirect_that_works_before_and_after_the_marketplace(self):
+        row = paragraphs(self.header())[1]
+        self.assertIn("/redirect/hacs_repository/?", row)
+        self.assertNotIn("marketplace_repository", row)
 
     def test_without_a_minimum_version_that_badge_is_omitted(self):
         row = paragraphs(self.header(hacs={}))[1]
