@@ -114,6 +114,10 @@ def prepare(release, domains, requirements):
     if marker.exists() and marker.read_text() == fingerprint:
         return interpreter
     run(["uv", "venv", "--python", release["python"], "--clear", str(folder)], check=True)
+    plugin_requirement = f"{plugin_package}=={release['plugin']}"
+    if "fixture_commit" in release:
+        source = prepare_fixture_source(folder, release["fixture_commit"], release["homeassistant"])
+        plugin_requirement = f"{plugin_package} @ {source.resolve().as_uri()}"
     install = ["uv", "pip", "install", "--python", str(interpreter)]
     if release.get("live"):
         if release.get("override_core"):
@@ -126,7 +130,7 @@ def prepare(release, domains, requirements):
     # tzdata and setuptools are missing from the oldest environments but required by the plugin;
     # "pins" holds dependencies that later releases broke for a release's own requirements.
     legacy = [] if release.get("live") else ["setuptools<70"]
-    run([*install, f"{plugin_package}=={release['plugin']}",
+    run([*install, plugin_requirement,
          f"homeassistant=={release['homeassistant']}", "tzdata", *legacy,
          *release.get("pins", [])], check=True)
     needed = run([str(interpreter), "-c", COMPONENT_REQUIREMENTS, *domains],
@@ -139,6 +143,31 @@ def prepare(release, domains, requirements):
          release["homeassistant"]], check=True)
     marker.write_text(fingerprint)
     return interpreter
+
+
+def prepare_fixture_source(folder, commit, version):
+    """Build Core's matching test package when only its Core wheel reached PyPI."""
+    import tomllib
+
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("Expected an immutable Core fixture commit")
+    source = folder / "core-fixtures"
+    source.mkdir()
+    package = "packages/pytest-homeassistant"
+
+    def git(*args):
+        run(["git", *args], cwd=source, check=True)
+
+    git("init", "--quiet")
+    git("remote", "add", "origin", "https://github.com/home-assistant/core.git")
+    git("fetch", "--quiet", "--depth=1", "--filter=blob:none", "origin", commit)
+    git("restore", "--source", commit, "--worktree", "--", package, "packages/package_release.py", "pyproject.toml")
+    run([sys.executable, "-m", "packages.package_release"], cwd=source, check=True)
+    project = tomllib.loads((source / package / "pyproject.toml").read_text())["project"]
+    if (project["name"] != "pytest-homeassistant" or project["version"] != version
+            or f"homeassistant=={version}" not in project["dependencies"]):
+        raise ValueError(f"Test package at {commit} does not match Core {version}")
+    return source / package
 
 
 def pytest_command(interpreter, directory, real):
