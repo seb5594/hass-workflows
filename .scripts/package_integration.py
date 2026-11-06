@@ -74,8 +74,15 @@ def publish(tag, manifest, hacs, out):
     if existing is not None:
         # Published versions are immutable; bump the manifest for the next release. Only the
         # pre-release marker may follow the rule above, e.g. for a beta released before it applied.
+        edits = []
         if existing["isPrerelease"] != prerelease:
-            run("gh", "release", "edit", tag, "--repo", repo, f"--prerelease={str(prerelease).lower()}")
+            edits.append(f"--prerelease={str(prerelease).lower()}")
+        # Switching the marker by edit does not make GitHub pick a new "latest" release, and
+        # catalogs and installers read exactly that one: repair it when the repository has none.
+        if not prerelease and gh_json("api", f"repos/{repo}/releases/latest") is None:
+            edits.append("--latest")
+        if edits:
+            run("gh", "release", "edit", tag, "--repo", repo, *edits)
         print(f"{tag} already exists; keeping its assets unchanged.")
         return
     archives = sorted(out.glob("*.zip"))
