@@ -47,6 +47,9 @@ def proposed_catalog(content, repository):
 def main():
     repository = os.environ["GITHUB_REPOSITORY"]
     submit = "--submit" in sys.argv
+    if submit and not os.environ.get("GH_TOKEN"):
+        raise ValueError("Submitting needs the repository secret CATALOG_SUBMISSION_TOKEN: a classic "
+                         "token of the repository owner with the public_repo scope")
     upstream = api(f"repos/{UPSTREAM}")
     branch = upstream["default_branch"]
     sha = api(f"repos/{UPSTREAM}/git/ref/heads/{branch}")["object"]["sha"]
@@ -79,8 +82,6 @@ def main():
         "user token that can create a public fork and pull request.\n", encoding="utf-8")
     if not submit:
         return
-    if not os.environ.get("GH_TOKEN"):
-        raise ValueError("CATALOG_SUBMISSION_TOKEN is required for submission")
     owner = repository.split("/")[0]
     if api("user")["login"].lower() != owner.lower():
         raise ValueError("Submit with the repository owner's user token")
