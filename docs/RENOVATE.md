@@ -19,8 +19,8 @@ edit `default.json` and run `managed.py sync` in each repository.
 
 ## Branches
 
-Renovate names its branches `feature-<topic>`, for example `feature-github-actions` or
-`feature-alpine-base-and-packages`, one stable name per group of updates.
+Renovate names its branches `feat/<topic>`, for example `feat/github-actions` or
+`feat/alpine-base-and-packages`, one stable name per group of updates.
 
 Only the default branch is a base branch (`baseBranchPatterns: ["$default"]`). The GitHub app can carry
 base branches of its own from its portal settings; a branch a repository does not have shows up as

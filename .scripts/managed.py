@@ -49,6 +49,9 @@ FOLLOWED_PIN = re.compile(r"^# renovate: datasource=docker depName=(?:docker\.io
 COMPATIBILITY = Workflow("compat", ".github/workflows/compat.yml", {})
 CATALOG_RELEASE = Workflow("catalog-release", ".github/workflows/release.yml", {})
 
+# Manual submission of an integration to the official HACS default catalog.
+MARKETPLACE = Workflow("marketplace-catalog", ".github/workflows/marketplace-catalog.yml", {})
+
 # What differs between the two catalogs in their maintenance notes.
 CATALOG_NOTES = {
     "catalog-apps": {
@@ -93,6 +96,12 @@ def shared_files():
     }
 
 
+def offered_to_default_catalog(root):
+    """Every integration except those listed in config.DEFAULT_CATALOG_EXCLUDED."""
+    name = projectmeta.discover(Path(root)).repository.split("/")[-1]
+    return name not in config.DEFAULT_CATALOG_EXCLUDED
+
+
 def expected(kind, sha, root=Path(".")):
     """Path (relative to the repository) -> content for every file the engine manages in `kind`."""
     files = shared_files()
@@ -115,9 +124,8 @@ def expected(kind, sha, root=Path(".")):
     elif kind in CATALOG_NOTES:
         files[".github/DEVELOPMENT.md"] = templating.fill(
             read_template("catalog/DEVELOPMENT.md"), CATALOG_NOTES[kind], once=False)
-    if kind in ("integration", "catalog-integrations"):
-        files[".github/workflows/marketplace-catalog.yml"] = render_workflow(
-            Workflow("marketplace-catalog", ".github/workflows/marketplace-catalog.yml", {}), sha)
+    if kind == "integration" and offered_to_default_catalog(root):
+        files[MARKETPLACE.target] = render_workflow(MARKETPLACE, sha)
     return files
 
 
