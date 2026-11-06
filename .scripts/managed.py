@@ -115,6 +115,9 @@ def expected(kind, sha, root=Path(".")):
     elif kind in CATALOG_NOTES:
         files[".github/DEVELOPMENT.md"] = templating.fill(
             read_template("catalog/DEVELOPMENT.md"), CATALOG_NOTES[kind], once=False)
+    if kind in ("integration", "catalog-integrations"):
+        files[".github/workflows/marketplace-catalog.yml"] = render_workflow(
+            Workflow("marketplace-catalog", ".github/workflows/marketplace-catalog.yml", {}), sha)
     return files
 
 
