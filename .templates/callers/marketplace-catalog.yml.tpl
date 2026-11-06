@@ -35,6 +35,7 @@ jobs:
           repository: ${{ github.repository }}
           comment: 'false'
       - name: Validate Home Assistant integration
+        if: ${{ !cancelled() }} # Report hassfest findings even when the HACS checks failed.
         uses: home-assistant/actions/hassfest@master
       - name: Prepare catalog submission
         env:
