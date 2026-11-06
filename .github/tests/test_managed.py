@@ -161,6 +161,13 @@ class ManagedFiles(unittest.TestCase):
         with unittest.mock.patch.dict(config.DEFAULT_CATALOG_EXCLUDED, {name: "test"}):
             self.assertNotIn(target, managed.expected("integration", SHA, root))
 
+    def test_marketplace_workflow_runs_hassfest_even_after_failed_hacs_checks(self):
+        text = managed.render_workflow(managed.MARKETPLACE, SHA)
+        step = text[text.index("home-assistant/actions/hassfest"):]
+        self.assertLess(text.index("hacs/action"), text.index("home-assistant/actions/hassfest"))
+        self.assertIn("!cancelled()", text[:text.index("home-assistant/actions/hassfest")].split("- name:")[-1])
+        self.assertIn("Prepare catalog submission", step)
+
     def test_catalogs_describe_how_they_are_maintained(self):
         notes = managed.expected("catalog-apps", SHA)[".github/DEVELOPMENT.md"]
         self.assertIn("Git submodule", notes)
