@@ -75,3 +75,10 @@ class CatalogSubmissionTests(unittest.TestCase):
                 self.assertIn("none yet", Path(".marketplace-submission/instructions.md").read_text())
             finally:
                 os.chdir(previous)
+
+    def test_submission_without_token_fails_before_any_request(self):
+        env = {"GITHUB_REPOSITORY": "owner/integration", "GITHUB_SHA": "sha", "GITHUB_RUN_ID": "1", "GH_TOKEN": ""}
+        with patch.dict(os.environ, env), patch.object(sys, "argv", ["script", "--submit"]), \
+                patch.object(catalog, "api", side_effect=AssertionError("no request expected")):
+            with self.assertRaisesRegex(ValueError, "CATALOG_SUBMISSION_TOKEN"):
+                catalog.main()

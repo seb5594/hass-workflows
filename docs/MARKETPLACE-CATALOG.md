@@ -10,9 +10,10 @@ For submission, publish a stable release, make sure the workflow succeeded for t
 commit of that release (a run on that commit counts, whether before or after the release;
 the default branch may already be further ahead), then rerun on the default branch with
 **submit** and **publishing_docs_read** enabled. The submission step requires
-**CATALOG_SUBMISSION_TOKEN**, a GitHub user token owned by the repository owner
-with permission to create a public fork, update its branch and open an upstream
-pull request. The regular validation uses the repository token.
+**CATALOG_SUBMISSION_TOKEN** (a repository secret): a classic personal access token of
+the repository owner with the `public_repo` scope, which allows creating a public fork,
+updating its branch and opening the upstream pull request. Without the secret the
+submission stops immediately with a message saying so. The regular validation uses the repository token.
 
 The script checks that the release commit was validated, preserves the existing upstream list and reuses an open submission. An existing
 branch with different contents requires review before retrying. Upstream review
