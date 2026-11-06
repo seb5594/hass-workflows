@@ -17,6 +17,7 @@ runs:
         echo "tag=$tag" >> "$GITHUB_OUTPUT"
         echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         if gh release view "$tag" >/dev/null 2>&1; then
+          echo "::warning::Release $tag exists already. Raise the version in manifest.json to publish a hub change."
           echo 'exists=true' >> "$GITHUB_OUTPUT"
         else
           echo 'exists=false' >> "$GITHUB_OUTPUT"
@@ -45,5 +46,9 @@ runs:
         RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
       shell: bash
       run: |
-        gh release create "$RELEASE_TAG" dist/seb5594_integration_catalog.zip dist/SHA256SUMS.txt \
-          --target "$RELEASE_COMMIT" --title "seb5594's Integration Hub $RELEASE_TAG" --generate-notes
+        package=dist/seb5594_integration_catalog.zip
+        notes="$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+          -f tag_name="$RELEASE_TAG" -f target_commitish="$RELEASE_COMMIT" --jq .body)"
+        checksum="SHA256 \`$(basename "$package")\`: \`$(sha256sum "$package" | cut -d' ' -f1)\`"
+        gh release create "$RELEASE_TAG" "$package" --target "$RELEASE_COMMIT" \
+          --title "$RELEASE_TAG" --notes "$notes"$'\n\n'"$checksum"

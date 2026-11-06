@@ -2,6 +2,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,7 +19,7 @@ class CatalogSubmissionTests(unittest.TestCase):
                          ["A/existing", "b/new", "z/existing"])
         self.assertIsNone(catalog.proposed_catalog(content, "A/existing"))
 
-    def test_submission_reuses_open_pr_and_requires_validation_before_release(self):
+    def test_submission_reuses_open_pr_once_the_release_commit_was_validated(self):
         calls = []
         successful_runs = []
         def api(path, payload=None, **kwargs):
@@ -30,29 +31,47 @@ class CatalogSubmissionTests(unittest.TestCase):
             if "/contents/integration?" in path:
                 return {"content": base64.b64encode(b"[]").decode()}
             if path.endswith("/releases/latest"):
-                return {"tag_name": "v1.0.0", "html_url": "https://example/release",
-                        "published_at": "2026-11-06T12:00:00Z"}
+                return {"tag_name": "v1.0.0", "html_url": "https://example/release"}
             if path == "user":
                 return {"login": "owner"}
             if "/commits/v1.0.0" in path:
                 return {"sha": "validated"}
             if "/actions/workflows/" in path:
-                return {"workflow_runs": successful_runs}
+                return {"total_count": len(successful_runs)}
             if "/pulls?state=open" in path:
                 return [{"html_url": "https://example/existing-pr"}]
             raise AssertionError(path)
-        env = {"GITHUB_REPOSITORY": "owner/integration", "GITHUB_SHA": "validated",
+        env = {"GITHUB_REPOSITORY": "owner/integration", "GITHUB_SHA": "later-commit",
                "GITHUB_RUN_ID": "123", "GH_TOKEN": "test"}
         previous = Path.cwd()
         with tempfile.TemporaryDirectory() as folder:
             try:
                 os.chdir(folder)
                 with patch.dict(os.environ, env), patch.object(sys, "argv", ["script", "--submit"]), patch.object(catalog, "api", side_effect=api):
-                    with self.assertRaisesRegex(ValueError, "Publish a release"):
+                    with self.assertRaisesRegex(ValueError, "on the commit of the latest release"):
                         catalog.main()
-                    successful_runs.append({"updated_at": "2026-11-06T11:00:00Z",
-                                            "event": "workflow_dispatch"})
+                    successful_runs.append({"event": "workflow_dispatch"})
                     catalog.main()
                 self.assertTrue(all(payload is None for _, payload in calls))
+            finally:
+                os.chdir(previous)
+
+    def test_validation_run_works_before_the_first_release(self):
+        def api(path, payload=None, **kwargs):
+            if path == "repos/hacs/default":
+                return {"default_branch": "master"}
+            if path.endswith("/git/ref/heads/master"):
+                return {"object": {"sha": "upstream"}}
+            if "/contents/integration?" in path:
+                return {"content": base64.b64encode(b"[]").decode()}
+            raise subprocess.CalledProcessError(1, "gh")  # releases/latest: no release yet
+        env = {"GITHUB_REPOSITORY": "owner/integration", "GITHUB_SHA": "sha", "GITHUB_RUN_ID": "1"}
+        previous = Path.cwd()
+        with tempfile.TemporaryDirectory() as folder:
+            try:
+                os.chdir(folder)
+                with patch.dict(os.environ, env), patch.object(sys, "argv", ["script"]), patch.object(catalog, "api", side_effect=api):
+                    catalog.main()
+                self.assertIn("none yet", Path(".marketplace-submission/instructions.md").read_text())
             finally:
                 os.chdir(previous)

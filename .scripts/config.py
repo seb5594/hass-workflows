@@ -48,6 +48,15 @@ PROJECTS = {
                      "hass-ubpet_cat_litter_hub-integration"],
 }
 
+# Integrations that are never offered to the official HACS default catalog, with the reason.
+# Everything else gets the manual "Marketplace catalog" workflow; catalogs and the hub never do.
+DEFAULT_CATALOG_EXCLUDED = {
+    "Home-Assistant-Integration-Template": "template repository",
+    "hass-pulseaudio_loopback_extended-integration": "its domain replaces a Core integration",
+    "hass-medication_tracker-integration": "fork of another project",
+    "hass-ubpet_cat_litter_hub-integration": "fork of another project",
+}
+
 # Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
 COFFEE_USER = OWNER
 PAYPAL_URL = f"https://paypal.me/{OWNER}"

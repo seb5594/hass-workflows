@@ -2,6 +2,7 @@
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 import support  # noqa: F401
@@ -109,9 +110,9 @@ class ManagedFiles(unittest.TestCase):
         found = json.loads(text)
         self.assertEqual(found, json.loads((config.ENGINE_ROOT / "default.json").read_text()))
         self.assertNotIn("github>", text)
-        self.assertEqual(found["branchPrefix"], "feature-")
+        self.assertEqual(found["branchPrefix"], "feat/")
         # Only the default branch is a base: a base branch configured elsewhere, which a repository
-        # does not have, produced "Base branch does not exist" and branch names like feature-main-x.
+        # does not have, produced "Base branch does not exist" and branch names like feat/main-x.
         self.assertEqual(found["baseBranchPatterns"], ["$default"])
 
     def test_updates_that_are_decisions_rather_than_bumps_are_switched_off(self):
@@ -149,6 +150,16 @@ class ManagedFiles(unittest.TestCase):
             managed.check("integration", root)
         self.assertEqual(managed.sync("integration", SHA, root), [".github/workflows/compat.yml"])
         managed.check("integration", root)
+
+    def test_marketplace_workflow_goes_to_eligible_integrations_only(self):
+        root = self.repository("integration")
+        target = ".github/workflows/marketplace-catalog.yml"
+        self.assertIn(target, managed.expected("integration", SHA, root))
+        self.assertNotIn(target, managed.expected("app", SHA, self.repository("app")))
+        self.assertNotIn(target, managed.expected("catalog-integrations", SHA))
+        name = projectmeta.discover(root).repository.split("/")[-1]
+        with unittest.mock.patch.dict(config.DEFAULT_CATALOG_EXCLUDED, {name: "test"}):
+            self.assertNotIn(target, managed.expected("integration", SHA, root))
 
     def test_catalogs_describe_how_they_are_maintained(self):
         notes = managed.expected("catalog-apps", SHA)[".github/DEVELOPMENT.md"]

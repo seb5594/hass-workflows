@@ -20,6 +20,23 @@ def api(path, payload=None, method="POST"):
     return json.loads(result.stdout)
 
 
+def latest_release(repository):
+    """The newest stable release, or None: drafts and pre-releases never count."""
+    try:
+        return api(f"repos/{repository}/releases/latest")
+    except subprocess.CalledProcessError:
+        return None
+
+
+def validated(repository, commit):
+    """A commit is validated when this run checked it or an earlier run of the workflow did."""
+    if commit == os.environ["GITHUB_SHA"]:
+        return True
+    runs = api(f"repos/{repository}/actions/workflows/marketplace-catalog.yml/runs"
+               f"?head_sha={commit}&status=success&per_page=1")
+    return runs["total_count"] > 0
+
+
 def proposed_catalog(content, repository):
     entries = json.loads(base64.b64decode(content))
     if repository in entries:
@@ -41,7 +58,7 @@ def main():
         (output / "status.md").write_text(f"{repository} is already listed in {UPSTREAM}.\n")
         print("Repository already listed.")
         return
-    release = api(f"repos/{repository}/releases/latest")
+    release = latest_release(repository)
     run_url = f"https://github.com/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     body = (
         f"Add {repository} to the integration catalog.\n\n"
@@ -49,15 +66,16 @@ def main():
         "- [x] I have read the publishing documentation.\n"
         "- [x] HACS and hassfest actions are configured and pass without disabled checks.\n"
         "- [x] A release was published after successful catalog validation.\n\n"
-        f"## Links\n\nRelease: {release['html_url']}\n"
+        f"## Links\n\nRelease: {release['html_url'] if release else 'none yet'}\n"
         f"HACS and hassfest validation: {run_url}\n"
     )
     (output / "integration").write_text(proposed, encoding="utf-8")
     (output / "instructions.md").write_text(
-        f"Repository {repository}\n\nLatest release {release['html_url']}\n\n"
-        "To submit, first run this workflow successfully, publish a release from that "
-        "validated commit, then run again on the default branch with submit and "
-        "publishing_docs_read enabled. Configure CATALOG_SUBMISSION_TOKEN with a "
+        f"Repository {repository}\n\nLatest stable release: "
+        f"{release['html_url'] if release else 'none yet, publish one first'}\n\n"
+        "To submit, publish a stable release, make sure this workflow succeeded for the commit "
+        "of that release (the commit it ran on counts), then run it again on the default branch "
+        "with submit and publishing_docs_read enabled. Configure CATALOG_SUBMISSION_TOKEN with a "
         "user token that can create a public fork and pull request.\n", encoding="utf-8")
     if not submit:
         return
@@ -66,13 +84,11 @@ def main():
     owner = repository.split("/")[0]
     if api("user")["login"].lower() != owner.lower():
         raise ValueError("Submit with the repository owner's user token")
+    if release is None:
+        raise ValueError("Publish a stable release before submitting")
     commit = api(f"repos/{repository}/commits/{quote(release['tag_name'], safe='')}")["sha"]
-    if commit != os.environ["GITHUB_SHA"]:
-        raise ValueError("Latest release must match the validated default-branch commit")
-    runs = api(f"repos/{repository}/actions/workflows/marketplace-catalog.yml/runs?head_sha={commit}&status=success&per_page=100")
-    if not any(run["updated_at"] < release["published_at"] and
-               run["event"] == "workflow_dispatch" for run in runs["workflow_runs"]):
-        raise ValueError("Publish a release after a successful Marketplace catalog workflow on this commit")
+    if not validated(repository, commit):
+        raise ValueError("Run the Marketplace catalog workflow on the commit of the latest release first")
     head = f"add-{repository.replace('/', '-')}"
     existing = api(f"repos/{UPSTREAM}/pulls?state=open&head={owner}:{head}")
     if existing:
