@@ -109,6 +109,12 @@ class IntegrationRelease(unittest.TestCase):
         self.assertEqual([call.args[:3] for call in self.run_calls], [("gh", "release", "edit")])
         self.assertIn("--prerelease=false", self.run_calls[0].args)
 
+    def test_a_regular_release_without_a_latest_release_is_made_the_latest(self):
+        zip_release = {"zip_release": True, "filename": "demo.zip"}
+        self.publish("1.0.0b3", hacs=zip_release, existing={"isPrerelease": False}, stable=False)
+        self.assertEqual(self.run_calls[0].args[-1], "--latest")
+        self.assertNotIn("--prerelease=false", self.run_calls[0].args)
+
     def test_an_existing_release_in_line_with_the_rule_is_left_alone(self):
         self.publish("1.0.0b3", existing={"isPrerelease": True})
         self.assertEqual(self.run_calls, [])
