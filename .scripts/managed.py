@@ -124,6 +124,11 @@ def expected(kind, sha, root=Path(".")):
     elif kind in CATALOG_NOTES:
         files[".github/DEVELOPMENT.md"] = templating.fill(
             read_template("catalog/DEVELOPMENT.md"), CATALOG_NOTES[kind], once=False)
+    if kind == "integration":
+        repository = projectmeta.discover(Path(root)).repository
+        if config.INTEGRATION_TAG_PREFIXES.get(repository, "v") == "":
+            target = WORKFLOWS[kind].target
+            files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
     if kind == "integration" and offered_to_default_catalog(root):
         files[MARKETPLACE.target] = render_workflow(MARKETPLACE, sha)
     return files

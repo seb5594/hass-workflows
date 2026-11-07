@@ -151,6 +151,15 @@ class ManagedFiles(unittest.TestCase):
         self.assertEqual(managed.sync("integration", SHA, root), [".github/workflows/compat.yml"])
         managed.check("integration", root)
 
+    def test_integration_tag_override_changes_only_its_caller(self):
+        root = self.repository("integration")
+        repository = projectmeta.discover(root).repository
+        target = ".github/workflows/ci.yml"
+        self.assertIn("tags: ['v*']", managed.expected("integration", SHA, root)[target])
+        with unittest.mock.patch.dict(config.INTEGRATION_TAG_PREFIXES, {repository: ""}):
+            self.assertIn("tags: ['[0-9]*']", managed.expected("integration", SHA, root)[target])
+            self.assertIn("tags: ['v*']", managed.expected("app", SHA, self.repository("app"))[target])
+
     def test_marketplace_workflow_goes_to_eligible_integrations_only(self):
         root = self.repository("integration")
         target = ".github/workflows/marketplace-catalog.yml"

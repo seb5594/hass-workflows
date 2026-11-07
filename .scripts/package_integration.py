@@ -88,7 +88,8 @@ def publish(tag, manifest, hacs, out):
     archives = sorted(out.glob("*.zip"))
     notes = f"{generated_notes(repo, tag, os.environ['GITHUB_SHA'])}\n\n{checksum_line(archives)}".lstrip()
     run("gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
-        "--title", release_title(manifest["version"]), "--notes-file", "-",
+        "--title", release_title(manifest["version"]) if is_prerelease(manifest["version"]) else tag,
+        "--notes-file", "-",
         *release_flags(manifest["version"], prerelease), *map(str, archives), input=notes, text=True)
 
 
@@ -101,7 +102,7 @@ def main(options):
     assert VERSION.fullmatch(version), "Use X.Y.Z or X.Y.Z.B, optionally with a PEP 440 a/b/rc pre-release"
     check_hacs(hacs, domain)
     archive = f"{domain}.zip"
-    tag = f"v{version}"
+    tag = f"{config.INTEGRATION_TAG_PREFIXES.get(project.repository, 'v')}{version}"
     ref = os.environ.get("GITHUB_REF", "")
     if ref.startswith("refs/tags/"):
         assert ref == f"refs/tags/{tag}", "Tag and manifest version must agree"
