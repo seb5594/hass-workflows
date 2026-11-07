@@ -60,7 +60,7 @@ class IntegrationRelease(unittest.TestCase):
         self.assertEqual(line, f"SHA256 `demo.zip`: `{hashlib.sha256(b'zip content').hexdigest()}`")
         self.assertNotIn("\n", line)
 
-    def publish(self, version, notes="## What's Changed\n* A change", hacs=None, existing=None, stable=False):
+    def publish(self, version, notes="## What's Changed\n* A change", hacs=None, existing=None, stable=False, prefix="v"):
         """Run publish() with GitHub mocked; returns the (create) call and all `run` calls."""
         def gh_json(*args):
             return existing if args[1] == "view" else None
@@ -72,7 +72,7 @@ class IntegrationRelease(unittest.TestCase):
                     mock.patch.object(package_integration, "stable_version_released", return_value=stable), \
                     mock.patch.object(package_integration, "generated_notes", return_value=notes), \
                     mock.patch.object(package_integration, "run") as run:
-                package_integration.publish(f"v{version}", {"name": "Demo", "version": version},
+                package_integration.publish(f"{prefix}{version}", {"name": "Demo", "version": version},
                                             hacs or {}, out)
             self.run_calls = run.call_args_list
             return run.call_args
@@ -85,6 +85,11 @@ class IntegrationRelease(unittest.TestCase):
         lines = call.kwargs["input"].splitlines()
         self.assertEqual(lines[0], "## What's Changed")
         self.assertTrue(lines[-1].startswith("SHA256 `demo.zip`: `"))
+
+    def test_unprefixed_release_keeps_the_exact_tag_and_title(self):
+        args = list(self.publish("2026.11.07.1", prefix="").args)
+        self.assertEqual(args[3], "2026.11.07.1")
+        self.assertEqual(args[args.index("--title") + 1], "2026.11.07.1")
 
     def test_only_the_archive_is_uploaded_not_a_checksum_file(self):
         args = [str(arg) for arg in self.publish("1.2.0").args]

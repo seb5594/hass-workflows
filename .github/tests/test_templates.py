@@ -467,6 +467,9 @@ class PublishDecision(unittest.TestCase):
     def test_default_branch_and_version_tags_publish(self):
         self.assertTrue(project.should_publish(self.base))
         self.assertTrue(project.should_publish({**self.base, "REF": "refs/tags/v1.0.0"}))
+        deepl = {**self.base, "GITHUB_REPOSITORY": "seb5594/hass-deepl_translator-integration"}
+        self.assertTrue(project.should_publish({**deepl, "REF": "refs/tags/2026.11.07.1"}))
+        self.assertFalse(project.should_publish({**deepl, "REF": "refs/tags/v2026.11.07.1"}))
 
     def test_other_refs_and_pull_requests_do_not(self):
         self.assertFalse(project.should_publish({**self.base, "REF": "refs/heads/dev"}))

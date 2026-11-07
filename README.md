@@ -87,6 +87,8 @@ The README install badge reads *HACS · Marketplace*. From Home Assistant 2026.1
 
 `zip_release` in `hacs.json` is optional. HACS installs a ZIP release from the newest *stable* release only, and it only counts downloads of the asset it installs. A repository whose releases are all pre-releases would fail to install with it (HACS falls back to the branch and asks for a release URL that does not exist). So while a project with `zip_release` has not released a stable version yet, its newest beta is published as a regular release, and an existing beta release is corrected the same way on the next run. Once a stable version exists, betas carry the pre-release marker again and HACS offers them behind its beta switch. Without `zip_release` HACS copies the component folder from the repository and the ZIP serves manual installs only.
 
+Integration tag prefixes can be overridden per repository in `INTEGRATION_TAG_PREFIXES` in `.scripts/config.py`. DeepL Translator uses the version without a leading `v` for both its tag and stable release title; its generated caller accepts numeric tags. Other repositories keep their existing format.
+
 A release is titled by its version only (`v1.2.0`, without the project name). A pre-release carries just its stage as the title, `Beta 3` for `1.0.0b3` or `1.0.0-beta.3`: the numeric part only keeps the git tag a proper version.
 
 The build and smoke-test phase executes once per architecture. Publishing pushes the tested images instead of rebuilding them. A version already released on `main` remains unchanged; a matching `vVERSION` tag can republish app images deliberately. Starting the workflow by hand offers a `draft` switch that keeps the release private for review.

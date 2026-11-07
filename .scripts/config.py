@@ -71,3 +71,8 @@ SUPPORT = {
 
 def github_url(repository):
     return f"https://github.com/{repository}"
+
+# Integration release tags without the conventional v prefix, as requested by their owner.
+INTEGRATION_TAG_PREFIXES = {
+    "seb5594/hass-deepl_translator-integration": "",
+}

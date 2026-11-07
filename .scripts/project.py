@@ -28,7 +28,10 @@ def should_publish(env=os.environ):
     if env.get("IS_TEMPLATE") == "true":
         return False
     ref = env.get("REF", "")
-    return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or ref.startswith("refs/tags/v")
+    prefix = config.INTEGRATION_TAG_PREFIXES.get(env.get("GITHUB_REPOSITORY"), "v")
+    return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or bool(
+        re.fullmatch(rf"refs/tags/{re.escape(prefix)}\d[^/]*", ref)
+    )
 
 
 # Checks of the HACS action that only the default store needs, not a custom repository.
