@@ -45,6 +45,7 @@ PROJECTS = {
     "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
                      "hass-vacuum_mapguard-integration", "hass-medication_tracker-integration",
                      "Home-Assistant-Integration-Template", "hass-deepl_translator-integration",
+                     "hass-custom_integrations_translator-integration",
                      "hass-ubpet_cat_litter_hub-integration"],
 }
 
@@ -55,7 +56,6 @@ DEFAULT_CATALOG_EXCLUDED = {
     "hass-pulseaudio_loopback_extended-integration": "its domain replaces a Core integration",
     "hass-medication_tracker-integration": "fork of another project",
     "hass-ubpet_cat_litter_hub-integration": "fork of another project",
-    "hass-custom_integrations_translator-integration": "private repository",
 }
 
 # Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
