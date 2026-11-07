@@ -45,6 +45,8 @@ jobs:
         with:
           name: marketplace-submission
           path: .marketplace-submission/
+          include-hidden-files: true # The submission directory itself starts with a dot.
+          if-no-files-found: error
       - name: Submit validated repository
         if: inputs.submit && inputs.publishing_docs_read && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:

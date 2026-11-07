@@ -168,6 +168,12 @@ class ManagedFiles(unittest.TestCase):
         self.assertIn("!cancelled()", text[:text.index("home-assistant/actions/hassfest")].split("- name:")[-1])
         self.assertIn("Prepare catalog submission", step)
 
+    def test_marketplace_submission_artifact_includes_its_hidden_directory(self):
+        text = managed.render_workflow(managed.MARKETPLACE, SHA)
+        self.assertIn("path: .marketplace-submission/", text)
+        self.assertIn("include-hidden-files: true", text)
+        self.assertIn("if-no-files-found: error", text)
+
     def test_catalogs_describe_how_they_are_maintained(self):
         notes = managed.expected("catalog-apps", SHA)[".github/DEVELOPMENT.md"]
         self.assertIn("Git submodule", notes)
