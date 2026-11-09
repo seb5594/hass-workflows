@@ -76,3 +76,6 @@ INTEGRATION_TAG_PREFIXES = {
     "seb5594/hass-deepl_translator-integration": "",
     "seb5594/hass-ubpet_cat_litter_hub-integration": "",
 }
+
+# These integrations publish after a separately validated version tag is pushed.
+INTEGRATION_TAG_ONLY_RELEASES = {"seb5594/hass-ubpet_cat_litter_hub-integration"}
