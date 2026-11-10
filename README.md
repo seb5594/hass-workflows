@@ -75,7 +75,9 @@ Apps use static versions throughout: a tagged base image and exact `apk` package
 
 Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
 then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a
-later day and never moves backwards. Date separators do not mark a pre-release. Existing
+later day and never moves backwards. The dotted spelling `YYYY.MM.DD.BUILD` numbers every build,
+starting at `.1` each day (`2026.11.10.1`, `2026.11.10.2`, then `2026.11.11.1`); it reads the same
+in an app's `config.yaml` and an integration's `manifest.json`. Date separators do not mark a pre-release. Existing
 numeric and pre-release version formats keep their behavior; `stage: experimental` remains
 an app metadata choice.
 
