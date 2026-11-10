@@ -191,6 +191,17 @@ class Versions(unittest.TestCase):
                         "2026-10-27.1", "2026-10-27.0", "2026-10-27.02", "2026-10-27.2."):
             self.assertFalse(validate_app.VERSION.fullmatch(version), version)
 
+    def test_dot_calendar_versions_follow_the_same_build_number_rule(self):
+        # Same shape as the dash calendar version, dots throughout (YYYY.MM.DD[.BUILD]).
+        for version in ("2026.10.27", "2026.10.27.2", "2026.10.27.10", "2027.01.01.123"):
+            self.assertTrue(validate_app.VERSION.fullmatch(version), version)
+            self.assertFalse(common.is_prerelease(version), version)
+        # An out-of-range month/day (e.g. "2026.13.27") still matches as a plain X.Y.Z
+        # SemVer shape, the same ambiguity SemVer already has with any three numbers;
+        # only the build-number rule itself is unambiguous and worth asserting here.
+        for version in ("2026.10.27.1", "2026.10.27.0", "2026.10.27.02", "2026.10.27.2."):
+            self.assertFalse(validate_app.VERSION.fullmatch(version), version)
+
     def test_numeric_versions_with_an_optional_prerelease_suffix_are_accepted(self):
         for version in ("1.74.3", "1.18", "1.0.0-beta4", "2.0.0-beta.4", "1.0.0-rc1"):
             self.assertTrue(validate_app.VERSION.fullmatch(version), version)
