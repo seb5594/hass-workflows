@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 import legacy
+import upstream
 from config import PLATFORMS
 
 
@@ -147,6 +148,9 @@ def check_translations(app, config):
 def check_release_files(app, config, dockerfile):
     """What a release needs besides the code: the version in step everywhere, a changelog entry, the pictures."""
     version = str(config["version"])
+    aligned = upstream.aligned_version(app)
+    assert aligned is None or aligned == version, \
+        f"App version {version} must match the primary upstream image version {aligned}"
     declared = re.search(r"^ARG BUILD_VERSION=(\S+)", dockerfile, re.M)
     assert declared, "Dockerfile must declare ARG BUILD_VERSION=<version>"
     assert declared.group(1) == version, \

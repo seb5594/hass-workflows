@@ -17,6 +17,7 @@ from pathlib import Path
 import config
 import projectmeta
 import templating
+import upstream
 
 TEMPLATES = config.ENGINE_ROOT / ".templates"
 SNIPPETS = TEMPLATES / "snippets"
@@ -107,6 +108,18 @@ def expected(kind, sha, root=Path(".")):
     files = shared_files()
     files[WORKFLOWS[kind].target] = render_workflow(WORKFLOWS[kind], sha)
     if kind == "app":
+        if upstream.policy(root):
+            preset = json.loads(files[".github/renovate.json"])
+            preset["packageRules"].append({
+                "description": "Major Docker updates require dashboard approval and manual merge",
+                "matchDatasources": ["docker"],
+                "matchUpdateTypes": ["major"],
+                "dependencyDashboardApproval": True,
+                "automerge": False,
+                "groupName": None,
+                "separateMajorMinor": True,
+            })
+            files[".github/renovate.json"] = json.dumps(preset, indent=2) + "\n"
         for app in projectmeta.app_projects(root):
             folder = app.folder
             entrypoint = folder / "entrypoint.sh"

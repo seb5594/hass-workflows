@@ -21,6 +21,11 @@ Alpine package). With --base it does nothing unless the app changed against that
 the version was already raised there.
 
 Results for the workflow go to $GITHUB_OUTPUT: changed (true/false) and version.
+
+Projects with .github/upstream.json opt into exact upstream versions instead of the legacy counter.
+versionArgument selects the primary annotated image ARG; majorUpdates: approval restricts the daily
+follower to that image's current major. Renovate presents newer majors for approval and manual merge.
+Packaging-only changes keep the version and are included in the next upstream release.
 """
 import argparse
 import json
@@ -79,10 +84,13 @@ def ghcr_tags(repository):
     return tags
 
 
-def newest_release(registry, repository):
+# Replaced: def newest_release(registry, repository):
+def newest_release(registry, repository, major=None):
     """The highest x.y.z (or vx.y.z) tag of an image."""
     tags = docker_hub_tags(repository) if registry == "docker.io" else ghcr_tags(repository)
     releases = [tag for tag in tags if RELEASE_TAG.match(tag)]
+    if major is not None:
+        releases = [tag for tag in releases if as_tuple(tag)[0] == major]
     if not releases:
         sys.exit(f"{registry}/{repository} has no release tags.")
     return max(releases, key=as_tuple)
@@ -111,11 +119,41 @@ def read_version(config_text):
     return match[3]
 
 
+def policy(root):
+    """Opt in to upstream version numbers and maintainer approval for major updates."""
+    path = Path(root) / ".github/upstream.json"
+    if not path.exists():
+        return None
+    value = json.loads(path.read_text())
+    if (not isinstance(value, dict) or set(value) != {"versionArgument", "majorUpdates"}
+            or not isinstance(value["versionArgument"], str)
+            or not re.fullmatch(r"[A-Z][A-Z0-9_]*", value["versionArgument"])
+            or value["majorUpdates"] != "approval"):
+        raise ValueError("upstream.json needs versionArgument and majorUpdates: approval")
+    return value
+
+
+def aligned_version(app):
+    """The primary image tag without its optional v prefix; None for legacy projects."""
+    settings = policy(app.parent)
+    if settings is None:
+        return None
+    pins = [pin for pin in PIN.finditer((app / "Dockerfile").read_text())
+            if pin["name"] == settings["versionArgument"]]
+    if len(pins) != 1:
+        raise ValueError("versionArgument must identify exactly one annotated stable image pin")
+    return pins[0]["version"].removeprefix("v")
+
+
 def release_app(app, note):
     """Raises the version in config.yaml and Dockerfile and adds the changelog entry. Returns it."""
     config_path, dockerfile_path, changelog_path = app / "config.yaml", app / "Dockerfile", app / "CHANGELOG.md"
     config = config_path.read_text()
-    version = next_version(read_version(config))
+    # Replaced: version = next_version(read_version(config))
+    # Opted-in apps use the image's version; packaging changes never invent an upstream patch.
+    version = aligned_version(app) or next_version(read_version(config))
+    if version == read_version(config):
+        return version
 
     config_path.write_text(VERSION_LINE.sub(lambda m: f"{m[1]}{m[2]}{version}{m[4]}", config, count=1))
     dockerfile_path.write_text(BUILD_VERSION.sub(lambda m: f"{m[1]}{version}", dockerfile_path.read_text(), count=1))
@@ -143,8 +181,14 @@ def update(app):
     dockerfile_path = app / "Dockerfile"
     dockerfile = dockerfile_path.read_text()
     notes = []
+    settings = policy(app.parent)
     for pin in list(PIN.finditer(dockerfile)):
-        latest = newest_release(pin["registry"], pin["repository"])
+        # Replaced: latest = newest_release(pin["registry"], pin["repository"])
+        if settings and pin["name"] != settings["versionArgument"]:
+            continue
+        # A daily or manually dispatched follower must never bypass Renovate's major approval.
+        major = as_tuple(pin["version"])[0] if settings else None
+        latest = newest_release(pin["registry"], pin["repository"], major=major)
         if as_tuple(latest) > as_tuple(pin["version"]):
             dockerfile = dockerfile.replace(pin[0], pin[0].replace(f"={pin['version']}", f"={latest}"))
             notes.append(f"Update {pin['repository']} to {latest.removeprefix('v')} (was {pin['version'].removeprefix('v')}).")
@@ -157,13 +201,16 @@ def update(app):
 
 def bump(app, note, base):
     config_path = app / "config.yaml"
+    previous = read_version(config_path.read_text())
     if base:
         changed_files = git("diff", "--name-only", f"{base}...HEAD", "--", str(app)).split()
         base_version = read_version(git("show", f"{base}:{config_path}"))
         if not changed_files or read_version(config_path.read_text()) != base_version:
             write_output(False, read_version(config_path.read_text()))
             return
-    write_output(True, release_app(app, note))
+    # Replaced: write_output(True, release_app(app, note))
+    version = release_app(app, note)
+    write_output(version != previous, version)
 
 
 def main():
