@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import yaml
@@ -17,6 +18,20 @@ def release_exists(tag, repo):
                           capture_output=True).returncode == 0
 
 
+def push_image(image):
+    """Retry short-lived GHCR layer errors without rebuilding the tested image."""
+    for attempt in range(4):
+        try:
+            run("docker", "push", image)
+            return
+        except subprocess.CalledProcessError:
+            if attempt == 3:
+                raise
+            delay = 2 ** attempt
+            print(f"Registry push failed; retrying {image} in {delay}s (attempt {attempt + 2}/4).")
+            time.sleep(delay)
+
+
 def push_architecture_images(app_config, folder, repository, assets):
     references = []
     for arch in app_config["arch"]:
@@ -24,7 +39,8 @@ def push_architecture_images(app_config, folder, repository, assets):
         image = f"{repository}:{tag}"
         # The CI build already produced and tested this image; retag instead of rebuilding.
         run("docker", "tag", f"local/{folder.name}:{arch}", image)
-        run("docker", "push", image)
+        # Replaced: run("docker", "push", image)
+        push_image(image)
         references.append(image)
         (assets / f"{tag}.json").write_text(json.dumps(
             {"image": image, "platform": config.PLATFORMS[arch], "version": app_config["version"]},

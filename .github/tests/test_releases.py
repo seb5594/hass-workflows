@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +13,26 @@ import support  # noqa: F401
 import common
 import package_integration
 import release_app
+
+
+class RegistryPush(unittest.TestCase):
+    def test_a_transient_blob_error_retries_the_same_tested_image(self):
+        error = subprocess.CalledProcessError(1, ["docker", "push", "image:tag"])
+        with mock.patch.object(release_app, "run", side_effect=[error, None]) as runner, \
+                mock.patch.object(release_app.time, "sleep") as sleep:
+            release_app.push_image("image:tag")
+        self.assertEqual(runner.call_count, 2)
+        self.assertEqual(runner.call_args_list[0], runner.call_args_list[1])
+        sleep.assert_called_once_with(1)
+
+    def test_an_unrecoverable_registry_error_stops_after_four_attempts(self):
+        error = subprocess.CalledProcessError(1, ["docker", "push", "image:tag"])
+        with mock.patch.object(release_app, "run", side_effect=error) as runner, \
+                mock.patch.object(release_app.time, "sleep") as sleep:
+            with self.assertRaises(subprocess.CalledProcessError):
+                release_app.push_image("image:tag")
+        self.assertEqual(runner.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2, 4])
 
 
 class ReleaseTitles(unittest.TestCase):
