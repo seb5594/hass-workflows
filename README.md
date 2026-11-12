@@ -124,6 +124,24 @@ They are rendered as ordinary static badges, so nothing depends on a separate br
 
 ## Public caller contract
 
+### Apps that use upstream image versions
+
+An app can opt in with `.github/upstream.json`:
+
+```json
+{"versionArgument": "GITEA_MIRROR_VERSION", "majorUpdates": "approval"}
+```
+
+The selected annotated Dockerfile ARG supplies the exact app version (without `v`). CI checks
+that `config.yaml`, `BUILD_VERSION`, and the primary image agree. The daily follower considers
+only releases within the current major. Managed Renovate configuration requires Dependency
+Dashboard approval and disables automerge for major Docker updates, including runtime images.
+Approval creates a PR; the maintainer reviews breaking changes and merges it manually.
+Base-image and package-only changes retain the upstream version and ship with its next release.
+Projects without this opt-in retain the existing version-counter behavior.
+
+### Engine access
+
 The public workflow checks out this private repository at a reviewed commit through `ORCHESTRATION_PAT`. GitHub's Actions sharing switch does not grant `actions/checkout` access to a private secondary repository from a public caller. The token must select `hass-workflows` with **Contents: Read**. App catalog notifications also need **Contents: Read and write** for `Home-Assistant-Apps`, and the catalog repository itself needs the same secret to fetch this engine. The source repository's `GITHUB_TOKEN` publishes its own release and images and commits the README refresh.
 
 Fork pull requests cannot access the private engine and are skipped. The central [engine validation](.github/workflows/engine-validation.yml) runs the unit tests and then every repository listed in `PROJECTS` in [`config.py`](.scripts/config.py) (apps, integrations and the template) without publishing. It runs the callers' `main` branches, so it passes once their README and workflow changes are merged.
