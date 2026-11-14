@@ -9,6 +9,8 @@ import time
 from urllib.parse import quote
 
 UPSTREAM = "hacs/default"
+# Identifies the pull request template of UPSTREAM; its bot checks for it.
+TEMPLATE_ID = "73253df5-5376-4e68-8c16-b234da6a2de3"
 
 
 def api(path, payload=None, method="POST"):
@@ -28,13 +30,35 @@ def latest_release(repository):
         return None
 
 
-def validated(repository, commit):
-    """A commit is validated when this run checked it or an earlier run of the workflow did."""
+def validation_run_url(repository, commit):
+    """Address of a run that validated this commit, or None when none did."""
     if commit == os.environ["GITHUB_SHA"]:
-        return True
+        return f"https://github.com/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     runs = api(f"repos/{repository}/actions/workflows/marketplace-catalog.yml/runs"
                f"?head_sha={commit}&status=success&per_page=1")
-    return runs["total_count"] > 0
+    if runs["total_count"] == 0:
+        return None
+    return runs.get("workflow_runs", [{}])[0].get("html_url", "")
+
+
+def pull_request_body(release_url, run_url):
+    """The upstream pull request template, filled in. The HACS bot closes anything else."""
+    return (
+        "## Checklist\n\n"
+        "- [x] I've read the [publishing documentation](https://hacs.xyz/docs/publish/start).\n"
+        "- [x] I've added the [HACS action](https://hacs.xyz/docs/publish/action) to my repository.\n"
+        "- [x] (For integrations only) I've added the [hassfest action]"
+        "(https://developers.home-assistant.io/blog/2020/04/16/hassfest/) to my repository.\n"
+        "- [x] The actions are passing without any disabled checks in my repository.\n"
+        "- [x] I've added a link to the action run on my repository below in the links section.\n"
+        "- [x] I've created a new release of the repository after the validation actions were run "
+        "successfully.\n\n"
+        "## Links\n\n"
+        f"Link to current release: <{release_url}>\n"
+        f"Link to successful HACS action (without the `ignore` key): <{run_url}>\n"
+        f"Link to successful hassfest action (if integration): <{run_url}>\n\n"
+        f"<!-- tid:{TEMPLATE_ID} -->"
+    )
 
 
 def proposed_catalog(content, repository):
@@ -62,16 +86,6 @@ def main():
         print("Repository already listed.")
         return
     release = latest_release(repository)
-    run_url = f"https://github.com/{repository}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-    body = (
-        f"Add {repository} to the integration catalog.\n\n"
-        "## Checklist\n\n"
-        "- [x] I have read the publishing documentation.\n"
-        "- [x] HACS and hassfest actions are configured and pass without disabled checks.\n"
-        "- [x] A release was published after successful catalog validation.\n\n"
-        f"## Links\n\nRelease: {release['html_url'] if release else 'none yet'}\n"
-        f"HACS and hassfest validation: {run_url}\n"
-    )
     (output / "integration").write_text(proposed, encoding="utf-8")
     (output / "instructions.md").write_text(
         f"Repository {repository}\n\nLatest stable release: "
@@ -88,8 +102,10 @@ def main():
     if release is None:
         raise ValueError("Publish a stable release before submitting")
     commit = api(f"repos/{repository}/commits/{quote(release['tag_name'], safe='')}")["sha"]
-    if not validated(repository, commit):
+    run_url = validation_run_url(repository, commit)
+    if run_url is None:
         raise ValueError("Run the Marketplace catalog workflow on the commit of the latest release first")
+    body = pull_request_body(release["html_url"], run_url)
     head = f"add-{repository.replace('/', '-')}"
     existing = api(f"repos/{UPSTREAM}/pulls?state=open&head={owner}:{head}")
     if existing:
