@@ -19,6 +19,26 @@ class CatalogSubmissionTests(unittest.TestCase):
                          ["A/existing", "b/new", "z/existing"])
         self.assertIsNone(catalog.proposed_catalog(content, "A/existing"))
 
+    def test_pull_request_body_follows_the_upstream_template(self):
+        body = catalog.pull_request_body("https://example/release", "https://example/run/1")
+        self.assertEqual(body.count("- [x]"), 6)
+        self.assertNotIn("- [ ]", body)
+        self.assertIn("Link to current release: <https://example/release>", body)
+        self.assertIn("Link to successful HACS action (without the `ignore` key): <https://example/run/1>", body)
+        self.assertIn("Link to successful hassfest action (if integration): <https://example/run/1>", body)
+        self.assertTrue(body.endswith(f"<!-- tid:{catalog.TEMPLATE_ID} -->"))
+
+    def test_validation_run_url_prefers_the_current_run_and_names_an_earlier_one(self):
+        env = {"GITHUB_SHA": "current", "GITHUB_RUN_ID": "7"}
+        earlier = {"total_count": 1, "workflow_runs": [{"html_url": "https://example/earlier"}]}
+        with patch.dict(os.environ, env):
+            self.assertEqual(catalog.validation_run_url("o/r", "current"),
+                             "https://github.com/o/r/actions/runs/7")
+            with patch.object(catalog, "api", return_value=earlier):
+                self.assertEqual(catalog.validation_run_url("o/r", "older"), "https://example/earlier")
+            with patch.object(catalog, "api", return_value={"total_count": 0}):
+                self.assertIsNone(catalog.validation_run_url("o/r", "older"))
+
     def test_submission_reuses_open_pr_once_the_release_commit_was_validated(self):
         calls = []
         successful_runs = []
