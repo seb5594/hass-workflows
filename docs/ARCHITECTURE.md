@@ -23,6 +23,8 @@ call it. Each module has one job.
 | `legacy.py` | Architectures only the previous base images cover (armv7, armhf, i386): their base and package pins |
 | `build_app.py`, `release_app.py`, `package_integration.py`, `validate_app.py` | App and integration specifics |
 | `ha_matrix.py`, `hass_real_tests.py`, `ha_releases.json` | Test an integration against genuine Home Assistant releases: environments, the shared pytest plugin and the release table |
+| `integration_checks.py` | Rules every integration shares: `strings.json` mirrors `translations/en.json`, other languages have the same keys, `services.yaml` matches the service texts, the ZIP is named after the domain, brand images have Home Assistant's sizes |
+| `render_brand.cjs` | Renders `icon.svg` / `logo.svg` (and `dark_` variants) into `brand/*.png` and `@2x` files with Playwright |
 | `metrics.py` | Measurements of a run (tests, sizes, pulls) kept in the project's `.github/metrics.json` |
 | `catalog.py`, `hub.py` | Catalog and hub generation |
 

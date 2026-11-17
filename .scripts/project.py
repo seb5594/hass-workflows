@@ -163,6 +163,7 @@ def validate(project):
     if (options := pycodestyle_options()) is not None:
         run(sys.executable, "-m", "pycodestyle", *options, "custom_components")
     run(sys.executable, str(ENGINE / ".scripts/package_integration.py"), "--check")
+    run(sys.executable, str(ENGINE / ".scripts/integration_checks.py"))
     run_project_checks()
     if directory := test_directory():
         run_integration_tests(directory)
@@ -179,7 +180,11 @@ def main(command):
         print(f"publish={str(publish).lower()}")
         print(f"images={str(images).lower()}")
         # Integrations release (a no-op once the version exists); apps only when they built images.
-        print(f"release={str(publish and (images or project.kind == projectmeta.INTEGRATION)).lower()}")
+        integration_release = project.kind == projectmeta.INTEGRATION and (
+            project.repository not in config.INTEGRATION_TAG_ONLY_RELEASES
+            or os.environ.get("REF", "").startswith("refs/tags/")
+        )
+        print(f"release={str(publish and (images or integration_release)).lower()}")
         ignored = hacs_ignored_checks()
         print(f"hacs_ignore={' '.join(ignored)}")
         if project.kind == projectmeta.INTEGRATION and "license" in ignored:

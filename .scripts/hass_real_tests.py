@@ -46,6 +46,19 @@ def pytest_configure(config):
         sys.modules["pytest_homeassistant_custom_component.common"] = importlib.import_module("pytest_homeassistant.common")
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _start_dns_helper_thread_early():
+    """pycares 5 starts one background thread for the whole process when the first resolver appears.
+    Home Assistant releases from before it existed count such a thread as left over by whichever
+    test happens to create it, so create it before any test is measured."""
+    try:
+        import pycares
+
+        pycares.Channel()
+    except Exception:  # noqa: BLE001 - older pycares releases need no warm-up
+        pass
+
+
 @pytest.fixture(autouse=True)
 def _real_home_assistant(verify_cleanup, enable_custom_integrations, hass, pytestconfig):
     """Boot the core for every test, with the repository's integrations and declared dependencies.
