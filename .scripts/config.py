@@ -54,7 +54,6 @@ PROJECTS = {
 DEFAULT_CATALOG_EXCLUDED = {
     "Home-Assistant-Integration-Template": "template repository",
     "hass-pulseaudio_loopback_extended-integration": "its domain replaces a Core integration",
-    "hass-medication_tracker-integration": "fork of another project",
     "hass-ubpet_cat_litter_hub-integration": "fork of another project",
 }
 

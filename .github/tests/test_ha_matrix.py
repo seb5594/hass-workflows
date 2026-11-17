@@ -44,6 +44,15 @@ class Releases(InProject):
         self.assertNotIn("2023.12.3", versions)
         self.assertEqual(ha_matrix.version_key("2023.12.3") < ha_matrix.version_key("2024.1.0"), True)
 
+    def test_button_era_target_requires_an_explicit_compatible_minimum(self):
+        target = "2021.12.10"
+        versions = lambda minimum=None: {
+            item["homeassistant"] for item in ha_matrix.releases(minimum)
+        }
+        self.assertIn(target, versions(target))
+        self.assertNotIn(target, versions())
+        self.assertNotIn(target, versions("2022.1.0"))
+
     def test_the_minimum_comes_from_hacs_json(self):
         self.assertIsNone(ha_matrix.minimum_from_hacs(self.root))
         self.write("hacs.json", json.dumps({"homeassistant": "2023.2.0"}))
