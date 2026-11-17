@@ -20,7 +20,7 @@ class ImageNaming(unittest.TestCase):
         self.assertEqual(common.image_tag("git-exporter", "1.18"), "hass-git-exporter-v1.18")
 
     def test_repository_is_lowercase(self):
-        self.assertEqual(common.image_repository("Seb5594", "rsync-local"), "ghcr.io/seb5594/hass-rsync-local")
+        self.assertEqual(common.image_repository("Seb5594", "rsync-local"), "ghcr.io/seb5594/hass-rsync-local-app")
 
 
 class ImagePublishing(unittest.TestCase):

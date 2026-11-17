@@ -227,9 +227,11 @@ class RegistryMigration(unittest.TestCase):
     def test_registry_override_keeps_slug_tags_and_owner_scope(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch('common.Path', side_effect=lambda name: Path(folder)/name):
             root=Path(folder);(root/'.github').mkdir()
-            self.assertEqual(common.image_repository('Example','tuya_breaker'),'ghcr.io/example/hass-tuya_breaker')
+            self.assertEqual(common.image_repository('Example','tuya_breaker'),'ghcr.io/example/hass-tuya_breaker-app')
             (root/'.github/images.json').write_text(json.dumps({'tuya_breaker':'hass-tuya-breaker'}))
-            self.assertEqual(common.image_repository('Example','tuya_breaker'),'ghcr.io/example/hass-tuya-breaker')
+            self.assertEqual(common.image_repository('Example','tuya_breaker'),'ghcr.io/example/hass-tuya-breaker-app')
+            (root/'.github/images.json').write_text(json.dumps({'tuya_breaker':'hass-tuya-breaker-app'}))
+            self.assertEqual(common.image_repository('Example','tuya_breaker'),'ghcr.io/example/hass-tuya-breaker-app')
             self.assertEqual(common.image_tag('tuya_breaker','1.0.0'),'hass-tuya_breaker-v1.0.0')
             (root/'.github/images.json').write_text(json.dumps({'tuya_breaker':'other-owner/package'}))
             with self.assertRaises(ValueError):common.image_repository('Example','tuya_breaker')
