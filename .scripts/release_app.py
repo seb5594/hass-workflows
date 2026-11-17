@@ -4,12 +4,14 @@ import os
 import subprocess
 import sys
 import time
+import tempfile
 from pathlib import Path
 
 import yaml
 
 import config
 import gitops
+import legacy
 from common import image_repository, image_tag, is_prerelease, release_flags, release_title, run
 
 
@@ -48,6 +50,32 @@ def push_architecture_images(app_config, folder, repository, assets):
     return references
 
 
+def push_platform_digests(app_config, folder, repository, assets):
+    """Export cached platform builds directly to the shared image repository."""
+    references = []
+    dockerfile = (folder / "Dockerfile").read_text()
+    for arch in app_config["arch"]:
+        with tempfile.TemporaryDirectory() as temporary:
+            metadata = Path(temporary) / "metadata.json"
+            run(
+                "docker", "buildx", "build", "--platform", config.PLATFORMS[arch],
+                "--build-arg", f"BUILD_ARCH={arch}",
+                "--build-arg", f"BUILD_VERSION={app_config['version']}",
+                *legacy.build_args(arch, dockerfile),
+                "--provenance=false", "--sbom=false",
+                "--output", f"type=image,name={repository},push-by-digest=true,name-canonical=true,push=true",
+                "--metadata-file", str(metadata), str(folder),
+            )
+            digest = json.loads(metadata.read_text())["containerimage.digest"]
+        references.append(f"{repository}@{digest}")
+    (assets / f"{app_config['slug']}-image.json").write_text(json.dumps({
+        "image": f"{repository}:{image_tag(app_config['slug'], app_config['version'])}",
+        "platforms": [config.PLATFORMS[arch] for arch in app_config["arch"]],
+        "version": app_config["version"],
+    }, indent=2) + "\n")
+    return references
+
+
 def create_release(app_config, folder, repo, tag, assets):
     notes = folder / "CHANGELOG.md"
     args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
@@ -79,9 +107,12 @@ def main(app, *companions):
     assets.mkdir(exist_ok=True)
     for member, metadata in zip(folders, configs):
         repository = image_repository(repo.split("/")[0], metadata["slug"])
-        references = push_architecture_images(metadata, member, repository, assets)
+        publisher = push_platform_digests if os.environ.get("MULTIARCH_ONLY") == "true" else push_architecture_images
+        references = publisher(metadata, member, repository, assets)
         # One multi-arch manifest per app lets Docker pick its architecture.
         tags = [image_tag(metadata["slug"], metadata["version"])]
+        if os.environ.get("MULTIARCH_ONLY") == "true":
+            tags.append(metadata["version"])
         if not is_prerelease(metadata["version"]):
             tags.append("latest")
         run("docker", "buildx", "imagetools", "create",

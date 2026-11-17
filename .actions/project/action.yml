@@ -1,6 +1,9 @@
 name: Validate, build, and publish a Home Assistant project
 description: Shared pipeline for apps and HACS integrations
 inputs:
+  multiarch-only:
+    description: Publish one image index without architecture tags
+    default: 'false'
   publish:
     description: Publish on the default branch or matching version tag (never from template repositories)
     default: 'true'
@@ -100,6 +103,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         ORCHESTRATION_TOKEN: ${{ inputs.catalog-token }}
         RELEASE_DRAFT: ${{ inputs.draft }}
+        MULTIARCH_ONLY: ${{ inputs.multiarch-only }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/project.py" release
     - name: Store measurements and refresh README badges with live values
