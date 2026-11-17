@@ -180,7 +180,11 @@ def main(command):
         print(f"publish={str(publish).lower()}")
         print(f"images={str(images).lower()}")
         # Integrations release (a no-op once the version exists); apps only when they built images.
-        print(f"release={str(publish and (images or project.kind == projectmeta.INTEGRATION)).lower()}")
+        integration_release = project.kind == projectmeta.INTEGRATION and (
+            project.repository not in config.INTEGRATION_TAG_ONLY_RELEASES
+            or os.environ.get("REF", "").startswith("refs/tags/")
+        )
+        print(f"release={str(publish and (images or integration_release)).lower()}")
         ignored = hacs_ignored_checks()
         print(f"hacs_ignore={' '.join(ignored)}")
         if project.kind == projectmeta.INTEGRATION and "license" in ignored:
