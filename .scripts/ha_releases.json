@@ -13,7 +13,7 @@
   {"homeassistant": "2024.6.4", "plugin": "0.13.136", "python": "3.12", "note": "ConfigFlowResult and reconfigure flows; static paths still blocking", "pins": ["josepy<2"]},
   {"homeassistant": "2024.7.4", "plugin": "0.13.148", "python": "3.12", "note": "static paths are registered asynchronously", "pins": ["josepy<2"]},
   {"homeassistant": "2024.11.3", "plugin": "0.13.184", "python": "3.12", "note": "options flows get their entry injected", "pins": ["josepy<2"]},
-  {"homeassistant": "2025.1.4", "plugin": "0.13.205", "python": "3.12", "pins": ["josepy<2"]},
+  {"homeassistant": "2025.1.4", "plugin": "0.13.205", "python": "3.12", "note": "needs a pre-release of aiohasupervisor, which uv only installs when it is pinned explicitly", "pins": ["josepy<2", "aiohasupervisor==0.2.2b5"]},
   {"homeassistant": "2025.12.4", "plugin": "0.13.301", "python": "3.13"},
   {"homeassistant": "2026.2.3", "plugin": "0.13.316", "python": "3.13"},
   {"homeassistant": "2026.9.4", "plugin": "0.13.367", "python": "3.14", "note": "active scans and advertisement replay"}
