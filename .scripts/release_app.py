@@ -111,6 +111,8 @@ def main(app, *companions):
         references = publisher(metadata, member, repository, assets)
         # One multi-arch manifest per app lets Docker pick its architecture.
         tags = [image_tag(metadata["slug"], metadata["version"])]
+        if os.environ.get("MULTIARCH_ONLY") == "true":
+            tags.append(metadata["version"])
         if not is_prerelease(metadata["version"]):
             tags.append("latest")
         run("docker", "buildx", "imagetools", "create",
