@@ -54,7 +54,6 @@ PROJECTS = {
 DEFAULT_CATALOG_EXCLUDED = {
     "Home-Assistant-Integration-Template": "template repository",
     "hass-pulseaudio_loopback_extended-integration": "its domain replaces a Core integration",
-    "hass-ubpet_cat_litter_hub-integration": "fork of another project",
 }
 
 # Donation channels, defined once: README badges and .github/FUNDING.yml are both built from them.
@@ -74,4 +73,8 @@ def github_url(repository):
 # Integration release tags without the conventional v prefix, as requested by their owner.
 INTEGRATION_TAG_PREFIXES = {
     "seb5594/hass-deepl_translator-integration": "",
+    "seb5594/hass-ubpet_cat_litter_hub-integration": "",
 }
+
+# These integrations publish after a separately validated version tag is pushed.
+INTEGRATION_TAG_ONLY_RELEASES = {"seb5594/hass-ubpet_cat_litter_hub-integration"}
