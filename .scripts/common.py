@@ -14,6 +14,9 @@ def image_tag(slug, version, arch=None):
     return f"{arch}-{stem}" if arch else stem
 
 
+PACKAGE_SUFFIX = "-app"
+
+
 def image_repository(owner, slug):
     # A repository move may need a fresh GHCR package without changing the HA slug.
     # Existing projects keep their original registry names unless explicitly mapped.
@@ -24,7 +27,9 @@ def image_repository(owner, slug):
         raise ValueError('.github/images.json must map app slugs to lowercase GHCR package names')
     if len(set(aliases.values())) != len(aliases):
         raise ValueError('App registry package names must be distinct')
-    return f"ghcr.io/{owner.lower()}/{aliases.get(slug, 'hass-'+slug)}"
+    package = aliases.get(slug, f"hass-{slug}")
+    # Every app package ends in -app, so it is recognisable among the other images of a Docker host.
+    return f"ghcr.io/{owner.lower()}/{package if package.endswith(PACKAGE_SUFFIX) else package + PACKAGE_SUFFIX}"
 
 
 # App versions carry a dash suffix (1.0.0-beta4), integrations a PEP 440 one (1.0.0b1).

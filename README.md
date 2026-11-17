@@ -76,7 +76,7 @@ The Compatibility workflow lists the releases at or above the minimum in `hacs.j
 
 ## Release flow
 
-Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP`. The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
+Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP-app` (the `-app` suffix keeps it recognisable among the other images of a Docker host). The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
 
 Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
 then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a
@@ -102,22 +102,25 @@ The build and smoke-test phase executes once per architecture. Publishing pushes
 
 ## README header
 
-Every README starts with a generated header, centered: the display name, the logo (`logo.png`, otherwise `icon.png`; nothing if there is neither), a separator and the badge rows. Integrations take the pictures from `brand/` of the component, apps from their folder; `@2x` and `dark_` variants are picked up. The text below the header is yours; the pipeline never touches it. READMEs written before the header existed are converted on the next refresh (old title, logo and badge block are replaced).
+Every README starts with a generated header, centered: the display name and below it the logo (`logo.png`, otherwise `icon.png`; nothing if there is neither) in one heading, then the badge rows. A single heading matters because GitHub draws a rule under every `h1`: it now sits below name and logo together instead of between them. Integrations take the pictures from `brand/` of the component, apps from their folder; `@2x` and `dark_` variants are picked up. The text below the header is yours; the pipeline never touches it. READMEs written before the header existed are converted on the next refresh (old title, logo and badge block are replaced).
 
-The badge rows come in three sizes, set by the `HERO`, `MAJOR` and `MINOR` tiers in [`badgekit.py`](.scripts/badgekit.py):
+The badge rows come in three sizes, set by the `MAJOR`, `SUPPORT` and `MINOR` tiers in [`badgekit.py`](.scripts/badgekit.py) (28, 24 and 20 pixels):
 
 | Row | Size | Integration | App |
 | --- | --- | --- | --- |
-| 1 | 1.4x | HACS install, minimum Home Assistant, newest release | install, minimum Home Assistant, newest release, GHCR pulls |
-| 2 | normal | stars (when above zero), downloads of the newest release, open issues, tests (when measured), checks, license (when present) | architectures, stage, ingress, mounts, privileges, image size |
-| 3 | normal | | the facts of row 2 of the integration, with runtime tests |
-| last | 2x | Support PayPal, Support Buy Me a Coffee | the same |
+| 1 | 28 | HACS install, minimum Home Assistant | install, minimum Home Assistant |
+| 2 | 28 | integration version (newest release), downloads of it | app version, GHCR pulls |
+| 3 | 20 | stars (when above zero), forks (when above zero), checks, tests (when measured), issues, license (when present) | stage, ingress, architectures with image sizes, mounts, privileges |
+| 4 | 20 | | stars (when above zero), forks (when above zero), checks, runtime tests, issues, license (when present) |
+| last | 24 | Support PayPal, Support 🍺 Buy me a ~~coffee~~ Beer | the same |
+
+The beer badge links to the same Buy Me a Coffee page; its struck-through word is built with combining long stroke overlays, which Shields renders as written. The support row is smaller than the facts above it so both badges stay side by side on a desktop and simply wrap on a phone.
 
 The rows share one centered paragraph, separated by line breaks, so they stay close together.
 
 Which badge sits in which row is decided in one place: `INTEGRATION_LAYOUT` and `APP_LAYOUT`. Editing a list there changes every project README and catalog entry. Conditional badges appear only when they have something to show, and a README cannot hide badges by itself, so the pipeline asks GitHub for the current values and rewrites the header on every run from the default branch (and weekly via the schedule trigger); CI only checks that the generated block exists. The version badge shows the newest published release (the metadata version before the first one); the downloads badge counts that release's assets and appears once a release exists, even at zero. The minimum Home Assistant badge links to the Compatibility workflow when the project has one. Catalogs and the hub reuse the layout per project without the donation, install and license badges.
 
-Every README also ends with two generated sections: "Say thanks" with the donation links in the larger `for-the-badge` style (text: `SUPPORT_TEXT` in `badgekit.py`), and "License" as the very last one. The license section names the license found in the repository's license file and links it ([`licenses.py`](.scripts/licenses.py)); without a license file there is none. Text added below these sections is moved above them on the next refresh.
+Every README also ends with two generated sections: "Say thanks" with the donation links in the `for-the-badge` style (text: `SUPPORT_TEXT` in `badgekit.py`), and "License" as the very last one. The license section names the license found in the repository's license file and links it ([`licenses.py`](.scripts/licenses.py)); without a license file there is none. Text added below these sections is moved above them on the next refresh.
 
 Measurements come from the pipeline itself and are kept in the project's `.github/metrics.json`, committed together with the README:
 
@@ -157,4 +160,4 @@ Fork pull requests cannot access the private engine and are skipped. The central
 
 Badges only show what can be measured. GitHub release badges count release assets, which is meaningful for integration ZIPs but not for apps, whose releases carry small image references; apps therefore show GHCR pulls instead. Local Home Assistant builds and installations are not counted anywhere. GitHub does not expose download country or continent data, so none is shown.
 
-App repositories may declare `.github/images.json` as a map from installed app slug to a GHCR package name (for example `{"tuya_breaker":"hass-tuya-breaker"}`). This lets a standalone repository publish to its own fresh package after a split while preserving its Home Assistant slug. The owner always remains the workflow repository owner; existing projects without this file retain their registry names. Published release tags/assets are never rewritten by an ordinary source-branch run.
+App repositories may declare `.github/images.json` as a map from installed app slug to a GHCR package name (for example `{"tuya_breaker":"hass-tuya-breaker"}`, published as `hass-tuya-breaker-app`). This lets a standalone repository publish to its own fresh package after a split while preserving its Home Assistant slug. The owner always remains the workflow repository owner; existing projects without this file retain their registry names. Published release tags/assets are never rewritten by an ordinary source-branch run.
