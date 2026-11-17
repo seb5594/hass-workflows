@@ -108,6 +108,12 @@ def expected(kind, sha, root=Path(".")):
     files = shared_files()
     files[WORKFLOWS[kind].target] = render_workflow(WORKFLOWS[kind], sha)
     if kind == "app":
+        if all(app.metadata.get("image") for app in projectmeta.app_projects(root)):
+            target = WORKFLOWS[kind].target
+            files[target] = files[target].replace(
+                "          draft: ${{ inputs.draft }}",
+                "          draft: ${{ inputs.draft }}\n          multiarch-only: 'true'",
+            )
         if upstream.policy(root):
             preset = json.loads(files[".github/renovate.json"])
             preset["packageRules"].append({

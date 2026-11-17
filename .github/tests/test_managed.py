@@ -110,7 +110,7 @@ class ManagedFiles(unittest.TestCase):
         found = json.loads(text)
         self.assertEqual(found, json.loads((config.ENGINE_ROOT / "default.json").read_text()))
         self.assertNotIn("github>", text)
-        self.assertEqual(found["branchPrefix"], "feat/")
+        self.assertEqual(found["branchPrefix"], "feature/")
         # Only the default branch is a base: a base branch configured elsewhere, which a repository
         # does not have, produced "Base branch does not exist" and branch names like feat/main-x.
         self.assertEqual(found["baseBranchPatterns"], ["$default"])
