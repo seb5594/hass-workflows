@@ -23,6 +23,12 @@ class Versions(unittest.TestCase):
         self.assertEqual(upstream.next_version("2026-10-27.9", today="2026-10-28"), "2026-10-28")
         self.assertEqual(upstream.next_version("2026-10-27.2", today="2026-10-26"), "2026-10-27.3")
 
+    def test_dotted_calendar_builds_count_per_day_and_restart_at_one(self):
+        self.assertEqual(upstream.next_version("2026.11.10.1", today="2026-11-10"), "2026.11.10.2")
+        self.assertEqual(upstream.next_version("2026.11.10.9", today="2026-11-10"), "2026.11.10.10")
+        self.assertEqual(upstream.next_version("2026.11.10.4", today="2026-11-11"), "2026.11.11.1")
+        self.assertEqual(upstream.next_version("2026.11.10.4", today="2026-11-09"), "2026.11.10.5")
+
     def test_prereleases_count_up_and_releases_get_a_patch_number(self):
         self.assertEqual(upstream.next_version("1.0.0-alpha.9"), "1.0.0-alpha.10")
         self.assertEqual(upstream.next_version("1.0.0-dev3"), "1.0.0-dev4")
