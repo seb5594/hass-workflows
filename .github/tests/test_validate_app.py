@@ -191,6 +191,13 @@ class Versions(unittest.TestCase):
                         "2026-10-27.1", "2026-10-27.0", "2026-10-27.02", "2026-10-27.2."):
             self.assertFalse(validate_app.VERSION.fullmatch(version), version)
 
+    def test_dotted_calendar_versions_always_carry_a_build_number(self):
+        for version in ("2026.11.10.1", "2026.11.10.2", "2026.01.31.17"):
+            self.assertTrue(validate_app.VERSION.fullmatch(version), version)
+            self.assertFalse(common.is_prerelease(version), version)
+        for version in ("2026.13.10.1", "2026.11.32.1", "2026.11.10.0", "2026.11.10.01", "2026.11.10."):
+            self.assertFalse(validate_app.VERSION.fullmatch(version), version)
+
     def test_numeric_versions_with_an_optional_prerelease_suffix_are_accepted(self):
         for version in ("1.74.3", "1.18", "1.0.0-beta4", "2.0.0-beta.4", "1.0.0-rc1"):
             self.assertTrue(validate_app.VERSION.fullmatch(version), version)

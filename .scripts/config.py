@@ -41,12 +41,12 @@ PROJECTS = {
              "Home-Assistant-WiFi-Helper-App", "Home-Assistant-Tuya-Breaker-App",
              "Home-Assistant-Gitea-MCP-Server-App", "Home-Assistant-Gitea-Runner-App",
              "Home-Assistant-Gitea-Mirror-App", "Home-Assistant-Assist-AI-Router-App",
-             "Home-Assistant-App-Template"],
+             "Home-Assistant-Extended-Secrets-App", "Home-Assistant-App-Template"],
     "integrations": ["hass-ninebot_e_scooters-integration", "hass-pulseaudio_loopback_extended-integration",
                      "hass-vacuum_mapguard-integration", "hass-medication_tracker-integration",
                      "Home-Assistant-Integration-Template", "hass-deepl_translator-integration",
                      "hass-custom_integrations_translator-integration",
-                     "hass-ubpet_cat_litter_hub-integration"],
+                     "hass-ubpet_cat_litter_hub-integration", "hass-extended_secrets-integration"],
 }
 
 # Integrations that are never offered to the official HACS default catalog, with the reason.
