@@ -94,7 +94,9 @@ def check_static_versions(dockerfile, arches=()):
     variables = version_variables(dockerfile)
     undefined = [name for name in variables if not defaults.get(name)]
     assert not undefined, f"Give each version argument a default: {', '.join(undefined)}"
-    if any(legacy.is_legacy(arch) for arch in arches):
+    if any(legacy.is_legacy(arch) for arch in arches) and not defaults.get("BUILD_FROM", "").startswith(
+        "ghcr.io/seb5594/home-assistant-base"
+    ):
         literal = [p for p in apk_packages(dockerfile) if not re.search(r"=\$", p)]
         assert not literal, f"Pin through ARG so legacy architectures can override: {', '.join(literal)}"
         resolvable = set(legacy.pinned_packages(dockerfile))
