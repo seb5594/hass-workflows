@@ -92,7 +92,7 @@ class HeaderStructure(unittest.TestCase):
             block = readme.header(root)
         heading = block[block.index("<h1"):block.index("</h1>")]
         self.assertIn("Demo Integration", heading)
-        self.assertLess(heading.index("Demo Integration"), heading.index("brand/logo.png"))
+        self.assertLess(heading.index("brand/logo.png"), heading.index("Demo Integration\n"))
         self.assertLess(block.index("</h1>"), block.index("label=HACS%20%C2%B7%20Marketplace"))
         self.assertEqual(block.count("<h1"), 1)
         self.assertNotIn("\n---\n", block)
@@ -331,7 +331,14 @@ class AppHeader(unittest.TestCase):
         self.assertNotIn("label=forks", quiet)
         busy = badgekit.app_rows(data, "o/n", live={**facts, "stars": 4, "forks": 1})
         labels = [badge.params["label"] for badge in busy[3].badges]
-        self.assertEqual(labels, ["stars", "forks", "checks", "issues", "license"])
+        self.assertEqual(labels, ["stars", "forks", "checks", "issues"])
+        self.assertEqual([badge.params["label"] for badge in busy[-1].badges], ["license"])
+
+    def test_the_license_closes_the_badges_below_the_support_row(self):
+        rows = badgekit.app_rows({"version": "1", "arch": ["amd64"]}, "o/n", licensed=True)
+        self.assertEqual([badge.params["label"] for badge in rows[-2].badges], ["Support", "Support \U0001F37A"])
+        self.assertEqual([badge.params["label"] for badge in rows[-1].badges], ["license"])
+        self.assertEqual(rows[-1].tier, badgekit.MINOR)
 
     def test_architectures_and_sizes_share_one_badge(self):
         data = {"version": "1", "arch": ["aarch64", "amd64", "armv7"]}

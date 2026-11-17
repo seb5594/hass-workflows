@@ -32,12 +32,12 @@ LEGACY_PREAMBLE = re.compile(
 
 
 def title(project):
-    """Name and picture in one heading: GitHub draws a rule under every h1, and one heading
-    keeps it below both instead of between them."""
+    """Picture above the name, both in one heading: GitHub draws a rule under every h1, and one
+    heading keeps it below both instead of between them."""
     name, picture = html.escape(project.name), brand.render(project)
     if not picture:
         return f'<h1 align="center">{name}</h1>'
-    return f'<h1 align="center">\n  {name}\n  <br>\n  {picture}\n</h1>'
+    return f'<h1 align="center">\n  {picture}\n  <br>\n  {name}\n</h1>'
 
 
 def header(root=Path("."), live=None):

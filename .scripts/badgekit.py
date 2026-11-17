@@ -197,15 +197,17 @@ def hacs_badge(repo):
 INTEGRATION_LAYOUT = [
     (MAJOR, ["install", "home_assistant"]),
     (MAJOR, ["version", "downloads"]),
-    (MINOR, ["stars", "forks", "checks", "tests", "issues", "license"]),
+    (MINOR, ["stars", "forks", "checks", "tests", "issues"]),
     (SUPPORT, ["paypal", "beer"]),
+    (MINOR, ["license"]),
 ]
 APP_LAYOUT = [
     (MAJOR, ["install", "home_assistant"]),
     (MAJOR, ["version", "image_pulls"]),
     (MINOR, ["stage", "ingress", "architectures", "mounts", "privileged", "apparmor"]),
-    (MINOR, ["stars", "forks", "checks", "runtime_tests", "issues", "license"]),
+    (MINOR, ["stars", "forks", "checks", "runtime_tests", "issues"]),
     (SUPPORT, ["paypal", "beer"]),
+    (MINOR, ["license"]),
 ]
 # Badges that only make sense in a project's own README, not in a catalog listing. The catalog
 # names its licenses in one closing note instead of a badge per entry.

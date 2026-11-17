@@ -102,7 +102,7 @@ The build and smoke-test phase executes once per architecture. Publishing pushes
 
 ## README header
 
-Every README starts with a generated header, centered: the display name and below it the logo (`logo.png`, otherwise `icon.png`; nothing if there is neither) in one heading, then the badge rows. A single heading matters because GitHub draws a rule under every `h1`: it now sits below name and logo together instead of between them. Integrations take the pictures from `brand/` of the component, apps from their folder; `@2x` and `dark_` variants are picked up. The text below the header is yours; the pipeline never touches it. READMEs written before the header existed are converted on the next refresh (old title, logo and badge block are replaced).
+Every README starts with a generated header, centered: the logo (`logo.png`, otherwise `icon.png`; nothing if there is neither) and below it the display name, both in one heading, then the badge rows. A single heading matters because GitHub draws a rule under every `h1`: it now sits below name and logo together instead of between them. Integrations take the pictures from `brand/` of the component, apps from their folder; `@2x` and `dark_` variants are picked up. The text below the header is yours; the pipeline never touches it. READMEs written before the header existed are converted on the next refresh (old title, logo and badge block are replaced).
 
 The badge rows come in three sizes, set by the `MAJOR`, `SUPPORT` and `MINOR` tiers in [`badgekit.py`](.scripts/badgekit.py) (28, 24 and 20 pixels):
 
@@ -110,9 +110,10 @@ The badge rows come in three sizes, set by the `MAJOR`, `SUPPORT` and `MINOR` ti
 | --- | --- | --- | --- |
 | 1 | 28 | HACS install, minimum Home Assistant | install, minimum Home Assistant |
 | 2 | 28 | integration version (newest release), downloads of it | app version, GHCR pulls |
-| 3 | 20 | stars (when above zero), forks (when above zero), checks, tests (when measured), issues, license (when present) | stage, ingress, architectures with image sizes, mounts, privileges |
-| 4 | 20 | | stars (when above zero), forks (when above zero), checks, runtime tests, issues, license (when present) |
-| last | 24 | Support PayPal, Support 🍺 Buy me a ~~coffee~~ Beer | the same |
+| 3 | 20 | stars (when above zero), forks (when above zero), checks, tests (when measured), issues | stage, ingress, architectures with image sizes, mounts, privileges |
+| 4 | 20 | | stars (when above zero), forks (when above zero), checks, runtime tests, issues |
+| support | 24 | Support PayPal, Support 🍺 Buy me a ~~coffee~~ Beer | the same |
+| last | 20 | license (when present) | the same |
 
 The beer badge links to the same Buy Me a Coffee page; its struck-through word is built with combining long stroke overlays, which Shields renders as written. The support row is smaller than the facts above it so both badges stay side by side on a desktop and simply wrap on a phone.
 
