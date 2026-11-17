@@ -1,6 +1,6 @@
 """Generated parts of a project README: the header above the introduction, thanks and license at the end.
 
-The header holds the centered display name, the logo (or icon), a separator and the badge rows.
+The header holds the centered display name with the logo (or icon) in one heading, and the badge rows.
 Everything after it, the introduction included, is written by hand and never touched.
 """
 import html
@@ -31,6 +31,15 @@ LEGACY_PREAMBLE = re.compile(
     r"(?:<!-- badges:begin.*?<!-- badges:end -->\s*)?", re.S)
 
 
+def title(project):
+    """Name and picture in one heading: GitHub draws a rule under every h1, and one heading
+    keeps it below both instead of between them."""
+    name, picture = html.escape(project.name), brand.render(project)
+    if not picture:
+        return f'<h1 align="center">{name}</h1>'
+    return f'<h1 align="center">\n  {name}\n  <br>\n  {picture}\n</h1>'
+
+
 def header(root=Path("."), live=None):
     """The generated header block of the project in `root`."""
     project = projectmeta.discover(root)
@@ -41,9 +50,7 @@ def header(root=Path("."), live=None):
     else:
         rows = badgekit.integration_rows(project.metadata, project.hacs, project.repository,
                                          compat=(root / COMPAT_WORKFLOW).exists(), **common)
-    parts = [f'<h1 align="center">{html.escape(project.name)}</h1>', brand.render(project), "---",
-             badgekit.render_header(rows)]
-    return f"{START}\n" + "\n\n".join(part for part in parts if part) + f"\n{END}"
+    return f"{START}\n" + "\n\n".join(part for part in (title(project), badgekit.render_header(rows)) if part) + f"\n{END}"
 
 
 def verify(root=Path(".")):

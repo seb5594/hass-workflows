@@ -29,10 +29,10 @@ class Tier:
     height: int
 
 
-# The smallest tier keeps the native height of a flat badge; the others are 2x and 1.4x of it.
-HERO = Tier("for-the-badge", 40)
+# The smallest tier keeps the native height of a flat badge; the others are 1.4x and 1.2x of it.
 MAJOR = Tier("for-the-badge", 28)
-MINOR = Tier(STYLE, 20)
+SUPPORT = Tier("for-the-badge", 24)  # smaller than the facts above it: the two donation badges stay
+MINOR = Tier(STYLE, 20)             # side by side on desktop and simply wrap on a phone
 
 
 @dataclass(frozen=True)
@@ -108,7 +108,7 @@ SUPPORT_TEXT = (
 def support_section():
     """The shared thank-you block: heading, text and the donation badges in the large style."""
     return (f"{SUPPORT_HEADING}\n\n{SUPPORT_TEXT}\n\n"
-            + " ".join(badge.markdown(HERO.style) for badge in support_badges()))
+            + " ".join(badge.markdown(MAJOR.style) for badge in support_badges()))
 
 
 def render(rows):
@@ -195,19 +195,21 @@ def hacs_badge(repo):
 # Unknown names fail loudly; builders that have nothing to show simply return no badge.
 # ---------------------------------------------------------------------------------------------
 INTEGRATION_LAYOUT = [
-    (HERO, ["paypal", "coffee"]),
-    (MAJOR, ["install", "home_assistant", "version"]),
-    (MINOR, ["stars", "downloads", "issues", "tests", "checks", "license"]),
+    (MAJOR, ["install", "home_assistant"]),
+    (MAJOR, ["version", "downloads"]),
+    (MINOR, ["stars", "forks", "checks", "tests", "issues", "license"]),
+    (SUPPORT, ["paypal", "beer"]),
 ]
 APP_LAYOUT = [
-    (HERO, ["paypal", "coffee"]),
-    (MAJOR, ["install", "home_assistant", "version", "image_pulls"]),
-    (MINOR, ["architectures", "stage", "ingress", "mounts", "privileged", "apparmor"]),
-    (MINOR, ["stars", "issues", "runtime_tests", "checks", "license"]),
+    (MAJOR, ["install", "home_assistant"]),
+    (MAJOR, ["version", "image_pulls"]),
+    (MINOR, ["stage", "ingress", "architectures", "mounts", "privileged", "apparmor"]),
+    (MINOR, ["stars", "forks", "checks", "runtime_tests", "issues", "license"]),
+    (SUPPORT, ["paypal", "beer"]),
 ]
 # Badges that only make sense in a project's own README, not in a catalog listing. The catalog
 # names its licenses in one closing note instead of a badge per entry.
-README_ONLY = {"paypal", "coffee", "install", "license"}
+README_ONLY = {"paypal", "beer", "install", "license"}
 
 
 def _links(ctx):
@@ -280,7 +282,7 @@ def when(condition, badges):
     return badges if condition else []
 
 
-def version(ctx, stage_only=False):
+def version(ctx, label="version", stage_only=False):
     """Declared app snapshots or the newest integration release, with metadata fallback.
 
     With `stage_only` a pre-release shows its stage alone ("Alpha 10"): the numbers in front of
@@ -298,7 +300,7 @@ def version(ctx, stage_only=False):
         shown = tag.removeprefix("v") if tag else declared
     if stage_only and is_prerelease(shown):
         shown = release_title(shown)
-    return [static("version", shown, "info", f"{_links(ctx)}/releases/tag/{tag}" if tag else f"{_links(ctx)}/releases")]
+    return [static(label, shown, "info", f"{_links(ctx)}/releases/tag/{tag}" if tag else f"{_links(ctx)}/releases")]
 
 
 def downloads(ctx):
@@ -319,11 +321,12 @@ def home_assistant(ctx):
 def _common_builders():
     return {
         "paypal": lambda c: [support_badge("paypal")],
-        "coffee": lambda c: [support_badge("coffee")],
+        "beer": lambda c: [support_badge("beer")],
         "home_assistant": home_assistant,
-        "version": version,
         "stars": lambda c: when(has(c, "stars"),
                                 [github("stars", c["repo"], "stars", f"{_community_links(c)}/stargazers")]),
+        "forks": lambda c: when(has(c, "forks"),
+                                [github("forks", c["repo"], "forks", f"{_community_links(c)}/forks")]),
         "issues": lambda c: [github("issues", c["repo"], "issues", f"{_community_links(c)}/issues")],
         "checks": lambda c: when(has(c, "builds"), [workflow(
             c["repo"], "ci.yml", "checks", f"{_links(c)}/actions/workflows/ci.yml", branch=c.get("branch"))]),
@@ -338,7 +341,7 @@ def _app_builders():
     builders = _common_builders()
     builders.update({
         "install": lambda c: [install_badge()],
-        "version": lambda c: version({**c, "declared_app_version": True}, stage_only=True),
+        "version": lambda c: version({**c, "declared_app_version": True}, "app version", stage_only=True),
         "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
         "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
         "architectures": architectures,
@@ -356,6 +359,7 @@ def _integration_builders():
     builders = _common_builders()
     builders.update({
         "install": lambda c: [hacs_badge(c["repo"])],
+        "version": lambda c: version(c, "integration version"),
         "downloads": downloads,
         "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
     })
