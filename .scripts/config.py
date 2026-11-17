@@ -60,10 +60,13 @@ DEFAULT_CATALOG_EXCLUDED = {
 COFFEE_USER = OWNER
 PAYPAL_URL = f"https://paypal.me/{OWNER}"
 COFFEE_URL = f"https://buymeacoffee.com/{COFFEE_USER}"
+# The beer badge is a joke on the coffee page it links to: "coffee" is struck through with
+# combining long stroke overlays (U+0336), which Shields renders as written.
+STRUCK_COFFEE = "".join(f"{letter}\u0336" for letter in "coffee")
 # name -> (alt text, left label, right label, color, logo, logo color, link), in display order
 SUPPORT = {
     "paypal": ("PayPal", "Support", "PayPal", "0070BA", "paypal", "white", PAYPAL_URL),
-    "coffee": ("Buy Me a Coffee", "Support", "Buy Me a Coffee", "FFDD00", "buy-me-a-coffee", "black", COFFEE_URL),
+    "beer": ("Buy me a beer", "Support \U0001F37A", f"Buy me a {STRUCK_COFFEE} Beer", "FFDD00", None, "black", COFFEE_URL),
 }
 
 

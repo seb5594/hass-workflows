@@ -65,7 +65,7 @@ def raw_url(repository, relative):
 
 
 def render(project):
-    """HTML for the centered picture; empty when the project has none."""
+    """Inline HTML of the picture, to sit inside the title; empty when the project has none."""
     image = find(project)
     if image is None:
         return ""
@@ -74,4 +74,4 @@ def render(project):
     if image.dark:
         tag = (f'<picture>\n    <source media="(prefers-color-scheme: dark)" '
                f'srcset="{raw_url(project.repository, image.dark)}">\n    {tag}\n  </picture>')
-    return f'<p align="center">\n  {tag}\n</p>'
+    return tag
