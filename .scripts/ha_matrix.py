@@ -75,7 +75,10 @@ def releases(minimum=None):
     """Known releases at or above `minimum`, oldest first."""
     table = json.loads(RELEASES.read_text())
     if minimum:
-        table = [item for item in table if version_key(item["homeassistant"]) >= version_key(minimum)]
+        minimum_key = version_key(minimum)
+        table = [item for item in table if version_key(item["homeassistant"]) >= minimum_key]
+    else:
+        table = [item for item in table if not item.get("opt_in")]
     return sorted(table, key=lambda item: version_key(item["homeassistant"]))
 
 

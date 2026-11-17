@@ -1,5 +1,6 @@
 [
-  {"homeassistant": "2022.4.7", "plugin": "0.8.12", "python": "3.9", "note": "oldest release the test plugin supports"},
+  {"homeassistant": "2021.12.10", "plugin": "0.5.14", "python": "3.9", "opt_in": true, "note": "first Core series with button entities"},
+  {"homeassistant": "2022.4.7", "plugin": "0.8.12", "python": "3.9"},
   {"homeassistant": "2022.8.7", "plugin": "0.11.12", "python": "3.9"},
   {"homeassistant": "2022.12.8", "plugin": "0.12.36", "python": "3.9"},
   {"homeassistant": "2023.1.7", "plugin": "0.12.49", "python": "3.9", "note": "last release on Python 3.9"},
