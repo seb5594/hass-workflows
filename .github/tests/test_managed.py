@@ -1,8 +1,10 @@
 """Protect the files every repository keeps in step with the engine, and the snippets behind them."""
+import io
 import json
 import tempfile
 import unittest
 import unittest.mock
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import support  # noqa: F401
@@ -151,6 +153,17 @@ class ManagedFiles(unittest.TestCase):
         self.assertEqual(managed.sync("integration", SHA, root), [".github/workflows/compat.yml"])
         managed.check("integration", root)
 
+    def test_a_repository_following_main_only_gets_a_warning_about_drift(self):
+        root = self.repository("integration")
+        managed.sync("integration", "main", root)
+        self.assertIn("ref: main", (root / ".github/workflows/ci.yml").read_text())
+        managed.check("integration", root)
+        (root / ".github/dependabot.yml").write_text("changed\n")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            managed.check("integration", root)
+        self.assertIn("::warning::", out.getvalue())
+
     def test_integration_tag_override_changes_only_its_caller(self):
         root = self.repository("integration")
         repository = projectmeta.discover(root).repository
@@ -213,7 +226,7 @@ class ManagedFiles(unittest.TestCase):
         root = self.repository("integration")
         managed.sync("integration", SHA, root)
         (root / ".github/workflows/ci.yml").write_text("name: local\n")
-        with self.assertRaisesRegex(ValueError, "pin the engine"):
+        with self.assertRaisesRegex(ValueError, "follow the engine"):
             managed.check("integration", root)
 
 

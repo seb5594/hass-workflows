@@ -4,6 +4,13 @@ The managed `compat.yml` runs daily at 05:41 UTC, on relevant code/test/workflow
 changes, and manually. GitHub schedules may be delayed; discovery happens each run,
 not through a release webhook in the upstream repository.
 
+The matrix always spans five years back from today (`SUPPORT_YEARS` in `ha_matrix.py`). The
+oldest Home Assistant series still inside that window sets the lower bound, and the curated
+release at or below it is the first target, never one above it. The bound therefore moves
+forward with the calendar and needs no commit. A project whose `hacs.json` declares an older
+minimum keeps that one; a newer minimum does not shorten the tested range, so the tests show
+where support ends. Keep `hacs.json` at or below the oldest tested release.
+
 `ha_matrix.py list --live --matrix` retains the historical Python/API boundaries
 in `ha_releases.json` and adds the newest non-yanked stable Home Assistant package
 on PyPI. It also adds the newest published alpha/dev, beta and release candidate
@@ -36,6 +43,6 @@ Every target runs the regular and real Home Assistant suites. Preview failures a
 visible failures, not ignored successes. Jobs use `fail-fast: false` so one broken
 target does not hide the rest. This workflow does not publish integration releases.
 
-After changing the engine, regenerate integration callers with `managed.py sync
-integration ENGINE_COMMIT PATH`. A pinned engine does not need further commits to
-discover new Core versions: the package metadata is fetched live on every daily run.
+Integration callers follow the engine branch `main`, so a new engine state needs no commit
+in the integration; `managed.py sync integration PATH` refreshes the callers after template
+changes. Core versions are discovered live in any case: the package metadata is fetched live on every daily run.

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """The files every repository keeps in step with the engine, each rendered from one template.
 
-    managed.py sync  KIND SHA [DIR]   write them; workflows are pinned to engine commit SHA
-    managed.py check KIND [DIR]       fail when one differs from what the engine would write
+    managed.py sync  KIND [REF] [DIR]  write them; workflows follow engine REF (`main` by default,
+                                       or a commit SHA to freeze a repository on one engine state)
+    managed.py check KIND [DIR]        fail when one differs from what the engine would write
+                                       (a repository that follows `main` only gets a warning, since
+                                       the engine moves on without a commit in the repository)
 
 KIND is one of WORKFLOWS below. DIR defaults to the current directory. GitHub reads these files
 from each repository, so they cannot be shared by reference; generating them from templates keeps
@@ -21,7 +24,8 @@ import upstream
 
 TEMPLATES = config.ENGINE_ROOT / ".templates"
 SNIPPETS = TEMPLATES / "snippets"
-PIN = re.compile(r"ref: ([0-9a-f]{40})")
+FOLLOW = "main"
+PIN = re.compile(r"ref: ([0-9a-f]{40}|main)\n")
 
 
 @dataclass(frozen=True)
@@ -157,21 +161,25 @@ def pinned_sha(kind, root="."):
     workflow = Path(root) / WORKFLOWS[kind].target
     found = PIN.search(workflow.read_text())
     if not found:
-        raise ValueError(f"{workflow} must pin the engine to a commit SHA")
+        raise ValueError(f"{workflow} must follow the engine branch `{FOLLOW}` or pin a commit SHA")
     return found.group(1)
 
 
 def check(kind, root="."):
     """Every managed file must equal its template, rendered for the engine commit the workflow pins."""
     root = Path(root)
-    differing = [path for path, text in expected(kind, pinned_sha(kind, root), root).items()
+    ref = pinned_sha(kind, root)
+    differing = [path for path, text in expected(kind, ref, root).items()
                  if not (root / path).is_file() or (root / path).read_text() != text]
-    if differing:
+    if differing and ref == FOLLOW:
+        print(f"::warning::Files differ from the current engine templates, run "
+              f"`managed.py sync {kind}`: {', '.join(sorted(differing))}")
+    elif differing:
         raise ValueError(f"Files differ from the engine templates (run managed.py sync): "
                          f"{', '.join(sorted(differing))}")
 
 
-def sync(kind, sha, root="."):
+def sync(kind, sha=FOLLOW, root="."):
     """Write the managed files; returns the paths that changed."""
     root = Path(root)
     changed = []

@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+import datetime
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -50,8 +51,24 @@ class Releases(InProject):
             item["homeassistant"] for item in ha_matrix.releases(minimum)
         }
         self.assertIn(target, versions(target))
-        self.assertNotIn(target, versions())
+        self.assertIn(target, versions("2022.1.0") | versions(target))
         self.assertNotIn(target, versions("2022.1.0"))
+
+    def test_the_support_line_trails_today_by_five_years(self):
+        day = datetime.date.fromisoformat
+        self.assertEqual(ha_matrix.support_line(day("2026-11-18")), (2021, 11))
+        self.assertEqual(ha_matrix.support_line(day("2026-11-03")), (2021, 10))  # .0 may not be out yet
+        self.assertEqual(ha_matrix.support_line(day("2027-01-05")), (2021, 12))
+        self.assertEqual(ha_matrix.support_line(day("2024-02-29")), (2019, 2))
+
+    def test_the_tested_range_always_covers_five_years(self):
+        day = datetime.date.fromisoformat
+        self.assertEqual(ha_matrix.supported_minimum(None, day("2026-11-18")), "2021.11.5")
+        # The curated release at or below the line is chosen, never one above it.
+        self.assertEqual(ha_matrix.supported_minimum("2026.5.0", day("2027-06-20")), "2022.4.7")
+        self.assertEqual(ha_matrix.supported_minimum("2026.5.0", day("2027-12-20")), "2022.12.8")
+        # A project that supports even more keeps its own, older minimum.
+        self.assertEqual(ha_matrix.supported_minimum("2021.11.0", day("2027-12-20")), "2021.11.0")
 
     def test_the_minimum_comes_from_hacs_json(self):
         self.assertIsNone(ha_matrix.minimum_from_hacs(self.root))
@@ -81,10 +98,15 @@ class Listing(InProject):
         self.write("hacs.json", json.dumps({"homeassistant": "2023.2.0"}))
         self.assertEqual(self.listed(), [])
 
-    def test_projects_with_real_tests_run_from_their_minimum_upwards(self):
+    def test_projects_with_real_tests_run_from_the_support_line_upwards(self):
         self.write(".github/ha_tests/test_real.py")
+        # Even a project that declares a recent minimum is tested over the whole support window.
         self.write("hacs.json", json.dumps({"homeassistant": "2025.1.0"}))
-        self.assertEqual(self.listed(), ["2025.1.4", "2025.12.4", "2026.2.3", "2026.9.4"])
+        with mock.patch.object(ha_matrix, "supported_minimum", wraps=ha_matrix.supported_minimum) as chosen:
+            listed = self.listed()
+        self.assertEqual(listed[0], ha_matrix.supported_minimum("2025.1.0"))
+        self.assertEqual(listed[-4:], ["2025.1.4", "2025.12.4", "2026.2.3", "2026.9.4"])
+        chosen.assert_called_once_with("2025.1.0")
         self.assertEqual(self.listed("--minimum", "2026.9.0"), ["2026.9.4"])
 
 

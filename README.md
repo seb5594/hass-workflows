@@ -30,7 +30,7 @@ for apps; companion image measurements cannot overwrite the primary app's badges
 
 | Path in the project | Meaning |
 | --- | --- |
-| `.github/workflows/ci.yml` | The caller. Must equal the template for the pinned engine commit; CI fails on drift |
+| `.github/workflows/ci.yml` | The caller. Follows the engine branch `main` (or a pinned commit); on a pinned commit CI fails on drift, on `main` it warns |
 | `.github/tests/` | All tests, kept out of the repository root (`tests/` is accepted as a fallback) |
 | `.github/ha_tests/` | Integrations only: tests against a real Home Assistant core. Never part of the regular run; the Compatibility workflow runs them for every Home Assistant release from the `hacs.json` minimum upwards (see below) |
 | `.github/workflows/compat.yml` | The Compatibility caller of a project with `ha_tests`, kept in step like `ci.yml` |
@@ -60,7 +60,7 @@ GitHub only reads workflows, Dependabot, Renovate and funding settings from the 
 | `<app>/entrypoint.sh` | Shared startup code of apps that do not run on s6 |
 | `.github/DEVELOPMENT.md` | Catalogs only: how the generated catalog is maintained |
 
-`python .engine/.scripts/managed.py sync <kind> <engine-sha>` inside a repository rewrites all of them (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Public apps, integrations and the integration catalog share the **Home Assistant CI** name.
+`python .engine/.scripts/managed.py sync <kind> [<engine-ref>]` inside a repository rewrites all of them (`main` by default, so the repository always runs the newest pipeline; pass a commit SHA to freeze it) (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Public apps, integrations and the integration catalog share the **Home Assistant CI** name.
 The read-only compatibility workflow resolves stable and preview releases daily.
 The integration catalog keeps its release ZIP and feed semantics and its historical
 tests on external pull requests. Project-specific firmware, camera, router and
@@ -70,7 +70,7 @@ Changing a template and re-running `sync` in every repository is the whole updat
 
 ## Home Assistant compatibility
 
-An integration that keeps the lowest possible Home Assistant version proves it. [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular `.github/tests` and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
+Every integration is tested over a rolling five-year support window: whatever Home Assistant release was current five years ago, plus everything since, so the oldest tested series moves forward with the calendar (see [`supported_minimum`](.scripts/ha_matrix.py)). A project that declares an even older minimum in `hacs.json` keeps it. [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular `.github/tests` and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
 
 The Compatibility workflow lists the releases at or above the minimum in `hacs.json` and tests each in its own job, daily and for relevant project changes. Each live run also resolves the current stable and preview versions from PyPI. See [compatibility testing](docs/COMPATIBILITY.md) for fixture selection and the frozen CI targets. Locally: `python .engine/.scripts/ha_matrix.py run 2026.9.4`; `list` prints the releases as JSON. A release is added to the table together with the first test run that proves it works.
 

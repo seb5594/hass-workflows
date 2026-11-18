@@ -9,7 +9,7 @@ in it, when the project has them:
 * .github/ha_tests  tests against a real Home Assistant core
 
 Historical releases come from ha_releases.json. --live adds the latest stable
-and upcoming alpha/dev, beta and RC packages from PyPI, honoring hacs.json's minimum.
+and upcoming alpha/dev, beta and RC packages from PyPI, from the oldest release inside the five-year support window (or hacs.json's minimum when that is older).
 
 CLI:
     ha_matrix.py list [--minimum VERSION]    JSON list of releases (for a CI matrix)
@@ -19,6 +19,7 @@ CLI:
 Environment: HASS_MATRIX_DIR keeps the virtual environments between runs.
 """
 import argparse
+import datetime
 import json
 import os
 import re
@@ -63,6 +64,38 @@ def version_key(version):
     return (int(major), int(minor), int(patch),
             {"a": 0, "b": 1, "rc": 2, None: 3}[stage] if dev is None else -1,
             int(serial or dev or 0))
+
+
+SUPPORT_YEARS = 5
+
+
+def support_line(today=None):
+    """(year, month) of the oldest Home Assistant series that must still work.
+
+    Every release published within the last SUPPORT_YEARS years has to be supported, so the line
+    moves forward with the calendar. A series is counted as released from the 8th of its month,
+    because the monthly .0 release always lands in the first week; that keeps the line on the
+    safe, older side.
+    """
+    today = today or datetime.date.today()
+    day = today.replace(year=today.year - SUPPORT_YEARS, day=28) if (today.month, today.day) == (2, 29) \
+        else today.replace(year=today.year - SUPPORT_YEARS)
+    return (day.year, day.month) if day.day >= 8 else ((day.year, day.month - 1) if day.month > 1
+                                                       else (day.year - 1, 12))
+
+
+def supported_minimum(declared=None, today=None):
+    """Oldest release to test: the curated release at or below the support line.
+
+    A project that declares an even older minimum in hacs.json keeps that one.
+    """
+    line = support_line(today)
+    table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
+    at_or_below = [item["homeassistant"] for item in table if version_key(item["homeassistant"])[:2] <= line]
+    floor = at_or_below[-1] if at_or_below else table[0]["homeassistant"]
+    if declared and version_key(declared) < version_key(floor):
+        return declared
+    return floor
 
 
 def minimum_from_hacs(root=Path(".")):
@@ -216,7 +249,7 @@ def main(arguments):
     parser.add_argument("--matrix", action="store_true", help="emit complete target objects for matrix.include")
     parser.add_argument("--target-json", help="run the exact target frozen by the discovery job")
     options = parser.parse_intermixed_args(arguments)
-    minimum = options.minimum or minimum_from_hacs()
+    minimum = options.minimum or supported_minimum(minimum_from_hacs())
     if options.stable_only and (not options.live or options.selection or options.target_json):
         parser.error("--stable-only requires --live without an explicit target")
     # The hub runs its historical baseline in ci.yml, including on fork pull requests.
