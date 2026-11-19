@@ -9,7 +9,8 @@ in it, when the project has them:
 * .github/ha_tests  tests against a real Home Assistant core
 
 Historical releases come from ha_releases.json. --live adds the latest stable
-and upcoming alpha/dev, beta and RC packages from PyPI, from the oldest release inside the five-year support window (or hacs.json's minimum when that is older).
+and upcoming alpha/dev, beta and RC packages from PyPI, honoring hacs.json's
+declared minimum. Without a declaration, a rolling five-year window is used.
 
 CLI:
     ha_matrix.py list [--minimum VERSION]    JSON list of releases (for a CI matrix)
@@ -85,16 +86,14 @@ def support_line(today=None):
 
 
 def supported_minimum(declared=None, today=None):
-    """Oldest release to test: the curated release at or below the support line.
-
-    A project that declares an even older minimum in hacs.json keeps that one.
-    """
+    """Honor a declared support boundary; use the rolling window as a fallback."""
+    if declared:
+        version_key(declared)
+        return declared
     line = support_line(today)
     table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
     at_or_below = [item["homeassistant"] for item in table if version_key(item["homeassistant"])[:2] <= line]
     floor = at_or_below[-1] if at_or_below else table[0]["homeassistant"]
-    if declared and version_key(declared) < version_key(floor):
-        return declared
     return floor
 
 

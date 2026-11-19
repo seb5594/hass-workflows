@@ -4,12 +4,13 @@ The managed `compat.yml` runs daily at 05:41 UTC, on relevant code/test/workflow
 changes, and manually. GitHub schedules may be delayed; discovery happens each run,
 not through a release webhook in the upstream repository.
 
-The matrix always spans five years back from today (`SUPPORT_YEARS` in `ha_matrix.py`). The
-oldest Home Assistant series still inside that window sets the lower bound, and the curated
-release at or below it is the first target, never one above it. The bound therefore moves
-forward with the calendar and needs no commit. A project whose `hacs.json` declares an older
-minimum keeps that one; a newer minimum does not shorten the tested range, so the tests show
-where support ends. Keep `hacs.json` at or below the oldest tested release.
+A project's explicit `homeassistant` minimum in `hacs.json` sets the lower bound.
+This includes newer declarations such as 2023.6.0: targets below that supported
+boundary are not selected. An older declaration also remains authoritative.
+Without a declaration, the matrix uses a rolling five-year window
+(`SUPPORT_YEARS` in `ha_matrix.py`). The curated release at or below that window's
+oldest series is the first target, so the fallback moves with the calendar.
+The CLI `--minimum` option remains an explicit override.
 
 `ha_matrix.py list --live --matrix` retains the historical Python/API boundaries
 in `ha_releases.json` and adds the newest non-yanked stable Home Assistant package
