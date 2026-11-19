@@ -53,7 +53,9 @@ stable target up to the newest one passed (as `Y.M.0`) into `homeassistant`, the
 `github-actions[bot]`. The value moves in both directions, so a fixed incompatibility lowers it
 again on the next run. Nothing changes when the newest stable release fails (that is a
 regression, not a boundary), when a result is missing, or for previews. Between two curated
-release table entries the boundary is rounded up to the passing one. HACS reads the minimum from
+release table entries the boundary is rounded up to the passing one. A target below the minimum that `hacs.json` already declares may fail without turning the
+workflow red (it is shown as a notice); only releases the project claims to support do.
+HACS reads the minimum from
 `hacs.json`; a custom integration's `manifest.json` has no such key.
 
 Integration callers follow the engine branch `main`, so a new engine state needs no commit

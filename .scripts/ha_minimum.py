@@ -10,13 +10,14 @@ is changed in that case. The same goes for missing results.
 CLI:
     ha_minimum.py record DIR TARGET_JSON OUTCOME   write the result of one matrix target
     ha_minimum.py raise  DIR [--expected JSON]     update hacs.json; prints the chosen minimum
+    ha_minimum.py gate   TARGET_JSON OUTCOME       fail only when a target the project claims fails
 """
 import argparse
 import json
 import sys
 from pathlib import Path
 
-from ha_matrix import version_key
+from ha_matrix import minimum_from_hacs, version_key
 
 
 def record(directory, target, outcome):
@@ -66,6 +67,18 @@ def write_minimum(version, root=Path(".")):
     return True
 
 
+def gate(target, outcome, root=Path(".")):
+    """Exit code of one target: a failure below the declared minimum is a known boundary, not an error."""
+    if outcome == "success":
+        return 0
+    declared = minimum_from_hacs(root)
+    if declared and version_key(target["homeassistant"]) < version_key(declared):
+        print(f"::notice::Home Assistant {target['homeassistant']} fails, which hacs.json already "
+              f"excludes (minimum {declared}).")
+        return 0
+    return 1
+
+
 def main(arguments):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -73,6 +86,9 @@ def main(arguments):
     rec.add_argument("directory", type=Path)
     rec.add_argument("target")
     rec.add_argument("outcome")
+    gat = sub.add_parser("gate")
+    gat.add_argument("target")
+    gat.add_argument("outcome")
     rai = sub.add_parser("raise")
     rai.add_argument("directory", type=Path)
     rai.add_argument("--expected", help="JSON list of the targets the matrix started")
@@ -80,6 +96,8 @@ def main(arguments):
     if options.command == "record":
         record(options.directory, json.loads(options.target), options.outcome)
         return 0
+    if options.command == "gate":
+        return gate(json.loads(options.target), options.outcome)
     expected = [item["homeassistant"] for item in json.loads(options.expected)] if options.expected else None
     chosen = choose_minimum(load(options.directory), expected)
     if chosen is None:

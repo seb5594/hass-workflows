@@ -46,6 +46,19 @@ class ChooseMinimum(unittest.TestCase):
         self.assertIsNone(ha_minimum.choose_minimum([result("2026.12.0b1", True, True)]))
 
 
+class Gate(unittest.TestCase):
+    def test_only_failures_the_project_claims_are_errors(self):
+        root = Path(tempfile.mkdtemp())
+        (root / "hacs.json").write_text('{"homeassistant": "2022.8.0"}')
+        old, new = {"homeassistant": "2022.4.7"}, {"homeassistant": "2022.8.7"}
+        self.assertEqual(ha_minimum.gate(old, "failure", root), 0)
+        self.assertEqual(ha_minimum.gate(new, "failure", root), 1)
+        self.assertEqual(ha_minimum.gate(new, "success", root), 0)
+
+    def test_without_a_declared_minimum_every_failure_counts(self):
+        self.assertEqual(ha_minimum.gate({"homeassistant": "2022.4.7"}, "failure", Path(tempfile.mkdtemp())), 1)
+
+
 class Files(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())

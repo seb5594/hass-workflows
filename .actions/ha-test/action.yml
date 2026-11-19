@@ -12,6 +12,7 @@ runs:
         packages: uv
     - name: Test selected Home Assistant release
       id: test
+      continue-on-error: true
       env:
         HA_TARGET: ${{ inputs.target }}
       shell: bash
@@ -29,3 +30,10 @@ runs:
         name: ha-result-${{ fromJSON(inputs.target).homeassistant }}
         path: ${{ runner.temp }}/ha-result
         if-no-files-found: error
+    - name: Fail unless the release is below the declared minimum
+      if: ${{ !cancelled() }}
+      env:
+        HA_TARGET: ${{ inputs.target }}
+        OUTCOME: ${{ steps.test.outcome }}
+      shell: bash
+      run: python .engine/.scripts/ha_minimum.py gate "$HA_TARGET" "$OUTCOME"
