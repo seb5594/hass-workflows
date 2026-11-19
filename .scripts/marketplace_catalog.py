@@ -128,7 +128,7 @@ def main():
         if base64.b64decode(current["content"]).decode() != proposed:
             raise ValueError("Existing submission branch differs. Review it before retrying.")
         result = api(f"repos/{UPSTREAM}/pulls", {
-            "title": f"Add {repository}", "head": f"{owner}:{head}", "base": branch, "body": body,
+            "title": f"Add {repository}", "head": f"{owner}:{head}", "head_repo": fork["name"], "base": branch, "body": body,
         })
         print(result["html_url"])
         return
@@ -142,7 +142,7 @@ def main():
     })
     api(f"repos/{fork_repo}/git/refs/heads/{head}", {"sha": commit["sha"]}, method="PATCH")
     result = api(f"repos/{UPSTREAM}/pulls", {
-        "title": f"Add {repository}", "head": f"{owner}:{head}", "base": branch, "body": body,
+        "title": f"Add {repository}", "head": f"{owner}:{head}", "head_repo": fork["name"], "base": branch, "body": body,
     })
     print(result["html_url"])
 
