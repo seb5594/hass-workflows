@@ -18,7 +18,9 @@ def api(path, payload=None, method="POST"):
     if payload is not None:
         command += ["--method", method, "--input", "-"]
     result = subprocess.run(command, input=json.dumps(payload) if payload is not None else None,
-                            capture_output=True, text=True, check=True)
+                            capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"GitHub API request failed for {path}: {result.stderr.strip()}")
     return json.loads(result.stdout)
 
 
@@ -128,7 +130,7 @@ def main():
         if base64.b64decode(current["content"]).decode() != proposed:
             raise ValueError("Existing submission branch differs. Review it before retrying.")
         result = api(f"repos/{UPSTREAM}/pulls", {
-            "title": f"Add {repository}", "head": f"{owner}:{head}", "head_repo": fork["name"], "base": branch, "body": body,
+            "title": f"Add {repository}", "head": f"{owner}:{head}", "base": branch, "body": body,
         })
         print(result["html_url"])
         return
@@ -142,7 +144,7 @@ def main():
     })
     api(f"repos/{fork_repo}/git/refs/heads/{head}", {"sha": commit["sha"]}, method="PATCH")
     result = api(f"repos/{UPSTREAM}/pulls", {
-        "title": f"Add {repository}", "head": f"{owner}:{head}", "head_repo": fork["name"], "base": branch, "body": body,
+        "title": f"Add {repository}", "head": f"{owner}:{head}", "base": branch, "body": body,
     })
     print(result["html_url"])
 
