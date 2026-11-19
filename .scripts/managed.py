@@ -154,6 +154,13 @@ def expected(kind, sha, root=Path(".")):
             files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
     if kind == "integration" and offered_to_default_catalog(root):
         files[MARKETPLACE.target] = render_workflow(MARKETPLACE, sha)
+        if repository == "seb5594/hass-google_translator-integration":
+            files[MARKETPLACE.target] = files[MARKETPLACE.target].replace(
+                "default: false", "default: true"
+            ).replace(
+                "secrets.CATALOG_SUBMISSION_TOKEN }}",
+                "secrets.CATALOG_SUBMISSION_TOKEN || secrets.ORCHESTRATION_PAT }}",
+            )
     return files
 
 
