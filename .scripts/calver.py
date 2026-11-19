@@ -49,7 +49,16 @@ def bump(root=Path("."), day=None):
         manifest = json.loads(text)
         if not is_calendar(manifest.get("version", "")):
             continue
-        new = next_version(manifest["version"], day)
+        if manifest.get("domain") == "google_translator":
+            current_day = datetime.strptime(day or today(), "%Y.%m.%d").date()
+            found = CALENDAR.fullmatch(manifest["version"])
+            previous = datetime.strptime(".".join(found.groups()[:3]), "%Y.%d.%m").date()
+            if current_day > previous:
+                new = current_day.strftime("%Y.%d.%m")
+            else:
+                new = previous.strftime("%Y.%d.%m") + f".{int(found[4] or 1) + 1}"
+        else:
+            new = next_version(manifest["version"], day)
         path.write_text(re.sub(r'("version"\s*:\s*)"[^"]*"', rf'\g<1>"{new}"', text, count=1))
         changed[str(path)] = new
     return changed
