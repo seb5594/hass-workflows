@@ -80,9 +80,12 @@ Apps use static versions throughout: a tagged base image and exact `apk` package
 
 Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
 then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a
-later day and never moves backwards. The dotted spelling `YYYY.MM.DD.BUILD` numbers every build,
-starting at `.1` each day (`2026.11.10.1`, `2026.11.10.2`, then `2026.11.11.1`); it reads the same
-in an app's `config.yaml` and an integration's `manifest.json`. Date separators do not mark a pre-release. Existing
+later day and never moves backwards. The dotted spelling `YYYY.MM.DD.BUILD` numbers every build of an app,
+starting at `.1` each day (`2026.11.10.1`, `2026.11.10.2`, then `2026.11.11.1`).
+Integrations use the same spelling in `manifest.json` but leave the suffix off the first build of a day:
+`2026.11.19`, then `2026.11.19.1`, `2026.11.19.2`, and `2026.11.20` on the next day.
+[`calver.py`](.scripts/calver.py) computes the next one (`calver.py next 2026.11.19` prints
+`2026.11.19.1`) and `calver.py bump` rewrites the manifest; versions of another shape stay untouched. Date separators do not mark a pre-release. Existing
 numeric and pre-release version formats keep their behavior; `stage: experimental` remains
 an app metadata choice.
 
