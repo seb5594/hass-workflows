@@ -1,0 +1,33 @@
+name: Keep the minimum Home Assistant version in step with the tests
+description: Write the oldest release that passed together with every newer stable one into hacs.json
+inputs:
+  results:
+    description: Directory with the result files of the matrix targets
+    required: true
+  expected:
+    description: JSON list of the matrix targets that were started
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: ./.engine/.actions/setup-python
+      with:
+        packages: packaging==26.0
+    - id: minimum
+      env:
+        RESULTS: ${{ inputs.results }}
+        EXPECTED: ${{ inputs.expected }}
+      shell: bash
+      run: python .engine/.scripts/ha_minimum.py raise "$RESULTS" --expected "$EXPECTED" | tee -a "$GITHUB_OUTPUT"
+    - name: Commit the new minimum
+      if: steps.minimum.outputs.changed == 'true'
+      env:
+        MINIMUM: ${{ steps.minimum.outputs.minimum }}
+      shell: bash
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add hacs.json
+        git commit -m "chore: set the minimum Home Assistant version to $MINIMUM"
+        git pull --rebase --autostash
+        git push

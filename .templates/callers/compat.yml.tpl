@@ -46,3 +46,24 @@ jobs:
       - uses: ./.engine/.actions/ha-test
         with:
           target: ${{ toJSON(matrix) }}
+
+  minimum:
+    # Not for pull requests, which cannot write, nor for forks.
+    needs: [releases, test]
+    if: ${{ !cancelled() && needs.releases.result == 'success' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      # include: checkout-engine
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ha-result-*
+          path: ${{ runner.temp }}/ha-results
+          merge-multiple: true
+      - uses: ./.engine/.actions/ha-minimum
+        with:
+          results: ${{ runner.temp }}/ha-results
+          expected: ${{ needs.releases.outputs.releases }}

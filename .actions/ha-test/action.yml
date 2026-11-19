@@ -11,7 +11,21 @@ runs:
       with:
         packages: uv
     - name: Test selected Home Assistant release
+      id: test
       env:
         HA_TARGET: ${{ inputs.target }}
       shell: bash
       run: python .engine/.scripts/ha_matrix.py run --target-json "$HA_TARGET"
+    - name: Record the result for the minimum version
+      if: ${{ !cancelled() }}
+      env:
+        HA_TARGET: ${{ inputs.target }}
+        OUTCOME: ${{ steps.test.outcome }}
+      shell: bash
+      run: python .engine/.scripts/ha_minimum.py record "$RUNNER_TEMP/ha-result" "$HA_TARGET" "$OUTCOME"
+    - uses: actions/upload-artifact@v7
+      if: ${{ !cancelled() }}
+      with:
+        name: ha-result-${{ fromJSON(inputs.target).homeassistant }}
+        path: ${{ runner.temp }}/ha-result
+        if-no-files-found: error

@@ -69,6 +69,14 @@ class WorkflowTemplates(unittest.TestCase):
         self.assertIn("timeout-minutes: 30", integration)
         self.assertIn("name: Home Assistant CI", integration)
 
+    def test_only_the_minimum_job_of_the_compat_caller_may_write(self):
+        text = managed.render_workflow(managed.COMPATIBILITY, SHA)
+        self.assertEqual(text.count("contents: write"), 1)
+        job = text[text.index("\n  minimum:"):]
+        self.assertIn("contents: write", job)
+        self.assertIn("github.event_name != 'pull_request'", job)
+        self.assertIn("./.engine/.actions/ha-minimum", job)
+
     def test_secrets_are_withheld_from_fork_pull_requests(self):
         for workflow in (managed.WORKFLOWS["app"], managed.COMPATIBILITY):
             text = managed.render_workflow(workflow, SHA)
@@ -76,7 +84,7 @@ class WorkflowTemplates(unittest.TestCase):
 
     def test_compat_caller_tests_every_release_of_the_matrix_in_its_own_job(self):
         text = managed.render_workflow(managed.COMPATIBILITY, SHA)
-        self.assertEqual(text.count(f"ref: {SHA}"), 2)
+        self.assertEqual(text.count(f"ref: {SHA}"), 3)
         self.assertIn("./.engine/.actions/ha-targets", text)
         self.assertIn("fromJSON(needs.releases.outputs.releases)", text)
         self.assertIn('ha_matrix.py run --target-json "$HA_TARGET"', (config.ENGINE_ROOT / ".actions/ha-test/action.yml").read_text())

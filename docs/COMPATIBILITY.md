@@ -43,6 +43,18 @@ Every target runs the regular and real Home Assistant suites. Preview failures a
 visible failures, not ignored successes. Jobs use `fail-fast: false` so one broken
 target does not hide the rest. This workflow does not publish integration releases.
 
+## Minimum version in hacs.json
+
+The whole window is tested, but `hacs.json` should only promise what passed. Each matrix target
+leaves a small result artifact. On the default branch the `minimum` job reads them all with
+[`ha_minimum.py`](../.scripts/ha_minimum.py) and writes the oldest release from which every
+stable target up to the newest one passed (as `Y.M.0`) into `homeassistant`, then commits it as
+`github-actions[bot]`. The value moves in both directions, so a fixed incompatibility lowers it
+again on the next run. Nothing changes when the newest stable release fails (that is a
+regression, not a boundary), when a result is missing, or for previews. Between two curated
+release table entries the boundary is rounded up to the passing one. HACS reads the minimum from
+`hacs.json`; a custom integration's `manifest.json` has no such key.
+
 Integration callers follow the engine branch `main`, so a new engine state needs no commit
 in the integration; `managed.py sync integration PATH` refreshes the callers after template
 changes. Core versions are discovered live in any case: the package metadata is fetched live on every daily run.
