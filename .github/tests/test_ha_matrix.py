@@ -77,6 +77,11 @@ class Releases(InProject):
         with self.assertRaises(ValueError):
             ha_matrix.supported_minimum("invalid")
 
+    def test_the_declared_time_entity_floor_has_an_exact_core_fixture_target(self):
+        first = ha_matrix.releases("2023.6.0")[0]
+        self.assertEqual((first["homeassistant"], first["plugin"], first["python"]),
+                         ("2023.6.0", "0.13.36", "3.10"))
+
     def test_the_minimum_comes_from_hacs_json(self):
         self.assertIsNone(ha_matrix.minimum_from_hacs(self.root))
         self.write("hacs.json", json.dumps({"homeassistant": "2023.2.0"}))

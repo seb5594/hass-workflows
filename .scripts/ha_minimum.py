@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep the minimum Home Assistant version of hacs.json in step with what the tests prove.
 
-The compatibility matrix covers the whole support window. Every target leaves a small result file
+The compatibility matrix covers the selected support range. Every target leaves a small result file
 (see `record`); `raise` reads them all and writes the oldest release from which every stable
 target up to the newest one passed into hacs.json, which is where HACS reads the minimum.
 A failing newest stable release is a regression, not a compatibility boundary, so nothing
