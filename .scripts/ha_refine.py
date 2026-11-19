@@ -26,9 +26,9 @@ def series(version):
 
 
 def gap_candidates(failed, passed, published):
-    """Stable `Y.M.0` releases of the series above `failed` up to and including that of `passed`."""
-    wanted = {f"{major}.{minor}.0" for major, minor, patch, *_ in map(version_key, published)
-              if patch == 0 and series(failed) < (major, minor) <= series(passed)}
+    """`Y.M.0` of every stable series above `failed` up to and including that of `passed`."""
+    wanted = {f"{major}.{minor}.0" for major, minor, *_ in map(version_key, published)
+              if series(failed) < (major, minor) <= series(passed)}
     return sorted(wanted, key=version_key)
 
 
@@ -56,6 +56,17 @@ def matching_plugin(version, core, plugin_releases, fetch=ha_discovery.fetch):
     return None
 
 
+def series_target(label, core, plugin_releases, fetch=ha_discovery.fetch):
+    """A target for the series named `Y.M.0`: its first release, else the next one a plugin matches."""
+    wanted = series(label)
+    patches = sorted((text for text in stable_versions(core) if series(text) == wanted), key=version_key)
+    for version in patches:
+        target = build_target(version, core, plugin_releases, fetch)
+        if target:
+            return target
+    return None
+
+
 def table_pins(version):
     """Dependency pins of the curated release at or below `version`; later ones broke older Cores."""
     table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
@@ -78,6 +89,15 @@ def build_target(version, core, plugin_releases, fetch=ha_discovery.fetch):
     return target
 
 
+def exact_target(version, fetch=ha_discovery.fetch):
+    """A target for exactly `version` (for example a project's declared minimum), or None."""
+    core = fetch("homeassistant")
+    if version not in core["releases"]:
+        return None
+    target = build_target(version, core, fetch(PLUGIN), fetch)
+    return target and {**target, "note": "declared minimum"}
+
+
 def bisect(candidates, passes):
     """First candidate that passes, assuming everything above it passes too; None if none does."""
     low, high = 0, len(candidates)
@@ -91,14 +111,15 @@ def bisect(candidates, passes):
 
 
 def refine(failed, passed, passes, fetch=ha_discovery.fetch):
-    """The lowest release between `failed` and `passed` that passes, or `passed` itself.
+    """The lowest series (`Y.M.0`) between `failed` and `passed` that passes, or `passed` itself.
 
-    `passes(target)` runs one target. Series without a matching test plugin are skipped.
+    `passes(target)` runs one target. A series is tested at its first release, or at the next one
+    a test plugin exists for; a series with no matching plugin at all is skipped.
     """
     core, plugins = fetch("homeassistant"), fetch(PLUGIN)
     targets = {}
     for version in gap_candidates(failed, passed, stable_versions(core)):
-        target = build_target(version, core, plugins, fetch)
+        target = series_target(version, core, plugins, fetch)
         if target:
             targets[version] = target
     found = bisect(list(targets), lambda version: passes(targets[version]))

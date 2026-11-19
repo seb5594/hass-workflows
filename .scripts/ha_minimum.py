@@ -68,6 +68,22 @@ def boundary(results):
     return stable[start - 1]["homeassistant"], stable[start]["homeassistant"]
 
 
+def keep_declared(pair, declared):
+    """Whether the declared minimum already lies in the gap the matrix could not resolve.
+
+    Without a boundary search the coarse result would round the minimum up to the passing release,
+    undoing an earlier search. A declared value inside the gap stays; the next push re-checks it.
+    """
+    if not pair or not declared:
+        return False
+    failed, passed = pair
+    return series(failed) < series(declared) <= series(passed)
+
+
+def series(version):
+    return version_key(version)[:2]
+
+
 def refined_minimum(failed, passed):
     """Bisect the series between the failed and the passed release with real test runs.
 
@@ -138,8 +154,11 @@ def main(arguments):
     expected = [item["homeassistant"] for item in json.loads(options.expected)] if options.expected else None
     results = load(options.directory)
     chosen = choose_minimum(results, expected)
-    if chosen is not None and options.refine and boundary(results):
-        chosen = refined_minimum(*boundary(results)) or chosen
+    pair = boundary(results)
+    if chosen is not None and options.refine and pair:
+        chosen = refined_minimum(*pair) or chosen
+    elif chosen is not None and keep_declared(pair, minimum_from_hacs()):
+        chosen = minimum_from_hacs()
     if chosen is None:
         print("Results are incomplete or the newest stable release fails: hacs.json stays as it is.", file=sys.stderr)
         return 0

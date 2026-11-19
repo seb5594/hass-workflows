@@ -10,7 +10,7 @@ in it, when the project has them:
 
 Historical releases come from ha_releases.json. --live adds the latest stable
 and upcoming alpha/dev, beta and RC packages from PyPI, honoring hacs.json's
-declared minimum. Without a declaration, a rolling five-year window is used.
+declared minimum when that is older than the rolling five-year window.
 
 CLI:
     ha_matrix.py list [--minimum VERSION]    JSON list of releases (for a CI matrix)
@@ -86,14 +86,17 @@ def support_line(today=None):
 
 
 def supported_minimum(declared=None, today=None):
-    """Honor a declared support boundary; use the rolling window as a fallback."""
-    if declared:
-        version_key(declared)
-        return declared
+    """Oldest release to test: the curated release at or below the support line.
+
+    A project that declares an even older minimum in hacs.json keeps that one. A newer declaration
+    does not shorten the range: the tests find the true boundary, which `ha_minimum` writes back.
+    """
     line = support_line(today)
     table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
     at_or_below = [item["homeassistant"] for item in table if version_key(item["homeassistant"])[:2] <= line]
     floor = at_or_below[-1] if at_or_below else table[0]["homeassistant"]
+    if declared and version_key(declared) < version_key(floor):
+        return declared
     return floor
 
 
@@ -256,6 +259,12 @@ def main(arguments):
     if options.live and real_tests().is_dir():
         from ha_discovery import discover
         targets = {item["homeassistant"]: item for item in available}
+        declared = minimum_from_hacs()
+        if declared and not options.minimum and declared not in targets:
+            from ha_refine import exact_target
+            exact = exact_target(declared)  # the declared minimum itself is always tested exactly
+            if exact:
+                targets[declared] = exact
         for item in discover():
             if not minimum or version_key(item["homeassistant"]) >= version_key(minimum):
                 targets[item["homeassistant"]] = item

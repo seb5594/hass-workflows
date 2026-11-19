@@ -64,6 +64,40 @@ class Candidates(unittest.TestCase):
 
     def test_a_series_without_matching_plugin_is_skipped(self):
         self.assertIsNone(ha_refine.build_target("2022.7.0", CORE, PLUGINS, fetch))
+        self.assertIsNone(ha_refine.series_target("2022.7.0", CORE, PLUGINS, fetch))
+
+    def test_a_series_falls_back_to_a_later_release_a_plugin_exists_for(self):
+        key = ("pytest-homeassistant-custom-component", "0.9.0")
+        original = INFOS[key]
+        INFOS[key] = "2022.5.5"  # the plugin of that series pins the second release, not the first
+        plugins = {"releases": {**PLUGINS["releases"], "0.9.0": files("05-22")}}
+        try:
+            target = ha_refine.series_target("2022.5.0", CORE, plugins, fetch)
+        finally:
+            INFOS[key] = original
+        self.assertEqual(target["homeassistant"], "2022.5.5")
+
+
+class Exact(unittest.TestCase):
+    def test_the_declared_minimum_gets_a_target_of_its_own(self):
+        target = ha_refine.exact_target("2022.6.0", fetch)
+        self.assertEqual((target["homeassistant"], target["plugin"], target["note"]),
+                         ("2022.6.0", "0.10.0", "declared minimum"))
+
+    def test_an_unknown_or_unmatched_declaration_gets_none(self):
+        self.assertIsNone(ha_refine.exact_target("2099.1.0", fetch))
+        self.assertIsNone(ha_refine.exact_target("2022.7.0", fetch))
+
+
+class KeepDeclared(unittest.TestCase):
+    def test_a_declared_minimum_inside_the_gap_survives_a_run_without_search(self):
+        pair = ("2026.2.3", "2026.9.4")
+        self.assertTrue(ha_minimum.keep_declared(pair, "2026.3.0"))
+        self.assertTrue(ha_minimum.keep_declared(pair, "2026.9.0"))
+        self.assertFalse(ha_minimum.keep_declared(pair, "2026.2.0"))   # below: it fails
+        self.assertFalse(ha_minimum.keep_declared(pair, "2026.11.0"))  # above: the boundary is lower
+        self.assertFalse(ha_minimum.keep_declared(None, "2026.3.0"))
+        self.assertFalse(ha_minimum.keep_declared(pair, None))
 
 
 class Bisect(unittest.TestCase):

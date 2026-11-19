@@ -4,12 +4,11 @@ The managed `compat.yml` runs daily at 05:41 UTC, on relevant code/test/workflow
 changes, and manually. GitHub schedules may be delayed; discovery happens each run,
 not through a release webhook in the upstream repository.
 
-A project's explicit `homeassistant` minimum in `hacs.json` sets the lower bound.
-This includes newer declarations such as 2023.6.0: targets below that supported
-boundary are not selected. An older declaration also remains authoritative.
-Without a declaration, the matrix uses a rolling five-year window
-(`SUPPORT_YEARS` in `ha_matrix.py`). The curated release at or below that window's
-oldest series is the first target, so the fallback moves with the calendar.
+The matrix always spans five years back from today (`SUPPORT_YEARS` in `ha_matrix.py`); the
+curated release at or below that window's oldest series is the first target. A project that
+declares an even older minimum in `hacs.json` keeps it. A newer declaration does not shorten
+the range: the tests find the real boundary and `ha_minimum.py` writes it back (see below).
+The declared minimum is also tested as a target of its own, so it is never taken on trust.
 The CLI `--minimum` option remains an explicit override.
 
 `ha_matrix.py list --live --matrix` retains the historical Python/API boundaries
@@ -66,8 +65,8 @@ runs (not on the daily schedule) the `minimum` job narrows it down with
 boundary, lists the `.0` release of every series in between, builds a target for each (the test
 plugin that pins exactly that Core, the lowest Python it allows, the dependency pins of the
 curated release below it) and bisects, so three or four environments suffice for a gap of a year.
-Series without such a plugin are skipped. If even the first release of the passed series fails,
-the passed target's own version is written. The search assumes that everything above the boundary
+A series is tested at its first release, or at the next one a plugin exists for (the boundary is then reported as `Y.M.0`); a series with no matching plugin at all is skipped. If even the first release of the passed series fails,
+the passed target's own version is written. On runs without a search (the daily schedule) a declared minimum that lies inside the unresolved gap is kept, so an earlier search is never undone by rounding up. The search assumes that everything above the boundary
 passes, which the coarse run has already confirmed for the curated targets.
 
 Integration callers follow the engine branch `main`, so a new engine state needs no commit
