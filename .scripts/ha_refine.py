@@ -1,0 +1,105 @@
+"""Narrow the minimum Home Assistant version down between a failed and a passed release.
+
+The compatibility matrix only knows the curated releases of ha_releases.json. When one of them
+fails and the next one passes, the true boundary lies somewhere in between. This module lists the
+`.0` release of every series in that gap, builds a test target for each (the plugin that pins that
+exact Core, the lowest Python it allows) and bisects over them, so the boundary is found with a
+handful of environments instead of one per series.
+"""
+import json
+import re
+from datetime import datetime, timedelta
+
+from packaging.requirements import Requirement
+from packaging.version import Version
+
+import ha_discovery
+from ha_matrix import RELEASES, version_key
+
+PLUGIN = "pytest-homeassistant-custom-component"
+# The matching plugin release follows its Core release within weeks.
+PLUGIN_WINDOW = timedelta(days=75)
+
+
+def series(version):
+    return version_key(version)[:2]
+
+
+def gap_candidates(failed, passed, published):
+    """Stable `Y.M.0` releases of the series above `failed` up to and including that of `passed`."""
+    wanted = {f"{major}.{minor}.0" for major, minor, patch, *_ in map(version_key, published)
+              if patch == 0 and series(failed) < (major, minor) <= series(passed)}
+    return sorted(wanted, key=version_key)
+
+
+def stable_versions(core):
+    return [text for text, files in core["releases"].items()
+            if re.fullmatch(r"\d+\.\d+\.\d+", text) and files and any(not f.get("yanked") for f in files)]
+
+
+def upload_time(files):
+    return datetime.fromisoformat(min(item["upload_time"] for item in files))
+
+
+def matching_plugin(version, core, plugin_releases, fetch=ha_discovery.fetch):
+    """The newest plugin release whose Core requirement is exactly `version`, or None."""
+    released = upload_time(core["releases"][version])
+    window = sorted((text for text, files in plugin_releases["releases"].items() if files
+                     and released - timedelta(days=2) <= upload_time(files) <= released + PLUGIN_WINDOW),
+                    key=lambda text: upload_time(plugin_releases["releases"][text]))
+    for text in window:
+        info = fetch(PLUGIN, text)["info"]
+        pins = [Requirement(item) for item in info.get("requires_dist") or []
+                if Requirement(item).name == "homeassistant"]
+        if pins and str(pins[0].specifier) == f"=={version}":
+            return info
+    return None
+
+
+def table_pins(version):
+    """Dependency pins of the curated release at or below `version`; later ones broke older Cores."""
+    table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
+    below = [item for item in table if version_key(item["homeassistant"]) <= version_key(version)]
+    return list((below[-1] if below else table[0]).get("pins", []))
+
+
+def build_target(version, core, plugin_releases, fetch=ha_discovery.fetch):
+    """A matrix target for one exact release, or None when no test plugin matches it."""
+    plugin = matching_plugin(version, core, plugin_releases, fetch)
+    if plugin is None:
+        return None
+    info = fetch("homeassistant", version)["info"]
+    target = {"homeassistant": version, "plugin": plugin["version"], "preview": False,
+              "python": ha_discovery.python_minor(info["requires_python"], plugin["requires_python"]),
+              "note": "boundary search"}
+    pins = table_pins(version)
+    if pins:
+        target["pins"] = pins
+    return target
+
+
+def bisect(candidates, passes):
+    """First candidate that passes, assuming everything above it passes too; None if none does."""
+    low, high = 0, len(candidates)
+    while low < high:
+        middle = (low + high) // 2
+        if passes(candidates[middle]):
+            high = middle
+        else:
+            low = middle + 1
+    return candidates[low] if low < len(candidates) else None
+
+
+def refine(failed, passed, passes, fetch=ha_discovery.fetch):
+    """The lowest release between `failed` and `passed` that passes, or `passed` itself.
+
+    `passes(target)` runs one target. Series without a matching test plugin are skipped.
+    """
+    core, plugins = fetch("homeassistant"), fetch(PLUGIN)
+    targets = {}
+    for version in gap_candidates(failed, passed, stable_versions(core)):
+        target = build_target(version, core, plugins, fetch)
+        if target:
+            targets[version] = target
+    found = bisect(list(targets), lambda version: passes(targets[version]))
+    return found or passed

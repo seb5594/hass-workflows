@@ -7,18 +7,23 @@ inputs:
   expected:
     description: JSON list of the matrix targets that were started
     required: true
+  refine:
+    description: Also test the series between the failed and the passed release
+    default: 'false'
 runs:
   using: composite
   steps:
     - uses: ./.engine/.actions/setup-python
       with:
-        packages: packaging==26.0
+        packages: packaging==26.0 uv
     - id: minimum
       env:
         RESULTS: ${{ inputs.results }}
         EXPECTED: ${{ inputs.expected }}
+        REFINE: ${{ inputs.refine == 'true' && '--refine' || '' }}
       shell: bash
-      run: python .engine/.scripts/ha_minimum.py raise "$RESULTS" --expected "$EXPECTED" | tee -a "$GITHUB_OUTPUT"
+      # Unquoted on purpose: REFINE is either empty or one flag.
+      run: python .engine/.scripts/ha_minimum.py raise "$RESULTS" --expected "$EXPECTED" $REFINE | tee -a "$GITHUB_OUTPUT"
     - name: Commit the new minimum
       if: steps.minimum.outputs.changed == 'true'
       env:

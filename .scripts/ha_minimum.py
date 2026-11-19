@@ -9,7 +9,9 @@ is changed in that case. The same goes for missing results.
 
 CLI:
     ha_minimum.py record DIR TARGET_JSON OUTCOME   write the result of one matrix target
-    ha_minimum.py raise  DIR [--expected JSON]     update hacs.json; prints the chosen minimum
+    ha_minimum.py raise  DIR [--expected JSON] [--refine]
+                                                   update hacs.json; prints the chosen minimum,
+                                                   --refine bisects the gap below it first
     ha_minimum.py gate   TARGET_JSON OUTCOME       fail only when a target the project claims fails
 """
 import argparse
@@ -52,6 +54,39 @@ def choose_minimum(results, expected=None):
     return f"{major}.{minor}.0"
 
 
+def boundary(results):
+    """(highest failed, lowest passed) stable release around the minimum, or None without a failure."""
+    stable = sorted((item for item in results if not item["preview"]),
+                    key=lambda item: version_key(item["homeassistant"]))
+    if not stable or not stable[-1]["passed"]:
+        return None
+    start = len(stable) - 1
+    while start > 0 and stable[start - 1]["passed"]:
+        start -= 1
+    if start == 0:
+        return None
+    return stable[start - 1]["homeassistant"], stable[start]["homeassistant"]
+
+
+def refined_minimum(failed, passed):
+    """Bisect the series between the failed and the passed release with real test runs.
+
+    Returns the lowest passing release; when no series in the gap passes, the passed release itself.
+    """
+    import ha_matrix
+    import ha_refine
+
+    domains, requirements = ha_matrix.manifest_dependencies(), ha_matrix.manifest_requirements()
+
+    def passes(target):
+        outcome = all(ha_matrix.test_release(target, domains, requirements).values())
+        print(f"Boundary search: Home Assistant {target['homeassistant']} "
+              f"{'passes' if outcome else 'fails'}", file=sys.stderr)
+        return outcome
+
+    return ha_refine.refine(failed, passed, passes)
+
+
 def write_minimum(version, root=Path(".")):
     """Set `homeassistant` in hacs.json; returns True when the file changed."""
     path = Path(root) / "hacs.json"
@@ -92,6 +127,8 @@ def main(arguments):
     rai = sub.add_parser("raise")
     rai.add_argument("directory", type=Path)
     rai.add_argument("--expected", help="JSON list of the targets the matrix started")
+    rai.add_argument("--refine", action="store_true",
+                     help="test the series between the failed and the passed release")
     options = parser.parse_args(arguments)
     if options.command == "record":
         record(options.directory, json.loads(options.target), options.outcome)
@@ -99,7 +136,10 @@ def main(arguments):
     if options.command == "gate":
         return gate(json.loads(options.target), options.outcome)
     expected = [item["homeassistant"] for item in json.loads(options.expected)] if options.expected else None
-    chosen = choose_minimum(load(options.directory), expected)
+    results = load(options.directory)
+    chosen = choose_minimum(results, expected)
+    if chosen is not None and options.refine and boundary(results):
+        chosen = refined_minimum(*boundary(results)) or chosen
     if chosen is None:
         print("Results are incomplete or the newest stable release fails: hacs.json stays as it is.", file=sys.stderr)
         return 0

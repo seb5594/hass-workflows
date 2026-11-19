@@ -58,6 +58,18 @@ workflow red (it is shown as a notice); only releases the project claims to supp
 HACS reads the minimum from
 `hacs.json`; a custom integration's `manifest.json` has no such key.
 
+### Boundary search
+
+The curated targets are far apart, so the coarse result is rounded up. On pushes and manual
+runs (not on the daily schedule) the `minimum` job narrows it down with
+[`ha_refine.py`](../.scripts/ha_refine.py): it takes the failed and the passed target around the
+boundary, lists the `.0` release of every series in between, builds a target for each (the test
+plugin that pins exactly that Core, the lowest Python it allows, the dependency pins of the
+curated release below it) and bisects, so three or four environments suffice for a gap of a year.
+Series without such a plugin are skipped. If even the first release of the passed series fails,
+the passed target's own version is written. The search assumes that everything above the boundary
+passes, which the coarse run has already confirmed for the curated targets.
+
 Integration callers follow the engine branch `main`, so a new engine state needs no commit
 in the integration; `managed.py sync integration PATH` refreshes the callers after template
 changes. Core versions are discovered live in any case: the package metadata is fetched live on every daily run.

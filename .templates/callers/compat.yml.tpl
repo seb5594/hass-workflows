@@ -52,7 +52,7 @@ jobs:
     needs: [releases, test]
     if: ${{ !cancelled() && needs.releases.result == 'success' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60 # The boundary search builds a few extra environments.
     permissions:
       contents: write
     steps:
@@ -67,3 +67,4 @@ jobs:
         with:
           results: ${{ runner.temp }}/ha-results
           expected: ${{ needs.releases.outputs.releases }}
+          refine: ${{ github.event_name != 'schedule' }}
