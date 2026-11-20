@@ -15,6 +15,7 @@ CLI:
     ha_minimum.py gate   TARGET_JSON OUTCOME       fail only when a target the project claims fails
 """
 import argparse
+from itertools import combinations
 import json
 import subprocess
 import sys
@@ -85,6 +86,16 @@ def series(version):
     return version_key(version)[:2]
 
 
+def pin_variants(target):
+    """The target with every subset of its pins, the full set first and none last."""
+    pins = target.get("pins", [])
+    variants = []
+    for size in range(len(pins), -1, -1):
+        for chosen in combinations(pins, size):
+            variants.append({**{k: v for k, v in target.items() if k != "pins"}, **({"pins": list(chosen)} if chosen else {})})
+    return variants
+
+
 def refined_minimum(failed, passed):
     """Bisect the series between the failed and the passed release with real test runs.
 
@@ -97,8 +108,9 @@ def refined_minimum(failed, passed):
 
     def passes(target):
         """True or False for a tested release; None when its environment cannot be built at all."""
-        # The pins of the curated release below were made for that series; a later one may not take them.
-        for attempt in (target, {key: value for key, value in target.items() if key != "pins"}):
+        # The pins of the curated release below were made for that series; a later one may not take
+        # all of them, so the largest set of them that installs is used.
+        for attempt in pin_variants(target):
             try:
                 outcome = all(ha_matrix.test_release(attempt, domains, requirements).values())
             except subprocess.CalledProcessError:

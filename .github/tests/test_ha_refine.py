@@ -100,6 +100,17 @@ class KeepDeclared(unittest.TestCase):
         self.assertFalse(ha_minimum.keep_declared(pair, None))
 
 
+class Pins(unittest.TestCase):
+    def test_every_subset_of_the_pins_is_offered_largest_first(self):
+        target = {"homeassistant": "2025.6.0", "pins": ["josepy<2", "aiohasupervisor==0.2.2b5"]}
+        sets = [variant.get("pins", []) for variant in ha_minimum.pin_variants(target)]
+        self.assertEqual(sets, [["josepy<2", "aiohasupervisor==0.2.2b5"], ["josepy<2"],
+                                ["aiohasupervisor==0.2.2b5"], []])
+
+    def test_a_target_without_pins_has_one_variant(self):
+        self.assertEqual(ha_minimum.pin_variants({"homeassistant": "2025.6.0"}), [{"homeassistant": "2025.6.0"}])
+
+
 class Bisect(unittest.TestCase):
     def run_search(self, first_passing):
         asked = []
