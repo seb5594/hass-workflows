@@ -54,7 +54,7 @@ ENTRYPOINT, RUN_SCRIPT, S6 = "entrypoint", "run", "s6"
 # Calendar versions come in two spellings: YYYY-MM-DD[.N] (first build of a day has no suffix) and
 # YYYY.MM.DD.N (every build carries its number, starting at 1).
 VERSION = re.compile(r"(?:\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:\.(?:[2-9]|[1-9]\d+))?|"
-                     r"\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])\.[1-9]\d*|"
+                     r"\d{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12]\d|3[01])(?:\.[1-9]\d*)?|"
                      r"\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)")
 
 
