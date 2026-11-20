@@ -99,11 +99,20 @@ def exact_target(version, fetch=ha_discovery.fetch):
 
 
 def bisect(candidates, passes):
-    """First candidate that passes, assuming everything above it passes too; None if none does."""
+    """First candidate that passes, assuming everything above it passes too; None if none does.
+
+    `passes` may return None for a candidate that cannot be tested at all (its environment does not
+    install); that candidate is dropped instead of counting as a failure.
+    """
+    candidates = list(candidates)
     low, high = 0, len(candidates)
     while low < high:
         middle = (low + high) // 2
-        if passes(candidates[middle]):
+        outcome = passes(candidates[middle])
+        if outcome is None:
+            del candidates[middle]
+            high -= 1
+        elif outcome:
             high = middle
         else:
             low = middle + 1

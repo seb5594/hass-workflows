@@ -119,6 +119,16 @@ class Bisect(unittest.TestCase):
         found, _ = self.run_search("2022.8.7")
         self.assertEqual(found, "2022.8.7")
 
+    def test_a_candidate_that_cannot_be_installed_is_skipped_not_failed(self):
+        asked = []
+
+        def passes(candidate):
+            asked.append(candidate)
+            return None if candidate == "c" else candidate >= "b"
+
+        self.assertEqual(ha_refine.bisect(["a", "b", "c", "d"], passes), "b")
+        self.assertIn("c", asked)
+
     def test_bisect_returns_none_when_nothing_passes(self):
         self.assertIsNone(ha_refine.bisect(["a", "b"], lambda _: False))
 

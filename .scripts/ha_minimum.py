@@ -16,6 +16,7 @@ CLI:
 """
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -95,10 +96,19 @@ def refined_minimum(failed, passed):
     domains, requirements = ha_matrix.manifest_dependencies(), ha_matrix.manifest_requirements()
 
     def passes(target):
-        outcome = all(ha_matrix.test_release(target, domains, requirements).values())
-        print(f"Boundary search: Home Assistant {target['homeassistant']} "
-              f"{'passes' if outcome else 'fails'}", file=sys.stderr)
-        return outcome
+        """True or False for a tested release; None when its environment cannot be built at all."""
+        # The pins of the curated release below were made for that series; a later one may not take them.
+        for attempt in (target, {key: value for key, value in target.items() if key != "pins"}):
+            try:
+                outcome = all(ha_matrix.test_release(attempt, domains, requirements).values())
+            except subprocess.CalledProcessError:
+                continue
+            print(f"Boundary search: Home Assistant {target['homeassistant']} "
+                  f"{'passes' if outcome else 'fails'}", file=sys.stderr)
+            return outcome
+        print(f"Boundary search: Home Assistant {target['homeassistant']} cannot be installed, skipped",
+              file=sys.stderr)
+        return None
 
     return ha_refine.refine(failed, passed, passes)
 
