@@ -42,15 +42,25 @@ def next_version(version=None, day=None):
 
 
 def bump(root=Path("."), day=None):
-    """Raise the calendar version of every integration under `root`; returns {path: new version}."""
+    """Raise calendar versions in integration manifests and app config files."""
+    import yaml
+
+    root = Path(root)
+    paths = sorted(root.glob("custom_components/*/manifest.json"))
+    paths += sorted(path for path in root.glob("*/config.yaml") if not path.parts[-2].startswith("."))
     changed = {}
-    for path in sorted(Path(root).glob("custom_components/*/manifest.json")):
+    for path in paths:
         text = path.read_text()
-        manifest = json.loads(text)
-        if not is_calendar(manifest.get("version", "")):
+        metadata = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+        version = str(metadata.get("version", "")).replace("-", ".")
+        if not is_calendar(version):
             continue
-        new = next_version(manifest["version"], day)
-        path.write_text(re.sub(r'("version"\s*:\s*)"[^"]*"', rf'\g<1>"{new}"', text, count=1))
+        new = next_version(version, day)
+        if path.suffix == ".json":
+            updated = re.sub(r'("version"\s*:\s*)"[^"]*"', rf'\g<1>"{new}"', text, count=1)
+        else:
+            updated = re.sub(r'(?m)^(version:\s*)[^\n]+', rf'\g<1>"{new}"', text, count=1)
+        path.write_text(updated)
         changed[str(path)] = new
     return changed
 
