@@ -34,9 +34,15 @@ LEGACY_PREAMBLE = re.compile(
 def title(project):
     """Picture above the name, both in one heading: GitHub draws a rule under every h1, and one
     heading keeps it below both instead of between them."""
-    name, picture = html.escape(project.name), brand.render(project)
+    name = html.escape(project.name)
+    image = brand.find(project)
+    picture = brand.render(project, image)
     if not picture:
         return f'<h1 align="center">{name}</h1>'
+    reviewed_logo = project.root / ".github/readme-title-logo"
+    if (reviewed_logo.is_file() and Path(image.light).name.startswith("logo")
+            and reviewed_logo.read_text(encoding="utf-8").strip() == image.light):
+        return f'<h1 align="center">\n  {picture}\n</h1>'
     return f'<h1 align="center">\n  {picture}\n  <br>\n  {name}\n</h1>'
 
 

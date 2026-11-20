@@ -60,13 +60,12 @@ def find(project):
     return None
 
 
-def raw_url(repository, relative):
-    return f"https://raw.githubusercontent.com/{repository}/{config.DEFAULT_BRANCH}/{quote(relative, safe='/@')}"
+def raw_url(repository, relative, ref=None):
+    return f"https://raw.githubusercontent.com/{repository}/{ref or config.DEFAULT_BRANCH}/{quote(relative, safe='/@')}"
 
 
-def render(project):
+def render(project, image):
     """Inline HTML of the picture, to sit inside the title; empty when the project has none."""
-    image = find(project)
     if image is None:
         return ""
     tag = (f'<img src="{raw_url(project.repository, image.light)}" alt="{html.escape(project.name)}" '

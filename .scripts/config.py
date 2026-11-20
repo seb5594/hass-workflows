@@ -60,13 +60,11 @@ DEFAULT_CATALOG_EXCLUDED = {
 COFFEE_USER = OWNER
 PAYPAL_URL = f"https://paypal.me/{OWNER}"
 COFFEE_URL = f"https://buymeacoffee.com/{COFFEE_USER}"
-# The beer badge is a joke on the coffee page it links to: "coffee" is struck through with
-# combining long stroke overlays (U+0336), which Shields renders as written.
-STRUCK_COFFEE = "".join(f"{letter}\u0336" for letter in "coffee")
+BEER_BADGE_URL = "https://raw.githubusercontent.com/seb5594/Home-Assistant-Apps/473dc258f963096745aac327df54950eb9b59066/.github/assets/support-beer.svg"
 # name -> (alt text, left label, right label, color, logo, logo color, link), in display order
 SUPPORT = {
     "paypal": ("PayPal", "Support", "PayPal", "0070BA", "paypal", "white", PAYPAL_URL),
-    "beer": ("Buy me a beer", "Support \U0001F37A", f"Buy me a {STRUCK_COFFEE} Beer", "FFDD00", None, "black", COFFEE_URL),
+    "beer": ("Buy me a beer", "Support \U0001F37A", "Buy me a beer", "FFDD00", None, "black", COFFEE_URL),
 }
 
 

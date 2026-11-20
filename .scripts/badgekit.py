@@ -42,8 +42,11 @@ class Badge:
     path: str
     params: dict
     link: str | None = None
+    source: str | None = None
 
     def url(self, style=STYLE):
+        if self.source:
+            return self.source
         return f"https://img.shields.io/{self.path}?" + urlencode({**self.params, "style": style}, quote_via=quote)
 
     def markdown(self, style=STYLE):
@@ -89,7 +92,8 @@ def workflow(repo, filename, label, link=None, branch=None):
 
 def support_badge(name):
     alt, left, right, color, logo, logo_color, link = config.SUPPORT[name]
-    return replace(static(left, right, color, link, logo, logo_color), alt=alt)
+    return replace(static(left, right, color, link, logo, logo_color), alt=alt,
+                   source=config.BEER_BADGE_URL if name == "beer" else None)
 
 
 def support_badges():
@@ -271,12 +275,12 @@ def architectures(ctx):
     """
     sizes = measured(ctx, "image_size") or {}
     declared = sorted(ctx["data"]["arch"], key=architecture_rank)
-    if not sizes:
+    if not any(arch in sizes for arch in declared):
         return [static("arch", " · ".join(declared), "ok")]
-    known = [arch for arch in declared if arch in sizes]
-    unmeasured = [arch for arch in declared if arch not in sizes]
-    parts = [f"{arch} {sizes[arch].removesuffix(' MiB')}" for arch in known]
-    message = " · ".join(parts) + " MiB" + "".join(f" · {arch}" for arch in unmeasured)
+    last_measured = next(arch for arch in reversed(declared) if arch in sizes)
+    parts = [f"{arch} {sizes[arch].removesuffix(' MiB')}" if arch in sizes else arch for arch in declared]
+    parts[declared.index(last_measured)] += " MiB"
+    message = " · ".join(parts)
     return [static("arch & size", message, "ok")]
 
 

@@ -118,9 +118,10 @@ class HeaderStructure(unittest.TestCase):
         support_row = paragraphs(self.header())[-1]
         self.assertIn('href="https://paypal.me/seb5594"', support_row)
         self.assertIn('href="https://buymeacoffee.com/seb5594"', support_row)
-        self.assertLess(support_row.index("PayPal"), support_row.index("Beer"))
-        self.assertIn("Support%20%F0%9F%8D%BA", support_row)
-        self.assertIn("Buy%20me%20a%20c%CC%B6o%CC%B6f%CC%B6f%CC%B6e%CC%B6e%CC%B6%20Beer", support_row)
+        self.assertLess(support_row.index("PayPal"), support_row.index("Buy me a beer"))
+        self.assertIn(f'src="{config.BEER_BADGE_URL}"', support_row)
+        self.assertIn('alt="Buy me a beer"', support_row)
+        self.assertNotIn("%CC%B6", support_row)
         self.assertNotIn("logo=buy-me-a-coffee", support_row)
 
     def test_first_row_installs_and_names_the_minimum_home_assistant(self):
@@ -180,13 +181,25 @@ class HeaderLogo(unittest.TestCase):
         self.assertNotIn("brand/icon.png", block)
         self.assertIn('width="200" height="100"', block)
 
+    def test_reviewed_logo_replaces_visible_text_but_keeps_the_accessible_name(self):
+        def prepare(brand):
+            self.png(brand / "logo.png", 200, 100)
+            marker = brand.parents[2] / ".github/readme-title-logo"
+            marker.parent.mkdir(exist_ok=True)
+            marker.write_text("custom_components/demo/brand/logo.png\n", encoding="utf-8")
+
+        heading = self.block(prepare).split("</h1>")[0]
+        self.assertIn('alt="Demo Integration"', heading)
+        self.assertNotIn("<br>", heading)
+        self.assertNotIn("\n  Demo Integration", heading)
+
     def test_icon_is_the_fallback(self):
         block = self.block(lambda brand: self.png(brand / "icon.png", 128, 128))
         self.assertIn("raw.githubusercontent.com/seb5594/demo-integration/main/custom_components/demo/brand/icon.png", block)
 
     def test_no_picture_leaves_the_space_empty(self):
         block = self.block(lambda brand: None)
-        self.assertNotIn("raw.githubusercontent.com", block)
+        self.assertNotIn("raw.githubusercontent.com/seb5594/demo-integration/", block)
         self.assertNotIn("<picture>", block)
         self.assertEqual(block.count("\n\n\n"), 0)
 
@@ -341,11 +354,11 @@ class AppHeader(unittest.TestCase):
         self.assertEqual(rows[-1].tier, badgekit.MINOR)
 
     def test_architectures_and_sizes_share_one_badge(self):
-        data = {"version": "1", "arch": ["aarch64", "amd64", "armv7"]}
+        data = {"version": "1", "arch": ["armhf", "aarch64", "amd64", "armv7", "i386"]}
         rows = badgekit.app_rows(data, "o/n", measured_values={"image_size": {"amd64": 16 * 1024 * 1024,
                                                                                   "aarch64": 19 * 1024 * 1024}})
         block = badgekit.render(badgekit.plain(rows))
-        self.assertIn("label=arch%20%26%20size&message=amd64%2016.0%20%C2%B7%20aarch64%2019.0%20MiB%20%C2%B7%20armv7", block)
+        self.assertIn("label=arch%20%26%20size&message=amd64%2016.0%20%C2%B7%20aarch64%2019.0%20MiB%20%C2%B7%20armv7%20%C2%B7%20armhf%20%C2%B7%20i386", block)
         self.assertNotIn("label=image%20size", block)
         self.assertEqual(block.count("label=arch"), 1)
 
@@ -433,7 +446,8 @@ class ReadmeUpdates(unittest.TestCase):
             tail = text[text.index(readme.SUPPORT_START):]
             self.assertIn("## Say thanks", tail)
             self.assertIn("hot drink", tail)
-            self.assertEqual(tail.count("style=for-the-badge"), 2)
+            self.assertEqual(tail.count("style=for-the-badge"), 1)
+            self.assertIn(config.BEER_BADGE_URL, tail)
             self.assertIn("https://paypal.me/seb5594", tail)
             self.assertFalse(readme.update(root))
 
