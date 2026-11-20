@@ -42,6 +42,7 @@ def first_file(files, *candidates):
 
 def load_apps(repository, sha, files):
     apps = []
+    measured = optional_json(repository, sha, files, METRICS_FILE)
     for path in sorted(files):
         parts = path.split("/")
         if parts[-1] not in {"config.yaml", "config.yml"} or any(p.startswith(".") for p in parts):
@@ -49,7 +50,7 @@ def load_apps(repository, sha, files):
         data = yaml.safe_load(raw(repository, sha, path))
         if isinstance(data, dict) and "slug" in data:
             folder = "/".join(parts[:-1])
-            apps.append({**data, "path": folder, "icon": first_file(files, f"{folder}/icon.png")})
+            apps.append({**data, "path": folder, "metrics": measured, "icon": first_file(files, f"{folder}/icon.png")})
     return apps
 
 

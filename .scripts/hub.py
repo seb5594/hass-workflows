@@ -75,7 +75,7 @@ def cell(text):
     return str(text).replace("|", "\\|").replace("\n", " ").strip()
 
 
-ICON_HEIGHT = 44
+ICON_HEIGHT = 64
 LOGO_URL = f"{remote.RAW}/{CATALOGS['integrations']}/main/assets/seb5594.png"
 TAGLINE = "Everything I publish for Home Assistant, in one place."
 
@@ -109,12 +109,30 @@ def status_badges(entry, workflow_label, extra):
         + badgekit.when(badgekit.has(facts, extra[0]), [extra[1]])])
 
 
+def total_line(label, total, count, unit):
+    """One sentence under a table: the summed counter and how many projects it comes from."""
+    return f"**{label}:** {total:,} across {count} {unit}." if total else ""
+
+
+def app_pulls(entries):
+    """Sum of the measured image pulls of every listed app."""
+    return sum(int((app.get("metrics") or {}).get("image_pulls") or 0)
+               for entry in entries for app in entry["items"])
+
+
+def integration_downloads(entries):
+    """Sum of the release downloads of every listed integration repository."""
+    return sum(int((entry.get("live") or {}).get("downloads") or 0) for entry in entries)
+
+
 def app_table(entries):
     rows = ["| | App | Version | Runs on | Status |", "| :---: | --- | --- | --- | --- |"]
     for entry in entries:
         link, repo = project_link(entry), entry["repository"]
         for app in entry["items"]:
-            status = status_badges(entry, "build", ("stars", badgekit.github("stars", repo, "stars", f"{link}/stargazers")))
+            status = " ".join(filter(None, (
+                badgekit.render([badgekit.measurement({"metrics": app.get("metrics")}, "image_pulls", "pulls", "info")]),
+                status_badges(entry, "build", ("stars", badgekit.github("stars", repo, "stars", f"{link}/stargazers"))))))
             rows.append(f"| {icon_cell(entry, app)} | {title_cell(app['name'], link, app.get('description'))} "
                         f"| {badgekit.static('version', app['version'], 'info', f'{link}/releases')} "
                         f"| {' · '.join(app['arch'])} | {status} |")
@@ -165,9 +183,12 @@ def render_readme(apps, integrations, own=None):
     text = templating.fill((ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8"), {
         "HEADER": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
         "LICENSE_NOTE": licenses.COLLECTION_NOTE,
-        "APPS": app_table(apps) if apps else "_No apps are published yet._",
-        "INTEGRATIONS": (integration_table(integrations) if integrations
-                         else "_No integrations are published yet._")})
+        "APPS": (app_table(apps) + "\n\n" + total_line("Total image pulls", app_pulls(apps),
+                                                        sum(len(e["items"]) for e in apps), "apps")
+                 if apps else "_No apps are published yet._").rstrip(),
+        "INTEGRATIONS": ((integration_table(integrations) + "\n\n" + total_line(
+            "Total downloads", integration_downloads(integrations), len(integrations), "integrations")).rstrip()
+                         if integrations else "_No integrations are published yet._")})
     return text.rstrip("\n") + "\n"
 
 

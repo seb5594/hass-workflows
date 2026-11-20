@@ -130,6 +130,20 @@ class HubTests(unittest.TestCase):
         self.assertEqual(readme.count("<h1"), 1)
         self.assertLess(readme.index("<img src="), readme.index("Home Assistant Hub"))
 
+    def test_pulls_and_downloads_are_summed_under_their_tables(self):
+        apps = [{"items": [{"metrics": {"image_pulls": 120}}, {"metrics": {}}, {}]},
+                {"items": [{"metrics": {"image_pulls": 30}}]}]
+        self.assertEqual(hub.app_pulls(apps), 150)
+        integrations = [{"live": {"downloads": 1985}}, {"live": None}, {}]
+        self.assertEqual(hub.integration_downloads(integrations), 1985)
+        self.assertEqual(hub.total_line("Total image pulls", 1500, 4, "apps"), "**Total image pulls:** 1,500 across 4 apps.")
+        self.assertEqual(hub.total_line("Total image pulls", 0, 4, "apps"), "")
+
+    def test_an_app_with_measured_pulls_shows_them_in_its_status(self):
+        entries = hub.collect("apps")
+        entries[0]["items"][0]["metrics"] = {"image_pulls": 1234}
+        self.assertIn("label=pulls&message=1.2k", hub.app_table(entries))
+
     def test_title_without_description_has_no_empty_line_break(self):
         self.assertEqual(hub.title_cell("Demo", "https://x", ""), "**[Demo](https://x)**")
         self.assertEqual(hub.title_cell("Demo", "https://x", "Text"), "**[Demo](https://x)**<br>Text")
