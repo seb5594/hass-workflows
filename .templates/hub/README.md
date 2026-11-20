@@ -1,10 +1,7 @@
-# Home Assistant Hub
+{{HEADER}}
 
-{{BADGES}}
-
-Everything I publish for Home Assistant in one place: apps for the Supervisor and custom
-integrations for HACS. This page is generated from the two catalogs and always shows the versions
-they currently pin.
+Apps for the Supervisor and custom integrations for HACS, from one pipeline. This page is generated
+from the two catalogs and always shows the versions they currently pin.
 
 ## Get started
 
@@ -16,12 +13,16 @@ they currently pin.
 
 ## Apps
 
+📦 Add the [app catalog](https://github.com/seb5594/Home-Assistant-Apps) once, then pick any of these in the app store.
+
 {{APPS}}
 
 Apps are built for the architectures listed and run in the Home Assistant Supervisor. Details,
 options and documentation are in each app's repository.
 
 ## Integrations
+
+🧩 Each integration installs on its own through HACS or the Marketplace, no catalog needed.
 
 {{INTEGRATIONS}}
 

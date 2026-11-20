@@ -93,7 +93,7 @@ class HubTests(unittest.TestCase):
     def test_readme_merges_both_catalogs(self):
         readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"))
         for item in ("Demo App", "Demo Integration", "message=1.2.3", "message=0.4.0", "amd64 · aarch64",
-                     "≥ 2026.9.0", "A \\| piped description", "label=apps&message=1", "label=integrations&message=1"):
+                     "≥ 2026.9.0", "A \\| piped description", "label=apps&amp;message=1", "label=integrations&amp;message=1"):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
 
@@ -114,6 +114,21 @@ class HubTests(unittest.TestCase):
         self.assertLess(readme.index("## How this works"), readme.index("## Say thanks"))
         self.assertLess(readme.index("## Say thanks"), readme.index("## License"))
         self.assertTrue(readme.rstrip().endswith("terms apply."))
+
+    def test_a_description_that_repeats_the_name_is_left_out(self):
+        self.assertEqual(hub.title_cell("Car Tires Season", "https://x", "car tires season"), "**[Car Tires Season](https://x)**")
+
+    def test_icons_come_from_the_pinned_commit_and_are_optional(self):
+        entry = {"repository": "seb5594/hass-demo-integration", "sha": "a" * 40}
+        self.assertEqual(hub.icon_cell(entry, {}), "")
+        cell = hub.icon_cell(entry, {"icon": "custom_components/demo/brand/icon.png"})
+        self.assertIn(f"seb5594/hass-demo-integration/{'a' * 40}/custom_components/demo/brand/icon.png", cell)
+
+    def test_the_header_puts_logo_and_title_into_one_heading(self):
+        readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"))
+        self.assertTrue(readme.startswith('<h1 align="center">'))
+        self.assertEqual(readme.count("<h1"), 1)
+        self.assertLess(readme.index("<img src="), readme.index("Home Assistant Hub"))
 
     def test_title_without_description_has_no_empty_line_break(self):
         self.assertEqual(hub.title_cell("Demo", "https://x", ""), "**[Demo](https://x)**")

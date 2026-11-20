@@ -35,6 +35,11 @@ def readme(repository, sha, files):
     return raw(repository, sha, name) if name else ""
 
 
+def first_file(files, *candidates):
+    """The first of the candidate paths the project contains, or None."""
+    return next((path for path in candidates if path in files), None)
+
+
 def load_apps(repository, sha, files):
     apps = []
     for path in sorted(files):
@@ -43,7 +48,8 @@ def load_apps(repository, sha, files):
             continue
         data = yaml.safe_load(raw(repository, sha, path))
         if isinstance(data, dict) and "slug" in data:
-            apps.append({**data, "path": "/".join(parts[:-1])})
+            folder = "/".join(parts[:-1])
+            apps.append({**data, "path": folder, "icon": first_file(files, f"{folder}/icon.png")})
     return apps
 
 
@@ -60,8 +66,10 @@ def load_integrations(repository, sha, files):
     items = []
     for path in manifests:
         manifest = json.loads(raw(repository, sha, path))
-        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs, "path": path.rsplit("/", 1)[0],
-                      "metrics": measured, "compat": compat})
+        folder = path.rsplit("/", 1)[0]
+        items.append({**manifest, "slug": manifest["domain"], "hacs": hacs, "path": folder,
+                      "metrics": measured, "compat": compat,
+                      "icon": first_file(files, f"{folder}/brand/icon@2x.png", f"{folder}/brand/icon.png")})
     return items
 
 

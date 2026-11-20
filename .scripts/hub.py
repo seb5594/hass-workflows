@@ -75,73 +75,95 @@ def cell(text):
     return str(text).replace("|", "\\|").replace("\n", " ").strip()
 
 
+ICON_HEIGHT = 44
+LOGO_URL = f"{remote.RAW}/{CATALOGS['integrations']}/main/assets/seb5594.png"
+TAGLINE = "Everything I publish for Home Assistant, in one place."
+
+
 def title_cell(name, link, description):
-    """Linked name, with the description on a second line only when there is one."""
+    """Linked name, with the description on a second line only when it adds something."""
     text = f"**[{cell(name)}]({link})**"
-    return f"{text}<br>{cell(description)}" if description else text
+    if not description or cell(description).casefold() == cell(name).casefold():
+        return text
+    return f"{text}<br>{cell(description)}"
 
 
 def project_link(entry):
     return config.github_url(entry["repository"])
 
 
+def icon_cell(entry, item):
+    """The project's own icon at the pinned commit, or an empty cell."""
+    if not item.get("icon"):
+        return ""
+    url = f"{remote.RAW}/{entry['repository']}/{entry['sha']}/{item['icon']}"
+    return f'<img src="{url}" height="{ICON_HEIGHT}" alt="">'
+
+
+def status_badges(entry, workflow_label, extra):
+    facts = {"repo": entry["repository"], "live": entry.get("live")}
+    link = project_link(entry)
+    return badgekit.render([
+        badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
+            entry["repository"], "ci.yml", workflow_label, f"{link}/actions/workflows/ci.yml")])
+        + badgekit.when(badgekit.has(facts, extra[0]), [extra[1]])])
+
+
 def app_table(entries):
-    rows = ["| App | Version | Architectures | Status |", "| --- | --- | --- | --- |"]
+    rows = ["| | App | Version | Runs on | Status |", "| :---: | --- | --- | --- | --- |"]
     for entry in entries:
         link, repo = project_link(entry), entry["repository"]
         for app in entry["items"]:
-            facts = {"repo": repo, "live": entry.get("live")}
-            status = badgekit.render([
-                badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
-                    repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")])
-                + badgekit.when(badgekit.has(facts, "stars"), [badgekit.github(
-                    "stars", repo, "stars", f"{link}/stargazers")])])
-            rows.append(f"| {title_cell(app['name'], link, app.get('description'))} "
+            status = status_badges(entry, "build", ("stars", badgekit.github("stars", repo, "stars", f"{link}/stargazers")))
+            rows.append(f"| {icon_cell(entry, app)} | {title_cell(app['name'], link, app.get('description'))} "
                         f"| {badgekit.static('version', app['version'], 'info', f'{link}/releases')} "
                         f"| {' · '.join(app['arch'])} | {status} |")
     return "\n".join(rows)
 
 
 def integration_table(entries):
-    rows = ["| Integration | Version | Home Assistant | Status |", "| --- | --- | --- | --- |"]
+    rows = ["| | Integration | Version | Home Assistant | Status | |", "| :---: | --- | --- | --- | --- | :---: |"]
     for entry in entries:
         link, repo = project_link(entry), entry["repository"]
         for manifest in entry["items"]:
             minimum = manifest["hacs"].get("homeassistant")
-            facts = {"repo": repo, "live": entry.get("live")}
-            status = badgekit.render([
-                badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
-                    repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")])
-                + badgekit.when(badgekit.has(facts, "releases"), [badgekit.github(
-                    "downloads", repo, "downloads", f"{link}/releases", "/total", "info")])])
-            rows.append(f"| {title_cell(manifest['name'], link, manifest.get('description'))} "
+            status = status_badges(entry, "checks", ("releases", badgekit.github(
+                "downloads", repo, "downloads", f"{link}/releases", "/total", "info")))
+            install = badgekit.hacs_badge(repo)
+            rows.append(f"| {icon_cell(entry, manifest)} | {title_cell(manifest['name'], link, manifest.get('description'))} "
                         f"| {badgekit.static('version', manifest['version'], 'info', f'{link}/releases')} "
-                        f"| {'≥ ' + minimum if minimum else '–'} | {status} |")
+                        f"| {'≥ ' + minimum if minimum else '–'} | {status} | [Install]({install.link}) |")
     return "\n".join(rows)
 
 
 def render_header(apps, integrations, own=None):
+    """Logo and title in one centered heading, then the badges in three sized rows and a navigation."""
     hub = config.github_url(HUB_REPOSITORY)
-    projects = len(apps) + len(integrations)
     context = {"live": own}
-    return badgekit.render([
-        [badgekit.install_badge()]
-        + [badgekit.static("HACS", "browse integrations", "info", config.github_url(CATALOGS["integrations"]))],
-        badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
-            HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml")])
-        + [badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", config.github_url(CATALOGS["apps"])),
-           badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
-                           config.github_url(CATALOGS["integrations"])),
-           badgekit.static("repositories", str(projects), "muted")],
-        badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
-            "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
-        + [badgekit.github("last-commit", HUB_REPOSITORY, "synced", f"{hub}/commits/main")],
-    ])
+    rows = [
+        badgekit.Row(badgekit.MAJOR, [badgekit.install_badge(), badgekit.static(
+            "HACS", "browse integrations", "info", config.github_url(CATALOGS["integrations"]))]),
+        badgekit.Row(badgekit.MAJOR, [
+            badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", config.github_url(CATALOGS["apps"])),
+            badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
+                            config.github_url(CATALOGS["integrations"]))]),
+        badgekit.Row(badgekit.MINOR,
+                     badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
+                         "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
+                     + badgekit.when(badgekit.has(context, "builds"), [badgekit.workflow(
+                         HUB_REPOSITORY, "update.yml", "hub sync", f"{hub}/actions/workflows/update.yml")])
+                     + [badgekit.github("last-commit", HUB_REPOSITORY, "synced", f"{hub}/commits/main")]),
+    ]
+    title = (f'<h1 align="center">\n  <img src="{LOGO_URL}" width="160" alt="">\n  <br>\n'
+             f"  Home Assistant Hub\n</h1>")
+    navigation = ('<p align="center">\n  <a href="#get-started">Get started</a> · <a href="#apps">Apps</a> · '
+                  '<a href="#integrations">Integrations</a> · <a href="#how-this-works">How this works</a>\n</p>')
+    return "\n\n".join((title, f'<p align="center"><b>{TAGLINE}</b></p>', badgekit.render_header(rows), navigation))
 
 
 def render_readme(apps, integrations, own=None):
     text = templating.fill((ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8"), {
-        "BADGES": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
+        "HEADER": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
         "LICENSE_NOTE": licenses.COLLECTION_NOTE,
         "APPS": app_table(apps) if apps else "_No apps are published yet._",
         "INTEGRATIONS": (integration_table(integrations) if integrations
