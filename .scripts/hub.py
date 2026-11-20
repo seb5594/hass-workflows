@@ -91,11 +91,11 @@ def app_table(entries):
         link, repo = project_link(entry), entry["repository"]
         for app in entry["items"]:
             facts = {"repo": repo, "live": entry.get("live")}
-            status = " ".join(
+            status = badgekit.render([
                 badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
                     repo, "ci.yml", "build", f"{link}/actions/workflows/ci.yml")])
                 + badgekit.when(badgekit.has(facts, "stars"), [badgekit.github(
-                    "stars", repo, "stars", f"{link}/stargazers")]))
+                    "stars", repo, "stars", f"{link}/stargazers")])])
             rows.append(f"| {title_cell(app['name'], link, app.get('description'))} "
                         f"| {badgekit.static('version', app['version'], 'info', f'{link}/releases')} "
                         f"| {' · '.join(app['arch'])} | {status} |")
@@ -109,11 +109,11 @@ def integration_table(entries):
         for manifest in entry["items"]:
             minimum = manifest["hacs"].get("homeassistant")
             facts = {"repo": repo, "live": entry.get("live")}
-            status = " ".join(
+            status = badgekit.render([
                 badgekit.when(badgekit.has(facts, "builds"), [badgekit.workflow(
                     repo, "ci.yml", "checks", f"{link}/actions/workflows/ci.yml")])
                 + badgekit.when(badgekit.has(facts, "releases"), [badgekit.github(
-                    "downloads", repo, "downloads", f"{link}/releases", "/total", "info")]))
+                    "downloads", repo, "downloads", f"{link}/releases", "/total", "info")])])
             rows.append(f"| {title_cell(manifest['name'], link, manifest.get('description'))} "
                         f"| {badgekit.static('version', manifest['version'], 'info', f'{link}/releases')} "
                         f"| {'≥ ' + minimum if minimum else '–'} | {status} |")
