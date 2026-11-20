@@ -41,7 +41,7 @@ class ReleaseTitles(unittest.TestCase):
         self.assertEqual(common.release_title("1.74.3"), "v1.74.3")
 
     def test_a_build_number_does_not_change_the_title(self):
-        self.assertEqual(common.release_title("2026.10.20.0"), "v2026.10.20.0")
+        self.assertEqual(common.release_title("2026.10.20.0"), "2026.10.20.0")
         self.assertEqual(common.release_title("2026.10.20.0b2"), "Beta 2")
 
     def test_prereleases_are_titled_by_their_stage(self):

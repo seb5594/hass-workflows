@@ -14,7 +14,7 @@ import managed
 import metrics
 import projectmeta
 import readme
-from common import run, run_captured
+from common import run, run_captured, is_calendar_version
 from config import PLATFORMS
 
 ENGINE = config.ENGINE_ROOT
@@ -29,6 +29,8 @@ def should_publish(env=os.environ):
         return False
     ref = env.get("REF", "")
     prefix = config.INTEGRATION_TAG_PREFIXES.get(env.get("GITHUB_REPOSITORY"), "v")
+    if ref.startswith("refs/tags/") and is_calendar_version(ref.removeprefix("refs/tags/")):
+        return True
     return ref == f"refs/heads/{env.get('DEFAULT_BRANCH')}" or bool(
         re.fullmatch(rf"refs/tags/{re.escape(prefix)}\d[^/]*", ref)
     )

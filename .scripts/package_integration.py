@@ -102,7 +102,8 @@ def main(options):
     assert VERSION.fullmatch(version), "Use X.Y.Z or X.Y.Z.B, optionally with a PEP 440 a/b/rc pre-release"
     check_hacs(hacs, domain)
     archive = f"{domain}.zip"
-    tag = f"{config.INTEGRATION_TAG_PREFIXES.get(project.repository, 'v')}{version}"
+    from common import release_tag
+    tag = release_tag(version, config.INTEGRATION_TAG_PREFIXES.get(project.repository, "v"))
     ref = os.environ.get("GITHUB_REF", "")
     if ref.startswith("refs/tags/"):
         assert ref == f"refs/tags/{tag}", "Tag and manifest version must agree"

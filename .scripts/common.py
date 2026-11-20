@@ -8,6 +8,16 @@ import subprocess
 import sys
 
 
+def is_calendar_version(version):
+    """Recognize date versions, including legacy dashed dates and build suffixes."""
+    return bool(re.fullmatch(r"20\d{2}[.-]\d{1,2}[.-]\d{1,2}(?:\.\d+)?", str(version)))
+
+
+def release_tag(version, prefix="v"):
+    """Date versions publish without a prefix across integrations and apps."""
+    return str(version) if is_calendar_version(version) else f"{prefix}{version}"
+
+
 def image_tag(slug, version, arch=None):
     """Return ARCH-hass-SLUG-vVERSION; multi-arch images carry no ARCH prefix."""
     stem = f"hass-{slug}-v{version}"
@@ -58,7 +68,7 @@ def release_title(version):
     if found := DASHED_STAGE.fullmatch(version):
         name = "RC" if found[1].lower() == "rc" else found[1].capitalize()
         return f"{name} {found[2]}" if found[2] else name
-    return f"v{version}"
+    return release_tag(version)
 
 
 def generated_notes(repo, tag, target):

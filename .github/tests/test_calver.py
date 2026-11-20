@@ -26,6 +26,12 @@ class NextVersion(unittest.TestCase):
     def test_a_legacy_zero_build_is_followed_by_build_one(self):
         self.assertEqual(calver.next_version("2026.11.19.0", "2026.11.19"), "2026.11.19.1")
 
+    def test_calendar_tags_and_titles_have_no_prefix(self):
+        import common
+        for version in ("2026.11.20", "2026.11.20.1", "2026-11-20.2"):
+            self.assertEqual(common.release_tag(version), version)
+        self.assertEqual(common.release_tag("1.2.3"), "v1.2.3")
+
     def test_other_version_shapes_are_rejected(self):
         with self.assertRaises(ValueError):
             calver.next_version("1.2.3", "2026.11.19")
@@ -42,7 +48,7 @@ class Release(unittest.TestCase):
         import package_integration
         for version in ("2026.11.19", "2026.11.19.1"):
             self.assertFalse(common.is_prerelease(version))
-            self.assertEqual(common.release_title(version), f"v{version}")
+            self.assertEqual(common.release_title(version), version)
             self.assertTrue(package_integration.VERSION.fullmatch(version))
 
 

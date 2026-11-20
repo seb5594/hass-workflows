@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-CALENDAR = re.compile(r"(\d{4})\.(\d{2})\.(\d{2})(?:\.(\d+))?")
+CALENDAR = re.compile(r"(\d{4})\.(\d{1,2})\.(\d{1,2})(?:\.(\d+))?")
 
 
 def today():
@@ -34,7 +34,7 @@ def next_version(version=None, day=None):
         if version:
             raise ValueError(f"'{version}' is not a calendar version (YYYY.MM.DD[.BUILD])")
         return day
-    published = ".".join(found.groups()[:3])
+    published = ".".join(f"{int(part):02d}" for part in found.groups()[:3])
     if day > published:
         return day
     # A suffix-less version counts as build 0, so its successor is .1.
@@ -49,16 +49,7 @@ def bump(root=Path("."), day=None):
         manifest = json.loads(text)
         if not is_calendar(manifest.get("version", "")):
             continue
-        if manifest.get("domain") == "google_translator":
-            current_day = datetime.strptime(day or today(), "%Y.%m.%d").date()
-            found = CALENDAR.fullmatch(manifest["version"])
-            previous = datetime.strptime(".".join(found.groups()[:3]), "%Y.%d.%m").date()
-            if current_day > previous:
-                new = current_day.strftime("%Y.%d.%m")
-            else:
-                new = previous.strftime("%Y.%d.%m") + f".{int(found[4] or 1) + 1}"
-        else:
-            new = next_version(manifest["version"], day)
+        new = next_version(manifest["version"], day)
         path.write_text(re.sub(r'("version"\s*:\s*)"[^"]*"', rf'\g<1>"{new}"', text, count=1))
         changed[str(path)] = new
     return changed

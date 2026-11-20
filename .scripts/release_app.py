@@ -95,7 +95,8 @@ def main(app, *companions):
         raise ValueError("Bundled apps must have distinct slugs")
     folder, app_config = folders[0], configs[0]
     repo, ref = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF"]
-    tag = f"v{app_config['version']}"
+    from common import release_tag
+    tag = release_tag(app_config["version"])
     if ref.startswith("refs/tags/") and ref != f"refs/tags/{tag}":
         raise SystemExit("Release tag must match config.yaml version")
     exists = release_exists(tag, repo)
