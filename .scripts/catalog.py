@@ -14,10 +14,12 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 
 import badgekit
+import brand
 import config
 import excerpt
 import github_api
@@ -97,7 +99,8 @@ def app_metadata(folder):
             raise ValueError(f"Invalid app slug in {config_file}")
         if not isinstance(data.get("arch"), list) or not data["arch"] or not set(data["arch"]) <= set(config.PLATFORMS):
             raise ValueError(f"Invalid architectures in {config_file}")
-        apps.append({**data, "path": config_file.parent.relative_to(folder).as_posix(),
+        icon = config_file.parent / "icon.png"
+        apps.append({**data, "icon": icon.relative_to(folder).as_posix() if icon.is_file() else None, "path": config_file.parent.relative_to(folder).as_posix(),
                      "metrics":metrics.load(config_file.parent),
                      "excerpt": readme_excerpt(config_file.parent, data["description"], EXCERPT_MAX_CHARS)})
     if not apps:
@@ -246,19 +249,37 @@ def render_item(entry, item):
     return f"{label}<br>\n{badgekit.render(item_rows(item, entry))}"
 
 
+def render_app_entry(entry, item):
+    """Keep install decisions visible and put build and repository metrics behind a disclosure."""
+    bundled = len(entry["items"]) > 1
+    folder = item["path"].strip("/")
+    source = entry["url"]
+    if bundled:
+        source += f"/tree/{entry['commit']}" + (f"/{quote(folder)}" if folder else "")
+    icon = ""
+    if item.get("icon"):
+        url = brand.raw_url(entry["repository"], item["icon"], ref=entry["commit"])
+        icon = f'<img src="{url}" width="28" height="28" alt=""> '
+    name = item["name"].replace("[", r"\[").replace("]", r"\]")
+    description = (item.get("excerpt") or item["description"]) if bundled else item["description"]
+    arch = " · ".join(sorted(item["arch"], key=badgekit.architecture_rank))
+    docs = "README & setup" if bundled else "Source & documentation"
+    pin = f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})"
+    return [
+        f"### {icon}[{name}]({source}) ({item['version']})", "",
+        description, "", f"**Architectures** · {arch}", "",
+        f"📖 [{docs}]({source}) · {changelog_link(entry, item)}", "",
+        "<details>", "<summary>Build, image and repository details</summary>", "",
+        badgekit.render(item_rows(item, entry)), "", pin, "", "</details>", "",
+    ]
+
+
 def render_catalog(entries):
     sections = []
     for entry in entries:
-        if KIND == "apps" and len(entry["items"]) > 1:
-            # One pinned source submodule; a separate documented entry per installable app.
+        if KIND == "apps":
             for item in entry["items"]:
-                folder = item['path'].strip('/')
-                source = f"{entry['url']}/tree/{entry['commit']}" + (f"/{folder}" if folder else "")
-                sections += [f"### [{item['name']}]({source}) ({item['version']})", "",
-                             f"> {item.get('excerpt') or item['description']}", "",
-                             render_item(entry, item), "",
-                             f"[README & setup]({source}) · "
-                             f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})", ""]
+                sections.extend(render_app_entry(entry, item))
             continue
         sections += [entry_heading(entry), "", f"> {entry['excerpt']}", ""]
         for item in entry["items"]:

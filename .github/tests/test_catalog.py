@@ -58,6 +58,7 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(set(catalog.managed_submodules(self.modules | unrelated)), {"Rsync-Local"})
 
     def test_rendered_catalog_reflects_declared_features(self):
+        (self.source / "rsync-local/icon.png").touch()
         entry = {"path": "Rsync-Local", "url": f"https://github.com/seb5594/{REPOSITORY}",
                  "repository": f"seb5594/{REPOSITORY}", "excerpt": "USB backups", "commit": "a" * 40,
                  "items": catalog.app_metadata(self.source)}
@@ -65,6 +66,9 @@ class CatalogTests(unittest.TestCase):
         for item in ("message=1.74.1", "label=mounts%20%28read-only%29", "label=local%20disks", "Pinned commit",
                      "label=apps"):
             self.assertIn(item, readme)
+        self.assertIn(f"{REPOSITORY}/{entry['commit']}/rsync-local/icon.png", readme)
+        self.assertIn("**Architectures** · amd64", readme)
+        self.assertIn("<summary>Build, image and repository details</summary>", readme)
         self.assertNotIn("{{", readme)
         self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1].split("## Support")[0])
 
