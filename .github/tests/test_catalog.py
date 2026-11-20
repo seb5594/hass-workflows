@@ -67,10 +67,14 @@ class CatalogTests(unittest.TestCase):
                      "label=apps"):
             self.assertIn(item, readme)
         self.assertIn(f"{REPOSITORY}/{entry['commit']}/rsync-local/icon.png", readme)
-        self.assertIn("**Architectures** · amd64", readme)
+        self.assertNotIn("**Architectures**", readme)
+        self.assertIn("[Rsync Local](#app-rsync-local-rsync-local)", readme)
+        self.assertIn('<a name="app-rsync-local-rsync-local"></a>', readme)
+        self.assertLess(readme.index("## Install"), readme.index("## Contents"))
+        self.assertLess(readme.index("## Contents"), readme.index("## Apps"))
         self.assertIn("<summary>Build, image and repository details</summary>", readme)
         self.assertNotIn("{{", readme)
-        self.assertNotIn("buymeacoffee", readme.split("## Available apps")[1].split("## Support")[0])
+        self.assertNotIn("buymeacoffee", readme.split("## Apps")[1].split("## Support")[0])
 
     def test_repository_metadata_names_the_maintainer_handle(self):
         self.assertIn("maintainer: seb5594", catalog.repository_yaml())
