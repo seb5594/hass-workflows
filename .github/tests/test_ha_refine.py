@@ -101,6 +101,11 @@ class KeepDeclared(unittest.TestCase):
 
 
 class Pins(unittest.TestCase):
+    def test_releases_before_2026_1_get_the_pycares_pin(self):
+        old = ha_refine.build_target("2022.6.0", CORE, PLUGINS, fetch)
+        self.assertIn("pycares<5", old["pins"])
+
+
     def test_every_subset_of_the_pins_is_offered_largest_first(self):
         target = {"homeassistant": "2025.6.0", "pins": ["josepy<2", "aiohasupervisor==0.2.2b5"]}
         sets = [variant.get("pins", []) for variant in ha_minimum.pin_variants(target)]

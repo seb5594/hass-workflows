@@ -67,6 +67,10 @@ def series_target(label, core, plugin_releases, fetch=ha_discovery.fetch):
     return None
 
 
+# Pins every release before the given one needs: its aiodns breaks with the current pycares.
+OLDER_THAN_PINS = (("2026.1.0", ["pycares<5"]),)
+
+
 def table_pins(version):
     """Dependency pins of the curated release at or below `version`; later ones broke older Cores."""
     table = sorted(json.loads(RELEASES.read_text()), key=lambda item: version_key(item["homeassistant"]))
@@ -83,7 +87,8 @@ def build_target(version, core, plugin_releases, fetch=ha_discovery.fetch):
     target = {"homeassistant": version, "plugin": plugin["version"], "preview": False,
               "python": ha_discovery.python_minor(info["requires_python"], plugin["requires_python"]),
               "note": "boundary search"}
-    pins = table_pins(version)
+    pins = table_pins(version) + [pin for before, extra in OLDER_THAN_PINS
+                                  if version_key(version) < version_key(before) for pin in extra]
     if pins:
         target["pins"] = pins
     return target
