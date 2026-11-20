@@ -208,7 +208,7 @@ INTEGRATION_LAYOUT = [
 APP_LAYOUT = [
     (MAJOR, ["install", "home_assistant"]),
     (MAJOR, ["version", "image_pulls"]),
-    (MINOR, ["stage", "ingress", "architectures", "mounts", "privileged", "apparmor"]),
+    (MINOR, ["stage", "ingress", "architectures", "base_image", "mounts", "privileged", "apparmor"]),
     (MINOR, ["stars", "forks", "checks", "runtime_tests", "issues"]),
     (SUPPORT, ["paypal", "beer"]),
     (MINOR, ["license"]),
@@ -351,6 +351,9 @@ def _app_builders():
         "image_pulls": lambda c: measurement(c, "image_pulls", "image pulls", "info"),
         "runtime_tests": lambda c: measurement(c, "runtime_tests", "runtime tests", "stable", " passed"),
         "architectures": architectures,
+        "base_image": lambda c: [static("base image", c["base_image"], "info",
+                                         "https://github.com/seb5594/home-assistant-base-multi-arch")]
+        if c["base_image"] else [],
         "mounts": lambda c: mount_badges(c["data"]),
         "stage": lambda c: [static("stage", c["data"].get("stage", "stable"), "stable")],
         "ingress": flag("ingress", lambda d: "enabled", "accent", lambda d: d.get("ingress")),
@@ -385,9 +388,9 @@ def build_rows(layout, builders, context, standalone=True):
     return rows
 
 
-def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False, branch=None):
+def app_rows(data, repo, standalone=True, live=None, measured_values=None, licensed=False, branch=None, base_image=None):
     context = {"data": data, "repo": repo, "live": live, "metrics": measured_values, "licensed": licensed,
-               "minimum": data.get("homeassistant"), "hub": config.APPS_CATALOG, "standalone": standalone, "branch":branch}
+               "minimum": data.get("homeassistant"), "hub": config.APPS_CATALOG, "standalone": standalone, "branch":branch, "base_image": base_image}
     return build_rows(APP_LAYOUT, _app_builders(), context, standalone)
 
 

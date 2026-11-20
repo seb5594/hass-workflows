@@ -1,4 +1,5 @@
 """Discover, validate, build and publish one app or integration."""
+import json
 import os
 import re
 import subprocess
@@ -175,6 +176,9 @@ def main(command):
     project = projectmeta.discover()
     if command == "inspect":
         print(f"kind={project.kind}")
+        spec = Path("project.json")
+        policy = json.loads(spec.read_text()).get("apk_version_policy") if spec.is_file() else None
+        print(f"apk_repository={str(policy == 'repository').lower()}")
         print(f"directory={project.folder.as_posix()}")
         print(f"version={project.version}")
         print(f"slug={project.slug}")
