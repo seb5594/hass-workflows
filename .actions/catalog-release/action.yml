@@ -13,7 +13,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
       shell: bash
       run: |
-        tag="v$(python3 -c 'import json; print(json.load(open("custom_components/seb5594_integration_catalog/manifest.json"))["version"])')"
+        tag="$(python3 -c 'import json; print(json.load(open("custom_components/seb5594_integration_catalog/manifest.json"))["version"])')"
         echo "tag=$tag" >> "$GITHUB_OUTPUT"
         echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         if gh release view "$tag" >/dev/null 2>&1; then
