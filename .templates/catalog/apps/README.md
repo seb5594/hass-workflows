@@ -2,13 +2,17 @@
 
 {{BADGES}}
 
-Add this catalog once to install apps for backups, development tools, smart devices and more. Each entry shows its version, supported architectures and links to its setup guide.
+Add this catalog once to install apps for backups, development tools, smart devices and more. Each entry shows its version and setup links, with build and image details below.
 
 ## Install
 
 📲 Use the blue button above, or open **Settings → Apps → App store → ⋮ → Repositories** in Home Assistant and add `https://github.com/seb5594/Home-Assistant-Apps`. Older versions may call these *Add-ons* and *Add-on store*. A Supervisor-based installation, such as Home Assistant OS, is required.
 
-## Available apps
+## Contents
+
+{{CONTENTS}}
+
+## Apps
 
 <!-- Generated from the source repositories by the hass-workflows catalog action. -->
 {{APP_CATALOG}}

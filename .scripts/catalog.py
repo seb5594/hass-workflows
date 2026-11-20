@@ -249,6 +249,19 @@ def render_item(entry, item):
     return f"{label}<br>\n{badgekit.render(item_rows(item, entry))}"
 
 
+def app_link_name(item):
+    return item["name"].replace("[", r"\[").replace("]", r"\]")
+
+
+def app_anchor(entry, item):
+    return f"app-{entry['path'].lower()}-{item['slug']}"
+
+
+def render_app_contents(entries):
+    return "\n".join(f"- [{app_link_name(item)}](#{app_anchor(entry, item)})"
+                     for entry in entries for item in entry["items"])
+
+
 def render_app_entry(entry, item):
     """Keep install decisions visible and put build and repository metrics behind a disclosure."""
     bundled = len(entry["items"]) > 1
@@ -260,14 +273,14 @@ def render_app_entry(entry, item):
     if item.get("icon"):
         url = brand.raw_url(entry["repository"], item["icon"], ref=entry["commit"])
         icon = f'<img src="{url}" width="28" height="28" alt=""> '
-    name = item["name"].replace("[", r"\[").replace("]", r"\]")
+    name = app_link_name(item)
     description = (item.get("excerpt") or item["description"]) if bundled else item["description"]
-    arch = " · ".join(sorted(item["arch"], key=badgekit.architecture_rank))
     docs = "README & setup" if bundled else "Source & documentation"
     pin = f"[Pinned commit `{entry['commit'][:7]}`]({entry['url']}/commit/{entry['commit']})"
     return [
+        f'<a name="{app_anchor(entry, item)}"></a>', "",
         f"### {icon}[{name}]({source}) ({item['version']})", "",
-        description, "", f"**Architectures** · {arch}", "",
+        description, "",
         f"📖 [{docs}]({source}) · {changelog_link(entry, item)}", "",
         "<details>", "<summary>Build, image and repository details</summary>", "",
         badgekit.render(item_rows(item, entry)), "", pin, "", "</details>", "",
@@ -297,9 +310,12 @@ def license_note(entries):
 
 def render_readme(entries, own=None):
     template = (TEMPLATES / "README.md").read_text(encoding="utf-8")
-    text = templating.fill(template, {
+    values = {
         "BADGES": render_header(entries, own), "APP_CATALOG": render_catalog(entries),
-        "SUPPORT": badgekit.support_section(), "LICENSE_NOTE": license_note(entries)})
+        "SUPPORT": badgekit.support_section(), "LICENSE_NOTE": license_note(entries)}
+    if KIND == "apps":
+        values["CONTENTS"] = render_app_contents(entries)
+    text = templating.fill(template, values)
     return text.rstrip("\n") + "\n"
 
 
