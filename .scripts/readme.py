@@ -52,7 +52,12 @@ def header(root=Path("."), live=None):
     common = {"live": live, "measured_values": metrics.load(root),
               "licensed": licenses.license_file(root) is not None}
     if project.kind == projectmeta.APP:
-        rows = badgekit.app_rows(project.metadata, project.repository, **common)
+        dockerfile = project.folder / "Dockerfile"
+        source = dockerfile.read_text(encoding="utf-8") if dockerfile.is_file() else ""
+        base = re.search(r"^ARG BUILD_FROM=(ghcr\.io/seb5594/home-assistant-base(?:-python)?):([^@\s]+)",
+                         source, re.M)
+        rows = badgekit.app_rows(project.metadata, project.repository, base_image=base[2] if base else None,
+                                 **common)
     else:
         rows = badgekit.integration_rows(project.metadata, project.hacs, project.repository,
                                          compat=(root / COMPAT_WORKFLOW).exists(), **common)
