@@ -27,6 +27,11 @@ class StaticVersions(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "rsync"):
             validate_app.check_static_versions(broken)
 
+    def test_repository_policy_accepts_unpinned_apks(self):
+        validate_app.check_static_versions(GOOD.replace("rsync=3.5.0-r0", "rsync"), apk_version_policy="repository")
+        with self.assertRaises(AssertionError):
+            validate_app.check_static_versions(GOOD, apk_version_policy="unknown")
+
     def test_floating_base_images_are_rejected(self):
         for base in ("ghcr.io/home-assistant/base", "alpine:latest"):
             with self.assertRaises(AssertionError):

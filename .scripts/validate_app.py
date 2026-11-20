@@ -1,5 +1,6 @@
 """Validate app metadata before container builds or publication."""
 import re
+import json
 import sys
 from pathlib import Path
 
@@ -84,12 +85,14 @@ def check_startup_style(app, config):
         assert (root / "user/contents.d" / name).is_file(), f"Register service {name} in user/contents.d"
 
 
-def check_static_versions(dockerfile, arches=()):
+def check_static_versions(dockerfile, arches=(), apk_version_policy="exact"):
     base = re.search(r"^ARG BUILD_FROM=(\S+)", dockerfile, re.M)
     assert base, "Dockerfile must declare a default base image: ARG BUILD_FROM=<image>:<tag>"
     assert ":" in base.group(1) and not base.group(1).endswith(":latest"), "Pin the base image to a tag"
-    missing = unpinned_packages(dockerfile)
-    assert not missing, f"Pin apk packages to exact versions: {', '.join(missing)}"
+    assert apk_version_policy in ("exact", "repository"), "Unknown APK version policy"
+    if apk_version_policy == "exact":
+        missing = unpinned_packages(dockerfile)
+        assert not missing, f"Pin apk packages to exact versions: {', '.join(missing)}"
     defaults = legacy.defaults(dockerfile)
     variables = version_variables(dockerfile)
     undefined = [name for name in variables if not defaults.get(name)]
@@ -178,7 +181,9 @@ def main(folder):
     assert config["arch"] and set(config["arch"]) <= set(PLATFORMS)
     check_startup_style(app, config)
     dockerfile = (app / "Dockerfile").read_text()
-    check_static_versions(dockerfile, config["arch"])
+    project_file = app.parent / "project.json"
+    project = json.loads(project_file.read_text()) if project_file.is_file() else {}
+    check_static_versions(dockerfile, config["arch"], project.get("apk_version_policy", "exact"))
     check_release_files(app, config, dockerfile)
     check_translations(app, config)
     print(f"Validated {config['name']} {config['version']}")
