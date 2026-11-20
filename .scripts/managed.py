@@ -161,7 +161,8 @@ def expected(kind, sha, root=Path(".")):
             files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
     if kind == "integration" and offered_to_default_catalog(root):
         files[MARKETPLACE.target] = render_workflow(MARKETPLACE, sha)
-        if repository == "seb5594/hass-google_translator-integration":
+        if repository in {"seb5594/hass-google_translator-integration",
+                          "seb5594/hass-escpos-thermal-printing-designer-integration"}:
             files[MARKETPLACE.target] = files[MARKETPLACE.target].replace(
                 "default: false", "default: true"
             ).replace(
