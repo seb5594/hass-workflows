@@ -97,6 +97,12 @@ class HubTests(unittest.TestCase):
             self.assertIn(item, readme)
         self.assertNotIn("{{", readme)
 
+    def test_status_badges_with_values_render_as_markdown(self):
+        with patch.object(live, "fetch", return_value={"builds": 1, "stars": 2, "releases": 1}):
+            readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"))
+        for label in ("build", "stars", "checks", "downloads"):
+            self.assertIn(f"[![{label}]", readme)
+
     def test_status_badges_without_values_are_hidden(self):
         readme = hub.render_readme(hub.collect("apps"), hub.collect("integrations"), own=dict(live.fetch()))
         for hidden in ("label=build", "label=stars", "label=downloads", "label=hub%20sync"):
