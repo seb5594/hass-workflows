@@ -1,6 +1,7 @@
 """Protect the files every repository keeps in step with the engine, and the snippets behind them."""
 import io
 import json
+import re
 import tempfile
 import unittest
 import unittest.mock
@@ -132,6 +133,15 @@ class ManagedFiles(unittest.TestCase):
         self.assertIn((("github-actions",), ("python",)), disabled)
         self.assertIn((("github-actions",), ("ubuntu",)), disabled)
         self.assertIn((("homeassistant-manifest",), ()), disabled)
+
+    def test_npmplus_follows_its_dated_release_tags_only(self):
+        rules = json.loads(managed.renovate_config())["packageRules"]
+        rule = next(rule for rule in rules if "zoeyvid/npmplus" in rule.get("matchPackageNames", []))
+        pattern = re.compile(rule["versioning"].removeprefix("regex:").replace("(?<", "(?P<"))
+        for release in ("2026-11-18-r1", "2026-10-22-r12"):
+            self.assertTrue(pattern.fullmatch(release), release)
+        for other in ("latest", "develop", "beta", "caddy", "caddy-360", "php-rewrite"):
+            self.assertFalse(pattern.fullmatch(other), other)
 
     def test_the_engine_keeps_the_same_renovate_config_itself(self):
         own = (config.ENGINE_ROOT / ".github/renovate.json").read_text()

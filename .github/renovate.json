@@ -92,6 +92,17 @@
       "pinDigests": false
     },
     {
+      "description": "NPMplus releases are dated tags such as 2026-11-18-r1; develop, beta, caddy and latest are not releases",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "zoeyvid/npmplus",
+        "docker.io/zoeyvid/npmplus"
+      ],
+      "versioning": "regex:^(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})-r(?<build>\\d+)$"
+    },
+    {
       "description": "Update this base through the shared regex manager for Dockerfiles and project metadata",
       "matchManagers": [
         "dockerfile"
