@@ -31,6 +31,7 @@ for apps; companion image measurements cannot overwrite the primary app's badges
 | Path in the project | Meaning |
 | --- | --- |
 | `.github/workflows/ci.yml` | The caller. Follows the engine branch `main` (or a pinned commit); on a pinned commit CI fails on drift, on `main` it warns |
+| `<app>/Dockerfile` | An app starts through its own `entrypoint.sh`, a `run.sh` service (`init: false`), s6 services under `rootfs/etc/s6-overlay`, or directly as a binary: an exec-form `ENTRYPOINT ["/path/to/binary"]` without `entrypoint.sh` and `run.sh`. The build then only checks that the binary is executable; `.github/tests/runtime.sh` does the rest |
 | `.github/tests/` | All tests, kept out of the repository root (`tests/` is accepted as a fallback) |
 | `.github/ha_tests/` | Integrations only: tests against a real Home Assistant core. Never part of the regular run; the Compatibility workflow runs them for every Home Assistant release from the `hacs.json` minimum upwards (see below) |
 | `.github/workflows/compat.yml` | The Compatibility caller of a project with `ha_tests`, kept in step like `ci.yml` |
@@ -57,7 +58,7 @@ GitHub only reads workflows, Dependabot, Renovate and funding settings from the 
 | `.github/dependabot.yml` | [`.templates`](.templates/) |
 | `.github/renovate.json` | The whole [`default.json`](default.json), see [Renovate](docs/RENOVATE.md) |
 | `.github/FUNDING.yml` | Built from the donation links in [`config.py`](.scripts/config.py), the same ones the README badges use |
-| `<app>/entrypoint.sh` | Shared startup code of apps that do not run on s6 |
+| `<app>/entrypoint.sh` | Shared startup code of apps that neither run on s6 nor start a binary directly |
 | `.github/DEVELOPMENT.md` | Catalogs only: how the generated catalog is maintained |
 
 `python .engine/.scripts/managed.py sync <kind> [<engine-ref>]` inside a repository rewrites all of them (`main` by default, so the repository always runs the newest pipeline; pass a commit SHA to freeze it) (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Public apps, integrations and the integration catalog share the **Home Assistant CI** name.
@@ -76,7 +77,7 @@ The Compatibility workflow lists the releases at or above the minimum in `hacs.j
 
 ## Release flow
 
-Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP-app` (the `-app` suffix keeps it recognisable among the other images of a Docker host). The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
+Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. A build toolchain that never reaches the image is exempt: packages installed into an `apk add --virtual` group which the same `RUN` deletes again with `apk del` need no pin. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP-app` (the `-app` suffix keeps it recognisable among the other images of a Docker host). The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
 
 Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
 then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a

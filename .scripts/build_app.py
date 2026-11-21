@@ -1,6 +1,7 @@
 """Build one declared architecture, smoke-test the image and record its metrics."""
 import re
 import os
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -13,13 +14,15 @@ import validate_app
 from common import run, run_captured
 
 # What proves a built image is startable, by startup style. Apps started from a run.sh service
-# have no generic check; their .github/tests/runtime.sh verifies the image instead.
+# have no generic check; their .github/tests/runtime.sh verifies the image instead. Native apps are
+# only checked for their binary, the runtime script does the rest.
 SMOKE_TESTS = {
     validate_app.ENTRYPOINT: "bash -n /entrypoint.sh /run.sh && test -x /run.sh",
     # Every s6 run/finish script must parse and be executable.
     validate_app.S6: ("find /etc/s6-overlay/s6-rc.d -type f \\( -name run -o -name finish \\) "
                       "-exec bash -n {} \\; -exec test -x {} \\;"),
     validate_app.RUN_SCRIPT: None,
+    validate_app.NATIVE: None,  # built by smoke_test(): the binary named in the Dockerfile must exist
 }
 UTILS_TEST = (
     "printf '%s' '{\"data\":{\"title\":\"CI\"}}' > /tmp/sample.json; "
@@ -27,6 +30,13 @@ UTILS_TEST = (
     "git init -q /tmp/secrets-check; cd /tmp/secrets-check; "
     "git secrets --add CI_TEST_PATTERN; git secrets --list | grep -q CI_TEST_PATTERN"
 )
+
+
+def smoke_test(style, dockerfile):
+    """The shell command that proves a built image is startable, or None when only runtime tests can."""
+    if style == validate_app.NATIVE:
+        return f"test -x {shlex.quote(validate_app.native_entrypoint(dockerfile))}"
+    return SMOKE_TESTS[style]
 
 
 def image_size(image):
@@ -44,8 +54,9 @@ def main(app, arch, platform):
             "--build-arg", f"BUILD_ARCH={arch}", "--build-arg", f"BUILD_VERSION={config['version']}"]
     args += legacy.build_args(arch, (folder / "Dockerfile").read_text())
     run(*args, app)
-    if smoke_test := SMOKE_TESTS[validate_app.startup_style(folder, config)]:
-        run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image, "-c", smoke_test)
+    style = validate_app.startup_style(folder, config)
+    if command := smoke_test(style, (folder / "Dockerfile").read_text()):
+        run("docker", "run", "--rm", "--platform", platform, "--entrypoint", "/bin/bash", image, "-c", command)
     prefix = os.environ.get("APP_METRICS_PREFIX", "")
     metrics.record(f"{prefix}image_size.{arch}", image_size(image))
     if arch != "amd64":

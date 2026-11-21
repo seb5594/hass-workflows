@@ -23,20 +23,45 @@ def instructions(dockerfile):
             pending = []
 
 
+def apk_add(words):
+    """Packages and virtual group of one `apk add` command, given the words after `add`."""
+    packages, group, group_follows = [], None, False
+    for word in words:
+        if group_follows:
+            group, group_follows = word, False
+        elif word in ("--virtual", "-t"):
+            group_follows = True
+        elif word.startswith("--virtual="):
+            group = word.partition("=")[2]
+        elif not word.startswith("-"):
+            packages.append(word)
+    return packages, group
+
+
+def apk_installs(dockerfile):
+    """(packages, build_only) per `apk add`; build_only when its virtual group is deleted again in the same instruction.
+
+    Such a toolchain never reaches the final image, so only what stays in the image has to be pinned.
+    """
+    for instruction in instructions(dockerfile):
+        commands = [command.split() for command in re.split(r"&&|;", instruction)]
+        deleted = {word for words in commands if "apk" in words and "del" in words
+                   for word in words[words.index("del") + 1:]}
+        for words in commands:
+            if "apk" in words and "add" in words:
+                packages, group = apk_add(words[words.index("add") + 1:])
+                yield packages, group in deleted
+
+
 def apk_packages(dockerfile):
     """Every package named in an `apk add`, as written (`name` or `name=version`)."""
-    packages = []
-    for instruction in instructions(dockerfile):
-        for command in re.split(r"&&|;", instruction):
-            words = command.split()
-            if "apk" in words and "add" in words:
-                packages += [w for w in words[words.index("add") + 1:] if not w.startswith("-")]
-    return packages
+    return [package for packages, _ in apk_installs(dockerfile) for package in packages]
 
 
 def unpinned_packages(dockerfile):
-    """apk packages without an exact =version."""
-    return [package for package in apk_packages(dockerfile) if "=" not in package]
+    """apk packages that stay in the image without an exact =version."""
+    return [package for packages, build_only in apk_installs(dockerfile) if not build_only
+            for package in packages if "=" not in package]
 
 
 def version_variables(dockerfile):
@@ -51,7 +76,7 @@ def s6_services(app):
     return sorted(p.name for p in root.iterdir() if p.is_dir() and p.name != "user") if root.is_dir() else []
 
 
-ENTRYPOINT, RUN_SCRIPT, S6 = "entrypoint", "run", "s6"
+ENTRYPOINT, RUN_SCRIPT, S6, NATIVE = "entrypoint", "run", "s6", "native"
 # Calendar versions come in two spellings: YYYY-MM-DD[.N] (first build of a day has no suffix) and
 # YYYY.MM.DD.N (every build carries its number, starting at 1).
 VERSION = re.compile(r"(?:\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:\.(?:[2-9]|[1-9]\d+))?|"
@@ -59,19 +84,49 @@ VERSION = re.compile(r"(?:\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])(?:\.(?
                      r"\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?)")
 
 
+# Launchers that start something else; an ENTRYPOINT that names one of them is not a native binary.
+LAUNCHERS = ("/bin/sh", "/bin/ash", "/bin/bash", "/usr/bin/env", "/init")
+
+
+def native_entrypoint(dockerfile):
+    """The binary that the Dockerfile's exec-form ENTRYPOINT starts directly; None for scripts and launchers."""
+    for instruction in reversed(list(instructions(dockerfile))):
+        match = re.fullmatch(r"ENTRYPOINT\s+(\[.*\])", instruction.strip())
+        if not match:
+            continue
+        try:
+            command = json.loads(match.group(1))
+        except ValueError:
+            return None
+        first = command[0] if command and isinstance(command[0], str) else ""
+        if first.startswith("/") and first not in LAUNCHERS and not first.endswith(".sh"):
+            return first
+        return None
+    return None
+
+
 def startup_style(app, config):
-    """How the app starts: its own entrypoint.sh, a run.sh service (`init: false`) or rootfs s6 services."""
+    """How the app starts: rootfs s6 services, a run.sh service (`init: false`), its own binary or an entrypoint.sh."""
     if s6_services(app):
         return S6
-    return RUN_SCRIPT if config.get("init") is False else ENTRYPOINT
+    if config.get("init") is False:
+        return RUN_SCRIPT
+    dockerfile = app / "Dockerfile"
+    if not (app / "entrypoint.sh").exists() and dockerfile.is_file() and native_entrypoint(dockerfile.read_text()):
+        return NATIVE
+    return ENTRYPOINT
 
 
 def check_startup_style(app, config):
-    """Apps start in exactly one of three ways; each needs its own files and none may mix."""
+    """Apps start in exactly one of four ways; each needs its own files and none may mix."""
     style = startup_style(app, config)
+    if style == NATIVE:
+        assert not (app / "run.sh").exists(), "Apps that start their binary directly do not use run.sh"
+        return
     if style == ENTRYPOINT:
         assert (app / "entrypoint.sh").is_file(), \
-            "Provide entrypoint.sh or s6 services under rootfs/etc/s6-overlay, or run.sh with `init: false`"
+            ("Provide entrypoint.sh or s6 services under rootfs/etc/s6-overlay, run.sh with `init: false`, "
+             "or start a binary directly through ENTRYPOINT [\"/path\"]")
         return
     assert not (app / "entrypoint.sh").exists(), "s6 apps start through /init; remove entrypoint.sh"
     assert config.get("init") is False, "s6 apps need `init: false` in config.yaml"

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from support import ENGINE  # noqa: F401
 
+import build_app
 import common
 import legacy
 import validate_app
@@ -128,6 +129,42 @@ class LegacyBuilds(unittest.TestCase):
         self.assertEqual(legacy.defaults("ARG A=1\nARG B\n  ARG C=x-y\nRUN echo ARG D=4\n"), {"A": "1", "C": "x-y"})
 
 
+BUILD_FROM = "ARG BUILD_FROM=ghcr.io/seb5594/home-assistant-base:3.24\nFROM ${BUILD_FROM}\n"
+BUILD_ONLY = BUILD_FROM + """RUN apk add --no-cache --virtual .build-deps gcc musl-dev \\
+    && gcc -o /usr/local/bin/tool /tool.c \\
+    && apk del .build-deps
+"""
+
+
+class BuildOnlyToolchains(unittest.TestCase):
+    def test_a_virtual_group_deleted_in_the_same_run_needs_no_pins(self):
+        validate_app.check_static_versions(BUILD_ONLY)
+        self.assertEqual(validate_app.unpinned_packages(BUILD_ONLY), [])
+
+    def test_the_group_name_is_not_a_package(self):
+        self.assertEqual(validate_app.apk_packages(BUILD_ONLY), ["gcc", "musl-dev"])
+        for spelling in ("--virtual=.build-deps", "-t .build-deps"):
+            self.assertEqual(validate_app.apk_packages(BUILD_ONLY.replace("--virtual .build-deps", spelling)),
+                             ["gcc", "musl-dev"])
+
+    def test_a_group_that_stays_in_the_image_still_needs_pins(self):
+        kept = BUILD_FROM + "RUN apk add --no-cache --virtual .toolchain gcc musl-dev && gcc -o /tool /tool.c\n"
+        with self.assertRaisesRegex(AssertionError, "gcc, musl-dev"):
+            validate_app.check_static_versions(kept)
+
+    def test_deleting_the_group_in_another_run_does_not_count(self):
+        split = BUILD_FROM + ("RUN apk add --no-cache --virtual .toolchain gcc && gcc -o /tool /tool.c\n"
+                              "RUN apk del .toolchain\n")
+        with self.assertRaisesRegex(AssertionError, "Pin apk packages to exact versions: gcc$"):
+            validate_app.check_static_versions(split)
+
+    def test_packages_that_stay_are_still_pinned_next_to_a_toolchain(self):
+        mixed = BUILD_ONLY.replace("RUN apk add --no-cache --virtual", "RUN apk add --no-cache nginx\nRUN apk add --no-cache --virtual")
+        with self.assertRaisesRegex(AssertionError, "Pin apk packages to exact versions: nginx$"):
+            validate_app.check_static_versions(mixed)
+        validate_app.check_static_versions(mixed.replace("add --no-cache nginx\n", "add --no-cache nginx=1.30.7-r0\n"))
+
+
 class StartupStyle(unittest.TestCase):
     def app(self, tmp, s6=True, entrypoint=False, registered=True):
         app = Path(tmp) / "demo"
@@ -185,6 +222,58 @@ class StartupStyle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(validate_app.startup_style(self.app(tmp, s6=False), {"init": True}),
                              validate_app.ENTRYPOINT)
+
+
+NATIVE_DOCKERFILE = """ARG BUILD_FROM=ghcr.io/seb5594/home-assistant-base:3.24
+FROM ${BUILD_FROM}
+ENTRYPOINT [ "/usr/local/bin/proxy" ]
+"""
+
+
+class NativeBinaryApps(unittest.TestCase):
+    def app(self, tmp, dockerfile=NATIVE_DOCKERFILE, **files):
+        app = Path(tmp) / "demo"
+        app.mkdir()
+        (app / "Dockerfile").write_text(dockerfile)
+        for name in files:
+            (app / name.replace("_", ".")).write_text("#!/bin/bash\n")
+        return app
+
+    def test_a_binary_entrypoint_is_recognised(self):
+        self.assertEqual(validate_app.native_entrypoint(NATIVE_DOCKERFILE), "/usr/local/bin/proxy")
+        self.assertEqual(validate_app.native_entrypoint(NATIVE_DOCKERFILE.replace('"/usr/local/bin/proxy"', '"/bin/proxy", "--port", "1"')),
+                         "/bin/proxy")
+
+    def test_scripts_launchers_and_shell_form_are_not_native(self):
+        for entrypoint in ('["/bin/bash", "/entrypoint.sh"]', '["/init"]', '["/run.sh"]',
+                           '["proxy"]', '/usr/local/bin/proxy', '[]', '[1]', '["/x"'):
+            dockerfile = NATIVE_DOCKERFILE.replace('[ "/usr/local/bin/proxy" ]', entrypoint)
+            self.assertIsNone(validate_app.native_entrypoint(dockerfile), entrypoint)
+        self.assertIsNone(validate_app.native_entrypoint("FROM scratch\n"))
+
+    def test_the_last_entrypoint_wins(self):
+        staged = 'FROM a\nENTRYPOINT ["/build/tool"]\nFROM b\nENTRYPOINT ["/bin/bash", "/entrypoint.sh"]\n'
+        self.assertIsNone(validate_app.native_entrypoint(staged))
+
+    def test_a_native_app_needs_no_entrypoint_or_run_script(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.app(tmp)
+            self.assertEqual(validate_app.startup_style(app, {"init": True}), validate_app.NATIVE)
+            validate_app.check_startup_style(app, {"init": True})
+
+    def test_an_entrypoint_script_keeps_the_classic_style(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.app(tmp, entrypoint_sh=True)
+            self.assertEqual(validate_app.startup_style(app, {"init": True}), validate_app.ENTRYPOINT)
+
+    def test_a_native_app_cannot_also_ship_a_run_script(self):
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(AssertionError, "do not use run.sh"):
+            validate_app.check_startup_style(self.app(tmp, run_sh=True), {"init": True})
+
+    def test_the_smoke_test_checks_the_binary(self):
+        self.assertEqual(build_app.smoke_test(validate_app.NATIVE, NATIVE_DOCKERFILE), "test -x /usr/local/bin/proxy")
+        self.assertIn("/entrypoint.sh", build_app.smoke_test(validate_app.ENTRYPOINT, ""))
+        self.assertIsNone(build_app.smoke_test(validate_app.RUN_SCRIPT, ""))
 
 
 class Versions(unittest.TestCase):
