@@ -168,9 +168,31 @@ def prepare(release, domains, requirements):
     # tzdata and setuptools are missing from the oldest environments but required by the plugin;
     # "pins" holds dependencies that later releases broke for a release's own requirements.
     legacy = [] if release.get("live") else ["setuptools<70"]
-    run([*install, plugin_requirement,
-         f"homeassistant=={release['homeassistant']}", "tzdata", *legacy,
-         *release.get("pins", [])], check=True)
+    # Replaced: resolving the old plugin directly requires a withdrawn mypy-dev pre-release.
+    # run([*install, plugin_requirement,
+    #      f"homeassistant=={release['homeassistant']}", "tzdata", *legacy,
+    #      *release.get("pins", [])], check=True)
+    old_fixture = plugin_package == "pytest-homeassistant-custom-component" and (
+        (2024, 4) <= version_key(release["homeassistant"])[:2] < (2024, 6)
+    )
+    if old_fixture:
+        from packaging.requirements import Requirement
+        from ha_discovery import fetch
+
+        dependencies = fetch(plugin_package, release["plugin"])["info"].get("requires_dist") or []
+        missing = "mypy-dev==1.10.0a3"
+        if missing in dependencies:
+            # The withdrawn package is a typing tool; pytest and Home Assistant do not import it.
+            dependencies = [item for item in dependencies if Requirement(item).name != "mypy-dev"]
+            run([*install, *dependencies, "tzdata", *legacy, "josepy<2",
+                 *release.get("pins", [])], check=True)
+            run([*install, "--no-deps", plugin_requirement], check=True)
+        else:
+            run([*install, plugin_requirement, f"homeassistant=={release['homeassistant']}",
+                 "tzdata", *legacy, *release.get("pins", [])], check=True)
+    else:
+        run([*install, plugin_requirement, f"homeassistant=={release['homeassistant']}",
+             "tzdata", *legacy, *release.get("pins", [])], check=True)
     needed = run([str(interpreter), "-c", COMPONENT_REQUIREMENTS, *domains],
                  capture_output=True, check=True).stdout.split("\n")
     needed = [item for item in (*needed, *requirements) if item]
