@@ -48,7 +48,7 @@ PROJECTS = {
                      "Home-Assistant-Integration-Template", "hass-deepl_translator-integration",
                      "hass-custom_integrations_translator-integration",
                      "hass-ubpet_cat_litter_hub-integration", "hass-extended_secrets-integration",
-                     "hass-init_perdis-integration"],
+                     "hass-perdis_roster-integration"],
 }
 
 # Integrations that are never offered to the official HACS default catalog, with the reason.
