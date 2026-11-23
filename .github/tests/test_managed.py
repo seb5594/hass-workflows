@@ -258,7 +258,9 @@ class UpstreamCredentials(unittest.TestCase):
             steps = workflow['jobs'][name]['steps']
             checkouts = [step['with'] for step in steps if step.get('uses', '').startswith('actions/checkout@')]
             self.assertEqual(checkouts[0]['token'], '${{ github.token }}')
-            self.assertEqual(checkouts[1]['token'], '${{ secrets.ORCHESTRATION_PAT }}')
+            # Replaced: assert only the orchestration secret, which new public projects may lack.
+            # self.assertEqual(checkouts[1]['token'], '${{ secrets.ORCHESTRATION_PAT }}')
+            self.assertEqual(checkouts[1]['token'], '${{ secrets.ORCHESTRATION_PAT || github.token }}')
             action = steps[-1]["uses"].removeprefix("./.engine/")
             composite = yaml.safe_load((config.ENGINE_ROOT / action / "action.yml").read_text())
             commit = next(step for step in composite["runs"]["steps"] if step.get("name") == "Commit the new version")
