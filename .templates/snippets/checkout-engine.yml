@@ -2,6 +2,6 @@
   with:
     repository: __ENGINE_REPOSITORY__
     ref: __ENGINE_SHA__
-    token: ${{ secrets.ORCHESTRATION_PAT }}
+    token: ${{ secrets.ORCHESTRATION_PAT || github.token }}
     path: .engine
     persist-credentials: false
