@@ -306,7 +306,7 @@ class Versions(unittest.TestCase):
         for version in ("1.0.0", "1.74.3"):
             self.assertFalse(common.is_prerelease(version), version)
         self.assertEqual(common.release_flags("1.0.0-beta4"), ["--prerelease"])
-        self.assertEqual(common.release_flags("1.0.0"), [])
+        self.assertEqual(common.release_flags("1.0.0"), ["--latest"])
 
 
 if __name__ == "__main__":
