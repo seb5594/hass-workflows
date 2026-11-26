@@ -82,11 +82,21 @@ def generated_notes(repo, tag, target):
 def release_flags(version="", prerelease=None):
     """Extra `gh release create` flags: pre-release marker, and RELEASE_DRAFT=true keeps a release private.
 
-    The marker follows the version unless the caller decides otherwise with `prerelease`.
+    The marker follows the version unless the caller decides otherwise with `prerelease`. A stable
+    release is pinned as the latest explicitly: a four-part calendar version (2026.11.25.14) is not
+    valid semantic versioning, so without this GitHub is left to guess which release is the latest
+    and can keep an older one pinned — which is what catalogs and installers read.
     """
     marked = is_prerelease(version) if prerelease is None else prerelease
-    return (["--prerelease"] if marked else []) + (
-        ["--draft"] if os.environ.get("RELEASE_DRAFT", "").lower() == "true" else [])
+    draft = os.environ.get("RELEASE_DRAFT", "").lower() == "true"
+    flags = []
+    if marked:
+        flags.append("--prerelease")
+    elif not draft:
+        flags.append("--latest")
+    if draft:
+        flags.append("--draft")
+    return flags
 
 
 ANNOTATION_TAIL_LINES = 15

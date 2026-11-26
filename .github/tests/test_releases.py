@@ -68,6 +68,32 @@ class IntegrationVersions(unittest.TestCase):
         self.assertTrue(common.is_prerelease("2026.10.20.3b1"))
 
 
+class ReleaseFlags(unittest.TestCase):
+    """A stable release is pinned as the latest explicitly; a pre-release never is."""
+
+    def flags(self, version, draft=False, prerelease=None):
+        with mock.patch.dict(os.environ, {"RELEASE_DRAFT": "true" if draft else ""}):
+            return common.release_flags(version, prerelease)
+
+    def test_a_stable_release_is_marked_latest(self):
+        self.assertEqual(self.flags("2026.11.25.14"), ["--latest"])
+        self.assertEqual(self.flags("1.2.0"), ["--latest"])
+
+    def test_a_prerelease_is_marked_prerelease_and_never_latest(self):
+        flags = self.flags("1.0.0b3")
+        self.assertIn("--prerelease", flags)
+        self.assertNotIn("--latest", flags)
+
+    def test_a_draft_stable_release_is_not_pinned_latest(self):
+        # A draft is unpublished and cannot be the latest release.
+        self.assertEqual(self.flags("1.2.0", draft=True), ["--draft"])
+
+    def test_a_beta_forced_regular_is_pinned_latest(self):
+        # When the caller overrides the marker (a first beta published as a regular release), it is
+        # the latest so catalogs and installers find it.
+        self.assertEqual(self.flags("1.0.0b3", prerelease=False), ["--latest"])
+
+
 class IntegrationRelease(unittest.TestCase):
     def archive(self, folder):
         path = Path(folder) / "demo.zip"
