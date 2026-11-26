@@ -149,6 +149,25 @@ class Commands(InProject):
             run.assert_not_called()
             self.assertEqual(interpreter, Path(folder) / "2023.2.5/bin/python")
 
+    def test_withdrawn_legacy_typing_dependency_does_not_block_core_tests(self):
+        release = {"homeassistant": "2024.4.0", "plugin": "0.13.111", "python": "3.12"}
+        with tempfile.TemporaryDirectory() as folder, mock.patch.dict(os.environ, {"HASS_MATRIX_DIR": folder}):
+            (Path(folder) / "2024.4.0").mkdir()
+            metadata = {"info": {"requires_dist": [
+                "homeassistant==2024.4.0", "pytest==8.1.1", "mypy-dev==1.10.0a3",
+            ]}}
+            with mock.patch.object(ha_matrix, "run", return_value=mock.Mock(stdout="")) as runner, \
+                    mock.patch("ha_discovery.fetch", return_value=metadata):
+                ha_matrix.prepare(release, [], [])
+            install = [call.args[0] for call in runner.call_args_list if call.args[0][:3] ==
+                       ["uv", "pip", "install"]]
+            self.assertTrue(any("homeassistant==2024.4.0" in args and "pytest==8.1.1" in args
+                                for args in install))
+            self.assertTrue(any("--no-deps" in args and
+                                "pytest-homeassistant-custom-component==0.13.111" in args
+                                for args in install))
+            self.assertFalse(any("mypy-dev==1.10.0a3" in args for args in install))
+
 
 if __name__ == "__main__":
     unittest.main()
