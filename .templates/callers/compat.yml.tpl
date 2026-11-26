@@ -36,6 +36,9 @@ jobs:
     name: Home Assistant ${{ matrix.homeassistant }}${{ matrix.preview && ' (preview)' || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # This Core version pins lru-dict 1.1.7, which predates the stricter GCC default.
+      CFLAGS: ${{ matrix.homeassistant == '2022.4.7' && '-Wno-error=incompatible-pointer-types' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -48,9 +51,9 @@ jobs:
           target: ${{ toJSON(matrix) }}
 
   minimum:
-    # Not for pull requests, which cannot write, nor for forks.
+    # Keep the verified floor when a supported target fails or the matrix is incomplete.
     needs: [releases, test]
-    if: ${{ !cancelled() && needs.releases.result == 'success' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+    if: ${{ !cancelled() && needs.releases.result == 'success' && needs.test.result == 'success' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60 # The boundary search builds a few extra environments.
     permissions:
