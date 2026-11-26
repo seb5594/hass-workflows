@@ -63,7 +63,8 @@ PROJECTS = {
                      "Home-Assistant-Integration-Template", "hass-deepl_translator-integration",
                      "hass-custom_integrations_translator-integration",
                      "hass-ubpet_cat_litter_hub-integration", "hass-extended_secrets-integration",
-                     "hass-perdis_roster-integration", "hass-pwa_app_studio-integration"],
+                     "hass-perdis_roster-integration", "hass-pwa_app_studio-integration",
+                     "hass-config_entry_bridge-integration"],
     "dashboards": ["Home-Assistant-Config-Entry-Lovelace-Card"],
 }
 
