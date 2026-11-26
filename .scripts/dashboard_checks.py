@@ -79,7 +79,7 @@ def problems(root="."):
     """Every problem of the dashboard in `root`."""
     project = projectmeta.discover(root)
     found = check_hacs(project.hacs) + check_package(project.metadata, project.category)
-    if not Path(root, "package-lock.json").is_file():
+    if project.category == projectmeta.CARD and not Path(root, "package-lock.json").is_file():
         found.append("package-lock.json: commit it, CI installs the locked versions with `npm ci`")
     if project.category == projectmeta.THEME:
         found += check_themes(root)

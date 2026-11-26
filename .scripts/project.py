@@ -158,8 +158,11 @@ def run_node_checks():
 
     Install scripts are skipped: a dependency has no reason to run code on the build machine.
     """
+    package = json.loads(Path("package.json").read_text())
+    scripts = package.get("scripts", {})
+    if not scripts and not (package.get("dependencies") or package.get("devDependencies")):
+        return  # a theme has nothing to install or run
     run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
-    scripts = json.loads(Path("package.json").read_text()).get("scripts", {})
     if "lint" in scripts:
         run("npm", "run", "lint")
     if "test" in scripts:
