@@ -278,7 +278,7 @@ class ProjectListing(unittest.TestCase):
         include = plan.matrix()["include"]
         self.assertEqual([entry["project"] for entry in include],
                          [name for names in config.PROJECTS.values() for name in names])
-        self.assertEqual({entry["kind"] for entry in include}, {"app", "integration"})
+        self.assertEqual({entry["kind"] for entry in include}, {"app", "integration", "dashboard"})
 
     def test_hacs_file_is_optional_for_discovery(self):
         with tempfile.TemporaryDirectory() as tmp:

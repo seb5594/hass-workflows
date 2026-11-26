@@ -1,7 +1,7 @@
 """The picture below a README's title: the project's logo, or its icon when there is no logo.
 
 Apps keep `logo.png` / `icon.png` in their folder, integrations in `brand/` of the component
-(or, as a fallback, directly in its folder). Home Assistant's `@2x` and `dark_` variants are
+(or, as a fallback, directly in its folder), dashboards (cards, themes) in `brand/` at the repository root. Home Assistant's `@2x` and `dark_` variants are
 used when present: the sharp file is shown at half its pixel size, the dark one on dark themes.
 """
 import html

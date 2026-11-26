@@ -15,6 +15,7 @@ import yaml
 
 import badgekit
 import config
+import discovery
 import licenses
 import live
 import remote
@@ -61,9 +62,23 @@ def listed_projects(catalog):
             for path, repository in parse_modules(modules)]
 
 
+def public_projects(kind):
+    """(repository, head commit) of every public repository whose name fits `kind`, read without a catalog."""
+    pattern = re.compile(config.NAME_PATTERNS[kind])
+    return [(f"{config.OWNER}/{repo['name']}",
+             remote.head_commit(f"{config.OWNER}/{repo['name']}", repo["default_branch"]))
+            for repo in discovery.public_repositories(pattern)]
+
+
+def projects_of(kind):
+    """What the catalog of `kind` lists; kinds without a catalog repository yet are read from GitHub directly."""
+    listed = listed_projects(CATALOGS[kind])
+    return listed if listed or kind not in config.UNCATALOGUED else public_projects(kind)
+
+
 def collect(kind):
     entries = []
-    for repository, sha in listed_projects(CATALOGS[kind]):
+    for repository, sha in projects_of(kind):
         items, _ = remote.describe(repository, sha, kind, 160)
         if items:
             entries.append({"repository": repository, "sha": sha, "items": items,
@@ -154,7 +169,23 @@ def integration_table(entries):
     return "\n".join(rows)
 
 
-def render_header(apps, integrations, own=None):
+def dashboard_table(entries):
+    rows = ["| | Dashboard | Type | Version | Home Assistant | Status | |", "| :---: | --- | --- | --- | --- | --- | :---: |"]
+    for entry in entries:
+        link, repo = project_link(entry), entry["repository"]
+        for item in entry["items"]:
+            minimum = item["hacs"].get("homeassistant")
+            status = status_badges(entry, "checks", ("releases", badgekit.github(
+                "downloads", repo, "downloads", f"{link}/releases", "/total", "info")))
+            install = badgekit.hacs_badge(repo, item["category"])
+            rows.append(f"| {icon_cell(entry, item)} | {title_cell(item['name'], link, item.get('description'))} "
+                        f"| {badgekit.DASHBOARD_KINDS[item['category']].capitalize()} "
+                        f"| {badgekit.static('version', item['version'], 'info', f'{link}/releases')} "
+                        f"| {'≥ ' + minimum if minimum else '–'} | {status} | [Install]({install.link}) |")
+    return "\n".join(rows)
+
+
+def render_header(apps, integrations, dashboards=(), own=None):
     """Logo and title in one centered heading, then the badges in three sized rows and a navigation."""
     hub = config.github_url(HUB_REPOSITORY)
     context = {"live": own}
@@ -164,7 +195,8 @@ def render_header(apps, integrations, own=None):
         badgekit.Row(badgekit.MAJOR, [
             badgekit.static("apps", str(sum(len(e["items"]) for e in apps)), "ok", config.github_url(CATALOGS["apps"])),
             badgekit.static("integrations", str(sum(len(e["items"]) for e in integrations)), "ok",
-                            config.github_url(CATALOGS["integrations"]))]),
+                            config.github_url(CATALOGS["integrations"])),
+            badgekit.static("dashboards", str(sum(len(e["items"]) for e in dashboards)), "ok")]),
         badgekit.Row(badgekit.MINOR,
                      badgekit.when(badgekit.has(context, "stars"), [badgekit.github(
                          "stars", HUB_REPOSITORY, "stars", f"{hub}/stargazers")])
@@ -175,31 +207,36 @@ def render_header(apps, integrations, own=None):
     title = (f'<h1 align="center">\n  <img src="{LOGO_URL}" width="160" alt="">\n  <br>\n'
              f"  Home Assistant Hub\n</h1>")
     navigation = ('<p align="center">\n  <a href="#get-started">Get started</a> · <a href="#apps">Apps</a> · '
-                  '<a href="#integrations">Integrations</a> · <a href="#how-this-works">How this works</a>\n</p>')
+                  '<a href="#integrations">Integrations</a> · <a href="#dashboards">Dashboards</a> · '
+                  '<a href="#how-this-works">How this works</a>\n</p>')
     return "\n\n".join((title, f'<p align="center"><b>{TAGLINE}</b></p>', badgekit.render_header(rows), navigation))
 
 
-def render_readme(apps, integrations, own=None):
+def render_readme(apps, integrations, dashboards=(), own=None):
     text = templating.fill((ENGINE / ".templates/hub/README.md").read_text(encoding="utf-8"), {
-        "HEADER": render_header(apps, integrations, own), "SUPPORT": badgekit.support_section(),
+        "HEADER": render_header(apps, integrations, dashboards, own), "SUPPORT": badgekit.support_section(),
         "LICENSE_NOTE": licenses.COLLECTION_NOTE,
         "APPS": (app_table(apps) + "\n\n" + total_line("Total image pulls", app_pulls(apps),
                                                         sum(len(e["items"]) for e in apps), "apps")
                  if apps else "_No apps are published yet._").rstrip(),
         "INTEGRATIONS": ((integration_table(integrations) + "\n\n" + total_line(
             "Total downloads", integration_downloads(integrations), len(integrations), "integrations")).rstrip()
-                         if integrations else "_No integrations are published yet._")})
+                         if integrations else "_No integrations are published yet._"),
+        "DASHBOARDS": ((dashboard_table(dashboards) + "\n\n" + total_line(
+            "Total downloads", integration_downloads(dashboards), len(dashboards), "dashboards")).rstrip()
+                       if dashboards else "_No dashboards are published yet._")})
     return text.rstrip("\n") + "\n"
 
 
 def main():
-    apps, integrations = collect("apps"), collect("integrations")
+    apps, integrations, dashboards = collect("apps"), collect("integrations"), collect("dashboards")
     if not apps and not integrations:
         raise ValueError("Both catalogs came back empty; refusing to overwrite the hub README.")
     own = live.fetch_own(HUB_REPOSITORY, "update.yml", os.environ.get("OWN_TOKEN"))
-    (ROOT / "README.md").write_text(render_readme(apps, integrations, own), encoding="utf-8")
-    print(f"Hub lists {sum(len(e['items']) for e in apps)} apps and "
-          f"{sum(len(e['items']) for e in integrations)} integrations.")
+    (ROOT / "README.md").write_text(render_readme(apps, integrations, dashboards, own), encoding="utf-8")
+    print(f"Hub lists {sum(len(e['items']) for e in apps)} apps, "
+          f"{sum(len(e['items']) for e in integrations)} integrations and "
+          f"{sum(len(e['items']) for e in dashboards)} dashboards.")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ DOWNLOADS = re.compile(r'Total downloads</span>\s*<h3 title="(\d+)"')
 # Raw keys written by record() that make it into the snapshot. Image sizes are recorded per
 # architecture as "image_size.<arch>" and stored together as one mapping.
 IMAGE_SIZE_PREFIX = "image_size."
-DISPLAYED = ("tests", "runtime_tests", "zip_size", "image_pulls")
+DISPLAYED = ("tests", "runtime_tests", "zip_size", "bundle_size", "image_pulls")
 
 
 def recorded():
@@ -77,7 +77,7 @@ def display(key, value):
     """The text a badge shows for a stored value."""
     if key == "image_size":
         return {arch: mebibytes(size) for arch, size in value.items()}
-    return {"zip_size": human_size, "image_pulls": compact_count}.get(key, str)(value)
+    return {"zip_size": human_size, "bundle_size": human_size, "image_pulls": compact_count}.get(key, str)(value)
 
 
 def merge(previous, values):

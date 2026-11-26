@@ -67,7 +67,8 @@ def marked_prerelease(hacs, version, repo):
     return not (hacs.get("zip_release") and not stable_version_released(repo))
 
 
-def publish(tag, manifest, hacs, out):
+def publish(tag, manifest, hacs, out, assets="*.zip"):
+    """Create the release of `tag` with every file of `out` matching `assets`; shared with dashboards."""
     repo = os.environ["GITHUB_REPOSITORY"]
     prerelease = marked_prerelease(hacs, manifest["version"], repo)
     existing = gh_json("release", "view", tag, "--repo", repo, "--json", "isPrerelease")
@@ -85,7 +86,7 @@ def publish(tag, manifest, hacs, out):
             run("gh", "release", "edit", tag, "--repo", repo, *edits)
         print(f"{tag} already exists; keeping its assets unchanged.")
         return
-    archives = sorted(out.glob("*.zip"))
+    archives = sorted(out.glob(assets))
     notes = f"{generated_notes(repo, tag, os.environ['GITHUB_SHA'])}\n\n{checksum_line(archives)}".lstrip()
     run("gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
         "--title", release_title(manifest["version"]) if is_prerelease(manifest["version"]) else tag,

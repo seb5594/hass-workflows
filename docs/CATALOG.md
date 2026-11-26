@@ -7,6 +7,8 @@ with the integration. Its synchronization and publication jobs live in the engin
 [Integration catalog maintenance](https://github.com/seb5594/Home-Assistant-Integrations/blob/main/.github/DEVELOPMENT.md)
 and the [shared synchronization action](../.actions/catalog-sync/action.yml) describe that path.
 
+The dashboard catalog works like the integration catalog (projects are described, not pinned) and is documented in [Dashboards](DASHBOARDS.md#catalog-and-hub).
+
 ## App catalog discovery
 
 **Private repositories stay invisible.** Discovery drops private, archived and disabled repositories, so they appear neither in the README nor as submodules, and a repository that turns private disappears on the next run. GitHub renders a README identically for every viewer, so this is the only way to keep a public catalog from revealing them.

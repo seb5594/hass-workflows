@@ -4,11 +4,11 @@
 
 ## Data flow
 
-1. Read `.gitmodules` of the app and integration catalogs and the commit each submodule is pinned to.
-2. Read the project's metadata at exactly that commit (`config.yaml`, or `manifest.json` and `hacs.json`) from `raw.githubusercontent.com`.
-3. Render the overview tables into [`.templates/hub/README.md`](../.templates/hub/README.md).
+1. Read `.github/catalog.json` (older catalogs: `.gitmodules`) of the app, integration and dashboard catalogs and the commit each project is pinned to. A kind without a catalog repository yet (`config.UNCATALOGUED`, currently dashboards) is read from the owner's public repositories instead, pinned to their default branch head.
+2. Read the project's metadata at exactly that commit (`config.yaml`, `manifest.json` and `hacs.json`, or `hacs.json` and `package.json`) from `raw.githubusercontent.com`.
+3. Render the overview tables (Apps, Integrations, Dashboards) into [`.templates/hub/README.md`](../.templates/hub/README.md).
 
-Because the catalogs only pin public projects, private repositories never show up in the hub. The catalogs must be public themselves. A run that finds both catalogs empty fails instead of overwriting the README.
+Because the catalogs only pin public projects, private repositories never show up in the hub. The catalogs must be public themselves. A run that finds the app and integration catalogs both empty fails instead of overwriting the README.
 
 ## Triggers
 

@@ -21,10 +21,12 @@ import config
 import projectmeta
 import templating
 import upstream
+from common import is_calendar_version
 
 TEMPLATES = config.ENGINE_ROOT / ".templates"
 SNIPPETS = TEMPLATES / "snippets"
 FOLLOW = "main"
+CALENDAR_TAG_KINDS = ("app", "integration", "dashboard")
 PIN = re.compile(r"ref: ([0-9a-f]{40}|main)\n")
 
 
@@ -41,9 +43,13 @@ WORKFLOWS = {
                     {"TIMEOUT": "90", "PACKAGES": "  packages: write"}),
     "integration": Workflow("project", ".github/workflows/ci.yml",
                             {"TIMEOUT": "30", "PACKAGES": ""}),
+    "dashboard": Workflow("project", ".github/workflows/ci.yml",
+                          {"TIMEOUT": "30", "PACKAGES": ""}),
     "catalog-apps": Workflow("catalog", ".github/workflows/update.yml",
                              {"KIND": "apps", "TITLE": "app", "EVENT": config.EVENTS["apps"]}),
     "catalog-integrations": Workflow("catalog-sync", ".github/workflows/update.yml", {}),
+    "catalog-dashboards": Workflow("catalog", ".github/workflows/update.yml",
+                                   {"KIND": "dashboards", "TITLE": "dashboard", "EVENT": config.EVENTS["dashboards"]}),
     "hub": Workflow("hub", ".github/workflows/update.yml", {"EVENT": config.EVENTS["hub"]}),
 }
 # Apps that package a released image keep this workflow: it follows the upstream releases.
@@ -66,6 +72,14 @@ CATALOG_NOTES = {
         "TITLE": "app", "EVENT": config.EVENTS["apps"],
         "PINNING": ("Each run pins the latest default-branch commit of every listed app as a Git "
                     "submodule, because the Supervisor installs from the repository tree."),
+    },
+    "catalog-dashboards": {
+        "OUTPUT": "the README",
+        "NAMES": "`Home-Assistant-<project>-Card`, `-Lovelace-Card`, `-Dashboard` or `-Theme`",
+        "REQUIREMENT": "with a `hacs.json` and a `package.json` at the root",
+        "TITLE": "dashboard", "EVENT": config.EVENTS["dashboards"],
+        "PINNING": ("Dashboards are only described, nothing is cloned: HACS installs them from "
+                    "their own repositories. Each run records the latest default-branch commit of every listed project."),
     },
 }
 
@@ -147,19 +161,10 @@ def expected(kind, sha, root=Path(".")):
     elif kind in CATALOG_NOTES:
         files[".github/DEVELOPMENT.md"] = templating.fill(
             read_template("catalog/DEVELOPMENT.md"), CATALOG_NOTES[kind], once=False)
-    if kind == "integration":
-        repository = projectmeta.discover(Path(root)).repository
-        from common import is_calendar_version
-        if (config.INTEGRATION_TAG_PREFIXES.get(repository, "v") == ""
-                or is_calendar_version(projectmeta.discover(Path(root)).version)):
-            target = WORKFLOWS[kind].target
-            files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
-    if kind == "app":
-        from common import is_calendar_version
-        if is_calendar_version(projectmeta.discover(Path(root)).version):
-            target = WORKFLOWS[kind].target
-            files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
+    if kind in CALENDAR_TAG_KINDS:
+        use_calendar_tags(files, kind, root)
     if kind == "integration" and offered_to_default_catalog(root):
+        repository = projectmeta.discover(Path(root)).repository
         files[MARKETPLACE.target] = render_workflow(MARKETPLACE, sha)
         if repository in {"seb5594/hass-google_translator-integration",
                           "seb5594/hass-escpos-thermal-printing-designer-integration"}:
@@ -170,6 +175,16 @@ def expected(kind, sha, root=Path(".")):
                 "secrets.CATALOG_SUBMISSION_TOKEN || secrets.ORCHESTRATION_PAT }}",
             )
     return files
+
+
+def use_calendar_tags(files, kind, root):
+    """Calendar versions are tagged without a `v`: the caller then reacts to such tags instead."""
+    project = projectmeta.discover(Path(root))
+    unprefixed = (kind == "integration"
+                  and config.INTEGRATION_TAG_PREFIXES.get(project.repository, "v") == "")
+    if unprefixed or is_calendar_version(project.version):
+        target = WORKFLOWS[kind].target
+        files[target] = files[target].replace("tags: ['v*']", "tags: ['[0-9]*']")
 
 
 def pinned_sha(kind, root="."):

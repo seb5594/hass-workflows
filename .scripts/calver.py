@@ -3,6 +3,7 @@
 
     calver.py next [VERSION]   print the version that follows VERSION (default: today's first)
     calver.py bump [DIR]       raise the version in every custom_components/*/manifest.json of DIR
+                               (and in the package.json of a dashboard project)
 
 The first build of a day carries no suffix, the second one .1, the third .2. A new day starts again
 without a suffix, and the version never moves backwards. Versions of another shape (1.2.3, 1.0.0b1)
@@ -42,11 +43,13 @@ def next_version(version=None, day=None):
 
 
 def bump(root=Path("."), day=None):
-    """Raise calendar versions in integration manifests and app config files."""
+    """Raise calendar versions in integration manifests, app config files and dashboard package.json."""
     import yaml
 
     root = Path(root)
     paths = sorted(root.glob("custom_components/*/manifest.json"))
+    if (root / "hacs.json").is_file() and (root / "package.json").is_file() and not paths:
+        paths.append(root / "package.json")
     paths += sorted(path for path in root.glob("*/config.yaml") if not path.parts[-2].startswith("."))
     changed = {}
     for path in paths:

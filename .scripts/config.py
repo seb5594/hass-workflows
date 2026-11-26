@@ -14,8 +14,22 @@ DEFAULT_BRANCH = os.environ.get("DEFAULT_BRANCH") or "main"
 ENGINE_REPOSITORY = f"{OWNER}/hass-workflows"
 APPS_CATALOG = f"{OWNER}/Home-Assistant-Apps"
 INTEGRATIONS_CATALOG = f"{OWNER}/Home-Assistant-Integrations"
+DASHBOARDS_CATALOG = f"{OWNER}/Home-Assistant-Dashboards"
 HUB_REPOSITORY = f"{OWNER}/Home-Assistant-Hub"
-CATALOGS = {"apps": APPS_CATALOG, "integrations": INTEGRATIONS_CATALOG}
+CATALOGS = {"apps": APPS_CATALOG, "integrations": INTEGRATIONS_CATALOG, "dashboards": DASHBOARDS_CATALOG}
+
+# Source repositories of each catalog kind are recognised by name; `project` becomes the folder name.
+# Dashboards are cards, themes and whatever else is shown in Lovelace: `Home-Assistant-<Project>-Card`,
+# `-Lovelace-Card`, `-Dashboard` or `-Theme` (a `-Lovelace` before the suffix is not part of the project name).
+NAME_PATTERNS = {
+    "apps": r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:Apps?|Addon)$",
+    "integrations": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?i:integration)$",
+    "dashboards": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*?)(?:-Lovelace)?-(?i:card|dashboard|theme)$",
+}
+
+# Kinds without a catalog repository yet. The hub lists their public repositories directly until
+# the catalog exists and publishes `.github/catalog.json`.
+UNCATALOGUED = {"dashboards"}
 
 # Supported architectures in display order, mapped to their Docker platform.
 PLATFORMS = {
@@ -32,7 +46,8 @@ LEGACY_ARCHES = ("armv7", "armhf", "i386")
 LEGACY_BASE = "ghcr.io/home-assistant/{arch}-base:3.22-2025.11.1"
 
 # repository_dispatch events that tell a catalog or the hub to refresh.
-EVENTS = {"apps": "update-addons", "integrations": "update-integrations", "hub": "update-hub"}
+EVENTS = {"apps": "update-addons", "integrations": "update-integrations",
+          "dashboards": "update-dashboards", "hub": "update-hub"}
 
 # Every repository the engine serves, by catalog kind. Drives the engine's own validation matrix.
 PROJECTS = {
@@ -49,6 +64,7 @@ PROJECTS = {
                      "hass-custom_integrations_translator-integration",
                      "hass-ubpet_cat_litter_hub-integration", "hass-extended_secrets-integration",
                      "hass-perdis_roster-integration", "hass-pwa_app_studio-integration"],
+    "dashboards": ["Home-Assistant-Config-Entry-Lovelace-Card"],
 }
 
 # Integrations that are never offered to the official HACS default catalog, with the reason.

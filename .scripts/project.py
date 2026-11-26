@@ -19,6 +19,8 @@ from common import run, run_captured, is_calendar_version
 from config import PLATFORMS
 
 ENGINE = config.ENGINE_ROOT
+# The script that builds and releases what a project ships as files (apps ship images and use their own).
+PACKAGERS = {projectmeta.INTEGRATION: "package_integration.py", projectmeta.DASHBOARD: "package_dashboard.py"}
 YAMLLINT_RULES = "{extends: relaxed, rules: {line-length: disable, truthy: disable}}"
 
 
@@ -148,9 +150,32 @@ def run_integration_tests(directory):
         run("node", "--test", *frontend)
 
 
+TESTS_PASSED = re.compile(r"(?:ℹ |# )pass (\d+)")  # the summary line of `node --test`
+
+
+def run_node_checks():
+    """Install exactly the locked dependencies, then run the project's own lint and test scripts.
+
+    Install scripts are skipped: a dependency has no reason to run code on the build machine.
+    """
+    run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
+    scripts = json.loads(Path("package.json").read_text()).get("scripts", {})
+    if "lint" in scripts:
+        run("npm", "run", "lint")
+    if "test" in scripts:
+        passed = TESTS_PASSED.search(run_captured("npm", "test"))
+        if passed:
+            metrics.record("tests", int(passed.group(1)))
+
+
 def validate(project):
     readme.verify()
     managed.check(project.kind)
+    if project.kind == projectmeta.DASHBOARD:
+        run(sys.executable, str(ENGINE / ".scripts/dashboard_checks.py"))
+        run_node_checks()
+        run_project_checks()
+        return
     if project.kind == projectmeta.APP:
         folders = [app.folder for app in projectmeta.app_projects(project.root)]
         for folder in folders:
@@ -180,6 +205,7 @@ def main(command):
         policy = json.loads(spec.read_text()).get("apk_version_policy") if spec.is_file() else None
         print(f"apk_repository={str(policy == 'repository').lower()}")
         print(f"directory={project.folder.as_posix()}")
+        print(f"category={project.category or ''}")
         print(f"version={project.version}")
         print(f"slug={project.slug}")
         publish, images = should_publish(), builds_images(project)
@@ -190,7 +216,8 @@ def main(command):
             project.repository not in config.INTEGRATION_TAG_ONLY_RELEASES
             or os.environ.get("REF", "").startswith("refs/tags/")
         )
-        print(f"release={str(publish and (images or integration_release)).lower()}")
+        dashboard_release = project.kind == projectmeta.DASHBOARD
+        print(f"release={str(publish and (images or integration_release or dashboard_release)).lower()}")
         ignored = hacs_ignored_checks()
         print(f"hacs_ignore={' '.join(ignored)}")
         if project.kind == projectmeta.INTEGRATION and "license" in ignored:
@@ -205,12 +232,12 @@ def main(command):
             for arch in app.metadata["arch"]:
                 run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(app.folder), arch,
                     PLATFORMS[arch], env={**os.environ, "APP_METRICS_PREFIX": prefix})
-    elif command == "package" and project.kind == projectmeta.INTEGRATION:
-        run(sys.executable, str(ENGINE / ".scripts/package_integration.py"))
+    elif command == "package" and project.kind in PACKAGERS:
+        run(sys.executable, str(ENGINE / ".scripts" / PACKAGERS[project.kind]))
     elif command == "release":
         script, args = (("release_app.py", [str(app.folder) for app in projectmeta.app_projects(project.root)])
                         if project.kind == projectmeta.APP
-                        else ("package_integration.py", ["--release"]))
+                        else (PACKAGERS[project.kind], ["--release"]))
         run(sys.executable, str(ENGINE / ".scripts" / script), *args)
     elif command == "refresh-readme":
         refresh_readme(project)

@@ -21,8 +21,8 @@ import yaml
 import badgekit
 import brand
 import config
+import discovery
 import excerpt
-import github_api
 import licenses
 import live
 import metrics
@@ -37,11 +37,7 @@ OWNER = config.OWNER
 CATALOG_REPOSITORY = config.CATALOGS[KIND]
 EXCLUDED_REPOSITORIES = set()
 EXCERPT_MAX_CHARS = 500
-NAME_PATTERNS = {
-    "apps": r"^Home-Assistant-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?:Apps?|Addon)$",
-    "integrations": r"^(?i:hass|Home-Assistant)-(?P<project>[A-Za-z0-9][A-Za-z0-9._-]*)-(?i:integration)$",
-}
-NAME_PATTERN = re.compile(NAME_PATTERNS[KIND])
+NAME_PATTERN = re.compile(config.NAME_PATTERNS[KIND])
 CONFIG_NAMES = {"config.yaml", "config.yml", "config.json"}
 
 
@@ -54,23 +50,8 @@ def git(*args, cwd=None):
 
 
 def discover_repositories(excluded):
-    """Walk every API page instead of relying on search indexing."""
-    repositories, page = [], 1
-    while True:
-        batch = github_api.fetch_json(f"https://api.github.com/users/{OWNER}/repos"
-                                      f"?type=owner&sort=full_name&per_page=100&page={page}")
-        if not isinstance(batch, list):
-            raise ValueError("Expected a repository list from GitHub.")
-        repositories.extend(
-            repo for repo in batch
-            if repo["owner"]["login"].casefold() == OWNER.casefold()
-            and NAME_PATTERN.fullmatch(repo["name"])
-            and not (repo.get("private") or repo.get("archived") or repo.get("disabled"))
-            and repo["name"] not in excluded)
-        if len(batch) < 100:
-            break
-        page += 1
-    return sorted(repositories, key=lambda repo: repo["name"].casefold())
+    """Public, active repositories of the owner whose name fits this catalog."""
+    return discovery.public_repositories(NAME_PATTERN, excluded)
 
 
 def readme_excerpt(folder, fallback, limit):
@@ -221,6 +202,9 @@ def item_rows(item, entry):
         rows = badgekit.integration_rows(item, item["hacs"], entry["repository"], standalone=False,
                                          live=entry.get("live"), measured_values=item.get("metrics"),
                                          compat=item.get("compat", False))
+    elif KIND == "dashboards":
+        rows = badgekit.dashboard_rows(item, item["hacs"], entry["repository"], standalone=False,
+                                       live=entry.get("live"), measured_values=item.get("metrics"))
     else:
         rows = badgekit.app_rows(item, entry["repository"], standalone=False, live=entry.get("live"),
                                  measured_values=item.get("metrics", {}) if len(entry["items"])>1 else entry.get("metrics"),
@@ -237,7 +221,7 @@ def entry_heading(entry):
 
 
 def changelog_link(entry, item):
-    folder = "" if KIND == "integrations" else f"{item['path']}/"
+    folder = f"{item['path']}/" if KIND == "apps" else ""
     return f"[Changelog]({entry['url']}/blob/{entry.get('branch', 'main')}/{folder}CHANGELOG.md)"
 
 

@@ -1,5 +1,5 @@
 name: Validate, build, and publish a Home Assistant project
-description: Shared pipeline for apps and HACS integrations
+description: Shared pipeline for apps, HACS integrations and HACS dashboards (cards and themes)
 inputs:
   multiarch-only:
     description: Publish one image index without architecture tags
@@ -33,6 +33,11 @@ runs:
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         IS_TEMPLATE: ${{ github.event.repository.is_template }}
       run: python "$ENGINE/.scripts/project.py" inspect >> "$GITHUB_OUTPUT"
+    # Dashboards (cards) are built with Node; the engine scripts themselves stay Python.
+    - uses: actions/setup-node@v6
+      if: steps.project.outputs.kind == 'dashboard'
+      with:
+        node-version: 24
     # Only apps lint shell scripts and YAML; GitHub's runner image usually ships both tools already.
     - name: Install shell and YAML linters
       if: steps.project.outputs.kind == 'app'
@@ -76,8 +81,8 @@ runs:
         ENGINE: ${{ github.action_path }}/../..
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/project.py" build
-    - name: Package and verify HACS and manual ZIPs
-      if: steps.project.outputs.kind == 'integration'
+    - name: Package and verify the release files
+      if: steps.project.outputs.kind == 'integration' || steps.project.outputs.kind == 'dashboard'
       shell: bash
       env:
         ENGINE: ${{ github.action_path }}/../..
@@ -88,6 +93,12 @@ runs:
       uses: actions/upload-artifact@v7
       with:
         name: integration-zips
+        path: dist/
+    - name: Make the built card available from CI
+      if: steps.project.outputs.kind == 'dashboard' && steps.project.outputs.category == 'plugin'
+      uses: actions/upload-artifact@v7
+      with:
+        name: dashboard-bundle
         path: dist/
     - uses: docker/login-action@v4
       if: steps.project.outputs.release == 'true' && steps.project.outputs.kind == 'app'
@@ -106,6 +117,16 @@ runs:
         MULTIARCH_ONLY: ${{ inputs.multiarch-only }}
         PYTHONDONTWRITEBYTECODE: '1'
       run: python "$ENGINE/.scripts/project.py" release
+    # HACS installs a card from its release asset, so this check can only pass once a release exists:
+    # it runs after publishing, never on pull requests, and not for private or template repositories.
+    - name: Validate HACS dashboard repository
+      if: steps.project.outputs.kind == 'dashboard' && github.event_name != 'pull_request' && github.event.repository.is_template != true && github.event.repository.private != true && (steps.project.outputs.release == 'true' || github.event_name == 'schedule')
+      uses: hacs/action@main
+      with:
+        category: ${{ steps.project.outputs.category }}
+        repository: ${{ github.repository }}
+        ignore: ${{ steps.project.outputs.hacs_ignore }}
+        comment: 'false'
     - name: Store measurements and refresh README badges with live values
       if: steps.project.outputs.publish == 'true'
       shell: bash

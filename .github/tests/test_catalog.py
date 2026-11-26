@@ -7,6 +7,8 @@ from unittest.mock import patch
 from support import ENGINE  # noqa: F401
 
 import catalog
+import config
+import discovery
 
 REPOSITORY = "Home-Assistant-Rsync-Local-Addon"
 
@@ -81,7 +83,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_plural_bundle_discovery_excludes_catalog_and_private_sources(self):
         public = {"name": "Home-Assistant-Anti-Tuya-Apps", "owner": {"login": "seb5594"}}
-        with patch.object(catalog.github_api, "fetch_json", return_value=[public,
+        with patch.object(discovery.github_api, "fetch_json", return_value=[public,
                 {**public, "name": "Home-Assistant-Apps"},
                 {**public, "name": "Home-Assistant-Secret-Apps", "private": True}]):
             self.assertEqual(catalog.discover_repositories(set()), [public])
@@ -120,7 +122,7 @@ class CatalogTests(unittest.TestCase):
 class IntegrationCatalog(unittest.TestCase):
     def setUp(self):
         for name, value in (("KIND", "integrations"), ("NAME_PATTERN", catalog.re.compile(
-                catalog.NAME_PATTERNS["integrations"])),
+                config.NAME_PATTERNS["integrations"])),
                             ("TEMPLATES", catalog.ENGINE / ".templates/catalog/integrations"),
                             ("CATALOG_REPOSITORY", "seb5594/Home-Assistant-Integrations")):
             patcher = patch.object(catalog, name, value)
@@ -137,7 +139,7 @@ class IntegrationCatalog(unittest.TestCase):
         public = {"name": "hass-a-integration", "owner": {"login": "seb5594"}}
         hidden = [{**public, "name": "hass-b-integration", "private": True},
                   {**public, "name": "hass-c-integration", "archived": True}]
-        with patch.object(catalog.github_api, "fetch_json", return_value=[public, *hidden]):
+        with patch.object(discovery.github_api, "fetch_json", return_value=[public, *hidden]):
             found = catalog.discover_repositories(set())
         self.assertEqual([repo["name"] for repo in found], ["hass-a-integration"])
 

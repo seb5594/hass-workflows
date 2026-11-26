@@ -1,17 +1,17 @@
 # Home Assistant Workflow Engine
 
 [![Engine checks](https://img.shields.io/github/actions/workflow/status/seb5594/hass-workflows/engine-validation.yml?branch=main&label=engine%20checks)](https://github.com/seb5594/hass-workflows/actions/workflows/engine-validation.yml)
-![Projects](https://img.shields.io/badge/projects-apps%20%2B%20integrations-1877A5)
+![Projects](https://img.shields.io/badge/projects-apps%20%2B%20integrations%20%2B%20dashboards-1877A5)
 ![Architectures](https://img.shields.io/badge/builds-5%20architectures-157F71)
 [![Buy Me a Coffee](https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/seb5594)
 [![PayPal](https://img.shields.io/badge/Support-PayPal-0070BA?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=QMQPNRENXDN26)
 
-**One private engine for every Home Assistant project.** Public repositories keep one short caller workflow, their app/integration code and a handful of [managed files](#managed-files) GitHub insists on reading locally. Metadata from `config.yaml` or `manifest.json` determines the validation, build, badges, and release behavior.
+**One private engine for every Home Assistant project:** apps, integrations and [dashboards](docs/DASHBOARDS.md) (Lovelace cards and themes). Public repositories keep one short caller workflow, their app/integration code and a handful of [managed files](#managed-files) GitHub insists on reading locally. Metadata from `config.yaml` or `manifest.json` determines the validation, build, badges, and release behavior.
 
 | Building block | Purpose |
 | --- | --- |
 | [Project action](.actions/project/action.yml) | Single CI and publishing entry point; detects the project type |
-| [App catalog](.actions/catalog/action.yml), [integration catalog](.actions/catalog-sync/action.yml), [hub](.actions/hub/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) and the [hub](docs/HUB.md) |
+| [App catalog](.actions/catalog/action.yml), [integration catalog](.actions/catalog-sync/action.yml), [hub](.actions/hub/action.yml) | Hourly sync of the app and integration [catalogs](docs/CATALOG.md) (a dashboard catalog follows) and the [hub](docs/HUB.md) |
 | [Setup action](.actions/setup-python/action.yml) | Python plus the one pinned PyYAML every other action and the engine checks reuse |
 | [Scripts](.scripts/) | All logic, see [Architecture](docs/ARCHITECTURE.md) |
 | [Renovate preset](default.json) | Shared dependency rules, copied into every repository, see [Renovate](docs/RENOVATE.md) |
@@ -36,6 +36,7 @@ for apps; companion image measurements cannot overwrite the primary app's badges
 | `.github/ha_tests/` | Integrations only: tests against a real Home Assistant core. Never part of the regular run; the Compatibility workflow runs them for every Home Assistant release from the `hacs.json` minimum upwards (see below) |
 | `.github/workflows/compat.yml` | The Compatibility caller of a project with `ha_tests`, kept in step like `ci.yml` |
 | `custom_components/<domain>/brand/` | Integrations only: `icon.png` (256), `icon@2x.png` (512), `logo.png`, `logo@2x.png` and `dark_` variants. Keep the SVG sources in the project and render them with `node .engine/.scripts/render_brand.cjs <svg folder> custom_components/<domain>/brand`; the sizes are checked on every build |
+| `hacs.json`, `package.json` | Dashboards only (cards and themes): metadata for HACS, and the version, repository and `build`/`lint`/`test` scripts. See [Dashboards](docs/DASHBOARDS.md) |
 | `.github/checks/*.py` | Optional project-specific rules, executed from the repository root |
 | `.github/dev/requirements-dev.txt` | If present (the root works too), installed before the integration tests, which then run with pytest |
 | `[tool.pycodestyle]` in `.github/dev/pyproject.toml` | Opts an integration into the style check; pytest settings go in the same file |
@@ -61,7 +62,7 @@ GitHub only reads workflows, Dependabot, Renovate and funding settings from the 
 | `<app>/entrypoint.sh` | Shared startup code of apps that neither run on s6 nor start a binary directly |
 | `.github/DEVELOPMENT.md` | Catalogs only: how the generated catalog is maintained |
 
-`python .engine/.scripts/managed.py sync <kind> [<engine-ref>]` inside a repository rewrites all of them (`main` by default, so the repository always runs the newest pipeline; pass a commit SHA to freeze it) (`kind`: `app`, `integration`, `catalog-apps`, `catalog-integrations` or `hub`); `check <kind>` is what CI runs. Public apps, integrations and the integration catalog share the **Home Assistant CI** name.
+`python .engine/.scripts/managed.py sync <kind> [<engine-ref>]` inside a repository rewrites all of them (`main` by default, so the repository always runs the newest pipeline; pass a commit SHA to freeze it) (`kind`: `app`, `integration`, `dashboard`, `catalog-apps`, `catalog-integrations`, `catalog-dashboards` or `hub`); `check <kind>` is what CI runs. Public apps, integrations, dashboards and the integration catalog share the **Home Assistant CI** name.
 The read-only compatibility workflow resolves stable and preview releases daily.
 The integration catalog keeps its release ZIP and feed semantics and its historical
 tests on external pull requests. Project-specific firmware, camera, router and
@@ -83,7 +84,7 @@ Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europ
 then `.2`, `.3`, and so on. The version bumper preserves this format, starts a fresh date on a
 later day and never moves backwards. The dotted spelling `YYYY.MM.DD.BUILD` numbers every build of an app,
 starting at `.1` each day (`2026.11.10.1`, `2026.11.10.2`, then `2026.11.11.1`).
-Integrations use the same spelling in `manifest.json` but leave the suffix off the first build of a day:
+Integrations and dashboards use the same spelling (in `manifest.json` and `package.json`) but leave the suffix off the first build of a day:
 `2026.11.19`, then `2026.11.19.1`, `2026.11.19.2`, and `2026.11.20` on the next day.
 [`calver.py`](.scripts/calver.py) computes the next one (`calver.py next 2026.11.19` prints
 `2026.11.19.1`) and `calver.py bump` rewrites the manifest; versions of another shape stay untouched. Date separators do not mark a pre-release. Existing
@@ -91,6 +92,8 @@ numeric and pre-release version formats keep their behavior; `stage: experimenta
 an app metadata choice.
 
 The current Home Assistant base image ships amd64 and aarch64 only. An app that lists armv7, armhf or i386 as well builds those on the previous generation of base images (`ghcr.io/home-assistant/ARCH-base:3.22-2025.11.1`, see [`legacy.py`](.scripts/legacy.py)), whose Alpine is older. Each apk pin is therefore a build argument with a legacy twin (`ARG GIT_VERSION=2.54.0-r0` next to `ARG GIT_VERSION_LEGACY=2.49.1-r0`); the build hands the legacy value to the Dockerfile on those architectures, and validation insists on a twin for every pinned package. Only these prebuilt images exist for them: a local build by the Supervisor does not know the twins.
+
+Dashboards run their own checks, build the card with Node and publish it as the single release asset; see [Dashboards](docs/DASHBOARDS.md).
 
 Integrations run the HACS checks (skipped for private and template repositories, which HACS cannot read; the `brands` and `topics` checks only the default store needs are always skipped, and so is `license` while the repository has no license file, which a warning points out), Python lint and tests (pytest when `requirements-dev.txt` exists, otherwise unittest, plus `*.test.cjs` frontend tests through Node). Every CI run produces a verified ZIP artifact. A new manifest version publishes the ZIP as a GitHub release whose notes end with the ZIP's SHA-256 (there is no checksum file); versions such as `1.0.0b1` become pre-releases (see `zip_release` below).
 

@@ -74,12 +74,31 @@ def load_integrations(repository, sha, files):
     return items
 
 
+def load_dashboards(repository, sha, files):
+    """The card or theme of a dashboard repository: `hacs.json` names it, `package.json` versions it.
+
+    The item is shaped like an integration manifest (name, slug, version, description) plus its
+    HACS category, so catalogs and the hub render all remotely described projects the same way.
+    """
+    if "hacs.json" not in files or "package.json" not in files:
+        return []
+    hacs = json.loads(raw(repository, sha, "hacs.json"))
+    package = json.loads(raw(repository, sha, "package.json"))
+    return [{**package, "name": hacs["name"], "slug": package["name"].rpartition("/")[2], "hacs": hacs,
+             "category": "plugin" if hacs.get("filename") else "theme", "path": "",
+             "metrics": optional_json(repository, sha, files, METRICS_FILE), "compat": False,
+             "icon": first_file(files, "brand/icon@2x.png", "brand/icon.png")}]
+
+
+LOADERS = {"integrations": load_integrations, "dashboards": load_dashboards}
+
+
 def describe(repository, sha, kind, limit=500, fallback=""):
-    """(items, summary) for the project at `sha`; integrations without a description get the README intro."""
+    """(items, summary) for the project at `sha`; projects without a description get the README intro."""
     files = project_files(repository, sha)
     if kind == "apps":
         return load_apps(repository, sha, files), ""
-    items = load_integrations(repository, sha, files)
+    items = LOADERS[kind](repository, sha, files)
     summary = excerpt.first_paragraph(readme(repository, sha, files), limit, fallback)
     for item in items:
         item.setdefault("description", summary)

@@ -3,7 +3,7 @@ import json
 
 import config
 
-KINDS = {"apps": "app", "integrations": "integration"}
+KINDS = {"apps": "app", "integrations": "integration", "dashboards": "dashboard"}
 
 
 def matrix():

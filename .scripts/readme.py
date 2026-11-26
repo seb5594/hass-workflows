@@ -58,6 +58,8 @@ def header(root=Path("."), live=None):
                          source, re.M)
         rows = badgekit.app_rows(project.metadata, project.repository, base_image=base[2] if base else None,
                                  **common)
+    elif project.kind == projectmeta.DASHBOARD:
+        rows = badgekit.dashboard_rows(project.metadata, project.hacs, project.repository, **common)
     else:
         rows = badgekit.integration_rows(project.metadata, project.hacs, project.repository,
                                          compat=(root / COMPAT_WORKFLOW).exists(), **common)

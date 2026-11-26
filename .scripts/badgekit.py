@@ -181,16 +181,17 @@ def install_badge():
 INSTALL_LABEL = "HACS · Marketplace"
 
 
-def hacs_badge(repo):
+def hacs_badge(repo, category="integration", message="Add integration"):
     """Install badge for HACS (Home Assistant up to 2026.10) and the Marketplace (2026.11 and newer).
 
     The link deliberately keeps the `hacs_repository` redirect: the Marketplace accepts it with the same
     parameters, while the newer `marketplace_repository` redirect does not exist on older instances.
+    `category` is HACS' own name: `integration`, or `plugin` for a card and `theme` for a dashboard project.
     """
     owner, name = repo.split("/")
     redirect = ("https://my.home-assistant.io/redirect/hacs_repository/?"
-                + urlencode({"owner": owner, "repository": name, "category": "integration"}, quote_via=quote))
-    return static(INSTALL_LABEL, "Add integration", "41BDF5", redirect, "homeassistantcommunitystore")
+                + urlencode({"owner": owner, "repository": name, "category": category}, quote_via=quote))
+    return static(INSTALL_LABEL, message, "41BDF5", redirect, "homeassistantcommunitystore")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -202,6 +203,13 @@ INTEGRATION_LAYOUT = [
     (MAJOR, ["install", "home_assistant"]),
     (MAJOR, ["version", "downloads"]),
     (MINOR, ["stars", "forks", "checks", "tests", "issues"]),
+    (SUPPORT, ["paypal", "beer"]),
+    (MINOR, ["license"]),
+]
+DASHBOARD_LAYOUT = [
+    (MAJOR, ["install", "home_assistant"]),
+    (MAJOR, ["version", "downloads"]),
+    (MINOR, ["stars", "forks", "checks", "tests", "bundle_size", "issues"]),
     (SUPPORT, ["paypal", "beer"]),
     (MINOR, ["license"]),
 ]
@@ -375,6 +383,21 @@ def _integration_builders():
     return builders
 
 
+DASHBOARD_KINDS = {"plugin": "card", "theme": "theme"}
+
+
+def _dashboard_builders():
+    builders = _common_builders()
+    builders.update({
+        "install": lambda c: [hacs_badge(c["repo"], c["category"], f"Add {DASHBOARD_KINDS[c['category']]}")],
+        "version": lambda c: version(c, "version"),
+        "downloads": downloads,
+        "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
+        "bundle_size": lambda c: measurement(c, "bundle_size", "bundle size", "info"),
+    })
+    return builders
+
+
 def build_rows(layout, builders, context, standalone=True):
     """Rows of badges for a layout; a catalog listing (`standalone=False`) skips README-only badges."""
     rows = []
@@ -400,3 +423,11 @@ def integration_rows(manifest, hacs, repo, standalone=True, live=None, measured_
     context = {"data": manifest, "repo": repo, "live": live, "metrics": measured_values, "compat": compat,
                "licensed": licensed, "minimum": hacs.get("homeassistant")}
     return build_rows(INTEGRATION_LAYOUT, _integration_builders(), context, standalone)
+
+
+def dashboard_rows(package, hacs, repo, standalone=True, live=None, measured_values=None, licensed=False):
+    """Badge rows of a card or theme; `package` is its package.json, `hacs` its hacs.json."""
+    context = {"data": package, "repo": repo, "live": live, "metrics": measured_values, "compat": False,
+               "licensed": licensed, "minimum": hacs.get("homeassistant"),
+               "category": "plugin" if hacs.get("filename") else "theme"}
+    return build_rows(DASHBOARD_LAYOUT, _dashboard_builders(), context, standalone)
