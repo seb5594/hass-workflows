@@ -387,5 +387,70 @@ class Listing(unittest.TestCase):
         self.assertIn("_No dashboards are published yet._", text)
 
 
+def make_integration_with_frontend(root):
+    from test_templates import make_integration
+    folder = make_integration(root)
+    (root / "frontend").mkdir()
+    (root / "frontend/package.json").write_text(json.dumps({"name": "panel", "scripts": {"build": "x", "test": "y"}}))
+    return folder
+
+
+class IntegrationFrontend(unittest.TestCase):
+    """An integration may ship a card of its own: frontend/ is built into the component folder."""
+
+    def test_the_frontend_folder_is_found_by_its_package_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertIsNone(project.frontend_directory(root))
+            make_integration_with_frontend(root)
+            self.assertEqual(project.frontend_directory(root), root / "frontend")
+
+    def test_it_stays_an_integration_and_inspect_tells_the_action_to_set_up_node(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            make_integration_with_frontend(Path(tmp))
+            facts = Pipeline().inspect(tmp, PUBLISH="true", EVENT_NAME="push", DEFAULT_BRANCH="main", REF="refs/heads/main")
+        self.assertEqual((facts["kind"], facts["frontend"]), ("integration", "true"))
+
+    def test_without_a_frontend_inspect_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            from test_templates import make_integration
+            make_integration(Path(tmp))
+            self.assertEqual(Pipeline().inspect(tmp)["frontend"], "false")
+
+    def test_node_tests_add_to_the_python_test_count(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(metrics, "RUN_STORE", Path(tmp) / "m.json"):
+            frontend = Path(tmp) / "frontend"
+            frontend.mkdir()
+            (frontend / "package.json").write_text(json.dumps({"scripts": {"test": "x"}}))
+            metrics.record("tests", 10)
+            calls = []
+            with patch.object(project, "run", lambda *a, **k: calls.append((a, k.get("cwd")))), \
+                    patch.object(project, "run_captured", return_value="ℹ pass 7\n"):
+                project.run_node_checks(frontend)
+            self.assertEqual(metrics.recorded()["tests"], 17)
+        self.assertEqual(calls[0][0][:2], ("npm", "ci"))
+        self.assertEqual(calls[0][1], frontend)
+
+    def test_the_build_must_write_into_the_component_folder_and_its_size_is_recorded(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(metrics, "RUN_STORE", Path(tmp) / "m.json"):
+            root = Path(tmp)
+            folder = make_integration_with_frontend(root)
+            card = projectmeta.discover(root)
+            with patch.object(project, "run"), self.assertRaisesRegex(AssertionError, "must write"):
+                project.build_frontend(card)
+            (folder / "frontend").mkdir()
+            (folder / "frontend/panel.js").write_text("x" * 100)
+            with patch.object(project, "run") as runner:
+                built = project.build_frontend(card, rebuild=False)
+            runner.assert_not_called()  # a finished build is reused by the release step
+            self.assertEqual([path.name for path in built], ["panel.js"])
+            self.assertEqual(metrics.recorded()["bundle_size"], 100)
+
+    def test_the_badge_shows_the_frontend_size_once_measured(self):
+        rows = badgekit.integration_rows({"version": "1"}, {}, "o/r", measured_values={"bundle_size": 2048})
+        text = " ".join(str(badge) for row in rows for badge in row.badges)
+        self.assertIn("frontend%20size", text)
+
+
 if __name__ == "__main__":
     unittest.main()

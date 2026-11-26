@@ -33,9 +33,9 @@ runs:
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         IS_TEMPLATE: ${{ github.event.repository.is_template }}
       run: python "$ENGINE/.scripts/project.py" inspect >> "$GITHUB_OUTPUT"
-    # Dashboards (cards) are built with Node; the engine scripts themselves stay Python.
+    # Dashboards (cards) and integrations with a frontend/ folder are built with Node; the engine scripts stay Python.
     - uses: actions/setup-node@v6
-      if: steps.project.outputs.kind == 'dashboard'
+      if: steps.project.outputs.kind == 'dashboard' || steps.project.outputs.frontend == 'true'
       with:
         node-version: 24
     # Only apps lint shell scripts and YAML; GitHub's runner image usually ships both tools already.

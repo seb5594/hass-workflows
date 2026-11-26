@@ -153,22 +153,53 @@ def run_integration_tests(directory):
 TESTS_PASSED = re.compile(r"(?:ℹ |# )pass (\d+)")  # the summary line of `node --test`
 
 
-def run_node_checks():
+FRONTEND = Path("frontend")
+
+
+def frontend_directory(root=Path(".")):
+    """The Node project an integration ships its own card or panel from, or None.
+
+    An integration may keep one in `frontend/`. Its `build` script writes the files into the component
+    folder (for example `custom_components/<domain>/frontend/`), so the release ZIP contains them.
+    """
+    return root / FRONTEND if (root / FRONTEND / "package.json").is_file() else None
+
+
+def run_node_checks(directory=Path(".")):
     """Install exactly the locked dependencies, then run the project's own lint and test scripts.
 
-    Install scripts are skipped: a dependency has no reason to run code on the build machine.
+    Install scripts are skipped: a dependency has no reason to run code on the build machine. The tests
+    of a Node project add to the test count of the Python ones.
     """
-    package = json.loads(Path("package.json").read_text())
+    package = json.loads((directory / "package.json").read_text())
     scripts = package.get("scripts", {})
     if not scripts and not (package.get("dependencies") or package.get("devDependencies")):
         return  # a theme has nothing to install or run
-    run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
+    run("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund", cwd=directory)
     if "lint" in scripts:
-        run("npm", "run", "lint")
+        run("npm", "run", "lint", cwd=directory)
     if "test" in scripts:
-        passed = TESTS_PASSED.search(run_captured("npm", "test"))
+        passed = TESTS_PASSED.search(run_captured("npm", "test", cwd=directory))
         if passed:
-            metrics.record("tests", int(passed.group(1)))
+            metrics.record("tests", metrics.recorded().get("tests", 0) + int(passed.group(1)))
+
+
+def build_frontend(project, rebuild=True):
+    """Build the integration's frontend and return the files it wrote into the component folder.
+
+    With `rebuild=False` files from an earlier build in the same run are reused, so the release step does
+    not build twice.
+    """
+    directory = frontend_directory(project.root)
+    if directory is None:
+        return []
+    output = project.folder / "frontend"
+    if rebuild or not any(output.rglob("*.js")):
+        run("npm", "run", "build", cwd=directory)
+    built = sorted(path for path in output.rglob("*") if path.is_file())
+    assert built, f"`npm run build` in frontend/ must write its files to {project.folder / 'frontend'}"
+    metrics.record("bundle_size", sum(path.stat().st_size for path in built))
+    return built
 
 
 def validate(project):
@@ -198,6 +229,8 @@ def validate(project):
     run_project_checks()
     if directory := test_directory():
         run_integration_tests(directory)
+    if (frontend := frontend_directory(project.root)) is not None:
+        run_node_checks(frontend)
 
 
 def main(command):
@@ -209,6 +242,7 @@ def main(command):
         print(f"apk_repository={str(policy == 'repository').lower()}")
         print(f"directory={project.folder.as_posix()}")
         print(f"category={project.category or ''}")
+        print(f"frontend={str(frontend_directory(project.root) is not None).lower()}")
         print(f"version={project.version}")
         print(f"slug={project.slug}")
         publish, images = should_publish(), builds_images(project)
@@ -236,8 +270,12 @@ def main(command):
                 run(sys.executable, str(ENGINE / ".scripts/build_app.py"), str(app.folder), arch,
                     PLATFORMS[arch], env={**os.environ, "APP_METRICS_PREFIX": prefix})
     elif command == "package" and project.kind in PACKAGERS:
+        if project.kind == projectmeta.INTEGRATION:
+            build_frontend(project)
         run(sys.executable, str(ENGINE / ".scripts" / PACKAGERS[project.kind]))
     elif command == "release":
+        if project.kind == projectmeta.INTEGRATION:
+            build_frontend(project, rebuild=False)  # a no-op without a frontend
         script, args = (("release_app.py", [str(app.folder) for app in projectmeta.app_projects(project.root)])
                         if project.kind == projectmeta.APP
                         else (PACKAGERS[project.kind], ["--release"]))

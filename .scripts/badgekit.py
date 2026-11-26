@@ -202,7 +202,7 @@ def hacs_badge(repo, category="integration", message="Add integration"):
 INTEGRATION_LAYOUT = [
     (MAJOR, ["install", "home_assistant"]),
     (MAJOR, ["version", "downloads"]),
-    (MINOR, ["stars", "forks", "checks", "tests", "issues"]),
+    (MINOR, ["stars", "forks", "checks", "tests", "bundle_size", "issues"]),
     (SUPPORT, ["paypal", "beer"]),
     (MINOR, ["license"]),
 ]
@@ -379,6 +379,7 @@ def _integration_builders():
         "version": lambda c: version(c, "integration version"),
         "downloads": downloads,
         "tests": lambda c: measurement(c, "tests", "tests", "stable", " passed"),
+        "bundle_size": lambda c: measurement(c, "bundle_size", "frontend size", "info"),
     })
     return builders
 
