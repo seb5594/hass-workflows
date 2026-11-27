@@ -3,9 +3,9 @@ name: Compatibility
 on:
   push:
     branches: [main, dev]
-    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
+    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', 'tests/**', '.github/workflows/compat.yml', 'hacs.json']
   pull_request:
-    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', '.github/workflows/compat.yml', 'hacs.json']
+    paths: ['custom_components/**', '.github/ha_tests/**', 'tests_ha/**', '.github/tests/**', 'tests/**', '.github/workflows/compat.yml', 'hacs.json']
   schedule:
     - cron: '41 5 * * *' # Daily: discover new stable and alpha/beta/RC packages from PyPI.
   workflow_dispatch:
@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 10
     outputs:
       releases: ${{ steps.releases.outputs.releases }}
+      engine: ${{ steps.releases.outputs.engine }}
     steps:
       # include: checkout-project
       # include: checkout-engine
@@ -45,7 +46,7 @@ jobs:
         include: ${{ fromJSON(needs.releases.outputs.releases) }}
     steps:
       # include: checkout-project
-      # include: checkout-engine
+      # include: checkout-frozen-engine
       - uses: ./.engine/.actions/ha-test
         with:
           target: ${{ toJSON(matrix) }}
@@ -60,7 +61,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      # include: checkout-engine
+      # include: checkout-frozen-engine
       - uses: actions/download-artifact@v8
         with:
           pattern: ha-result-*
@@ -70,4 +71,4 @@ jobs:
         with:
           results: ${{ runner.temp }}/ha-results
           expected: ${{ needs.releases.outputs.releases }}
-          refine: ${{ github.event_name != 'schedule' }}
+          refine: 'true'

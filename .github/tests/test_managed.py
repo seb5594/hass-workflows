@@ -56,7 +56,8 @@ class WorkflowTemplates(unittest.TestCase):
     def test_every_workflow_pins_the_engine_and_passes_secrets(self):
         for kind, workflow in {**managed.WORKFLOWS, "compat": managed.COMPATIBILITY}.items():
             text = managed.render_workflow(workflow, SHA)
-            self.assertEqual(text.count(f"ref: {SHA}"), text.count("path: .engine"), kind)
+            refs = text.count(f"ref: {SHA}") + text.count("ref: ${{ needs.releases.outputs.engine }}")
+            self.assertEqual(refs, text.count("path: .engine"), kind)
             self.assertGreaterEqual(text.count(f"ref: {SHA}"), 1, kind)
             self.assertIn("secrets.ORCHESTRATION_PAT", text, kind)
             self.assertNotIn("# include", text, kind)
@@ -85,7 +86,9 @@ class WorkflowTemplates(unittest.TestCase):
 
     def test_compat_caller_tests_every_release_of_the_matrix_in_its_own_job(self):
         text = managed.render_workflow(managed.COMPATIBILITY, SHA)
-        self.assertEqual(text.count(f"ref: {SHA}"), 3)
+        self.assertEqual(text.count(f"ref: {SHA}"), 1)
+        self.assertEqual(text.count("ref: ${{ needs.releases.outputs.engine }}"), 2)
+        self.assertIn("refine: 'true'", text)
         self.assertIn("./.engine/.actions/ha-targets", text)
         self.assertIn("fromJSON(needs.releases.outputs.releases)", text)
         self.assertIn('ha_matrix.py run --target-json "$HA_TARGET"', (config.ENGINE_ROOT / ".actions/ha-test/action.yml").read_text())

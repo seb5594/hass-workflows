@@ -28,7 +28,7 @@ def record(directory, target, outcome):
     """Store whether one matrix target passed."""
     directory.mkdir(parents=True, exist_ok=True)
     item = {"homeassistant": target["homeassistant"], "preview": bool(target.get("preview")),
-            "passed": outcome == "success"}
+            "passed": {"success": True, "failure": False}.get(outcome)}
     (directory / f"{item['homeassistant']}.json").write_text(json.dumps(item) + "\n")
 
 
@@ -37,7 +37,7 @@ def load(directory):
 
 
 def choose_minimum(results, expected=None):
-    """`Y.M.0` of the oldest stable release below which something failed, or None to keep hacs.json.
+    """Exact oldest patch in the passing suffix, or None when results are inconclusive.
 
     Walks down from the newest stable release while the targets pass. Preview targets never count.
     """
@@ -45,22 +45,21 @@ def choose_minimum(results, expected=None):
         return None
     stable = sorted((item for item in results if not item["preview"]),
                     key=lambda item: version_key(item["homeassistant"]))
-    if not stable or not stable[-1]["passed"]:
+    if not stable or any(item["passed"] is None for item in stable) or not stable[-1]["passed"]:
         return None
     oldest = stable[-1]
     for item in reversed(stable):
         if not item["passed"]:
             break
         oldest = item
-    major, minor = version_key(oldest["homeassistant"])[:2]
-    return f"{major}.{minor}.0"
+    return oldest["homeassistant"]
 
 
 def boundary(results):
     """(highest failed, lowest passed) stable release around the minimum, or None without a failure."""
     stable = sorted((item for item in results if not item["preview"]),
                     key=lambda item: version_key(item["homeassistant"]))
-    if not stable or not stable[-1]["passed"]:
+    if not stable or any(item["passed"] is None for item in stable) or not stable[-1]["passed"]:
         return None
     start = len(stable) - 1
     while start > 0 and stable[start - 1]["passed"]:
@@ -79,11 +78,7 @@ def keep_declared(pair, declared):
     if not pair or not declared:
         return False
     failed, passed = pair
-    return series(failed) < series(declared) <= series(passed)
-
-
-def series(version):
-    return version_key(version)[:2]
+    return version_key(failed) < version_key(declared) <= version_key(passed)
 
 
 def pin_variants(target):
@@ -97,9 +92,9 @@ def pin_variants(target):
 
 
 def refined_minimum(failed, passed):
-    """Bisect the series between the failed and the passed release with real test runs.
+    """Bisect the stable patches between the failed and the passed release with real test runs.
 
-    Returns the lowest passing release; when no series in the gap passes, the passed release itself.
+    Returns the lowest passing release; when no patch in the gap passes, the passed release itself.
     """
     import ha_matrix
     import ha_refine
@@ -112,7 +107,10 @@ def refined_minimum(failed, passed):
         # all of them, so the largest set of them that installs is used.
         for attempt in pin_variants(target):
             try:
-                outcome = all(ha_matrix.test_release(attempt, domains, requirements).values())
+                results = ha_matrix.test_release(attempt, domains, requirements)
+                if not results:
+                    return None
+                outcome = all(results.values())
             except subprocess.CalledProcessError:
                 continue
             print(f"Boundary search: Home Assistant {target['homeassistant']} "
@@ -145,7 +143,7 @@ def gate(target, outcome, root=Path(".")):
     if outcome == "success":
         return 0
     declared = minimum_from_hacs(root)
-    if declared and version_key(target["homeassistant"]) < version_key(declared):
+    if outcome == "failure" and declared and version_key(target["homeassistant"]) < version_key(declared):
         print(f"::notice::Home Assistant {target['homeassistant']} fails, which hacs.json already "
               f"excludes (minimum {declared}).")
         return 0
@@ -166,7 +164,7 @@ def main(arguments):
     rai.add_argument("directory", type=Path)
     rai.add_argument("--expected", help="JSON list of the targets the matrix started")
     rai.add_argument("--refine", action="store_true",
-                     help="test the series between the failed and the passed release")
+                     help="test the stable patches between the failed and the passed release")
     options = parser.parse_args(arguments)
     if options.command == "record":
         record(options.directory, json.loads(options.target), options.outcome)

@@ -1,0 +1,7 @@
+- uses: actions/checkout@v7
+  with:
+    repository: __ENGINE_REPOSITORY__
+    ref: ${{ needs.releases.outputs.engine }}
+    token: ${{ secrets.ORCHESTRATION_PAT || github.token }}
+    path: .engine
+    persist-credentials: false

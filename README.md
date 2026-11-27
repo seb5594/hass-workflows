@@ -72,9 +72,11 @@ Changing a template and re-running `sync` in every repository is the whole updat
 
 ## Home Assistant compatibility
 
-An explicit `homeassistant` minimum in `hacs.json` is the lower bound of the integration's test matrix. With no declared minimum, a rolling five-year window is used, so its oldest tested series advances with the calendar (see [`supported_minimum`](.scripts/ha_matrix.py)). [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular suite in `.github/tests/` (or `tests/`) and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
-
-The Compatibility workflow lists the releases at or above the minimum in `hacs.json` and tests each in its own job, daily and for relevant project changes. Each live run also resolves the current stable and preview versions from PyPI. See [compatibility testing](docs/COMPATIBILITY.md) for fixture selection and the frozen CI targets. Locally: `python .engine/.scripts/ha_matrix.py run 2026.9.4`; `list` prints the releases as JSON. A release is added to the table together with the first test run that proves it works.
+Compatibility jobs cover a rolling five-year window, the integration's declared minimum when
+testable, the latest stable Core and published previews for upcoming monthly releases. Each job
+runs against one frozen target. The minimum written to `hacs.json` is an exact passing patch.
+The daily summary includes next month's beta and RC availability. See the [matrix and boundary
+search](docs/COMPATIBILITY.md) for the sampling rules and local preview command.
 
 ## Release flow
 

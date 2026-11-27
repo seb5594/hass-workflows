@@ -9,7 +9,7 @@ runs:
   steps:
     - uses: ./.engine/.actions/setup-python
       with:
-        packages: uv
+        packages: packaging==26.0 uv==0.13.9
     - name: Test selected Home Assistant release
       id: test
       continue-on-error: true
@@ -21,7 +21,7 @@ runs:
       if: ${{ !cancelled() }}
       env:
         HA_TARGET: ${{ inputs.target }}
-        OUTCOME: ${{ steps.test.outcome }}
+        OUTCOME: ${{ steps.test.outputs.compatibility || 'unknown' }}
       shell: bash
       run: python .engine/.scripts/ha_minimum.py record "$RUNNER_TEMP/ha-result" "$HA_TARGET" "$OUTCOME"
     - uses: actions/upload-artifact@v7
@@ -34,6 +34,6 @@ runs:
       if: ${{ !cancelled() }}
       env:
         HA_TARGET: ${{ inputs.target }}
-        OUTCOME: ${{ steps.test.outcome }}
+        OUTCOME: ${{ steps.test.outputs.compatibility || 'unknown' }}
       shell: bash
       run: python .engine/.scripts/ha_minimum.py gate "$HA_TARGET" "$OUTCOME"

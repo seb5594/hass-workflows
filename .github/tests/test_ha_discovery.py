@@ -1,4 +1,5 @@
 """Live version discovery must not silently miss new Core releases."""
+import datetime
 import json
 import unittest
 from unittest import mock
@@ -14,7 +15,7 @@ class Discovery(unittest.TestCase):
 
     def test_latest_stable_and_each_upcoming_preview_channel(self):
         core = self.payload(["2026.9.4", "2026.10.3", "2026.10.4", "2026.10.0b1",
-                             "2026.11.0a1", "2026.11.0a2", "2026.11.0b1", "2026.11.0rc1"])
+                             "2026.11.0a1", "2026.11.0a2", "2026.11.0b1", "2026.11.0rc1", "2026.12.0b1"])
         core["releases"]["2026.12.0"] = [{"yanked": True}]
         core["releases"]["2027.1.0"] = []
         plugin = {"info": {"version": "0.13.375", "requires_python": ">=3.14",
@@ -27,13 +28,22 @@ class Discovery(unittest.TestCase):
                 return plugin
             return core if version is None else {"info": {"requires_python": ">=3.14.2"}}
 
-        with mock.patch.object(ha_discovery, "fetch", side_effect=fetch):
+        with mock.patch.object(ha_discovery, "fetch", side_effect=fetch), \
+                mock.patch.object(ha_discovery, "fixture_commit", return_value="a" * 40):
             targets = ha_discovery.discover()
         self.assertEqual([item["homeassistant"] for item in targets],
-                         ["2026.10.4", "2026.11.0a2", "2026.11.0b1", "2026.11.0rc1"])
+                         ["2026.10.4", "2026.11.0a2", "2026.11.0b1", "2026.11.0rc1", "2026.12.0b1"])
         self.assertTrue(all(item["python"] == "3.14" for item in targets))
         self.assertFalse(targets[0]["override_core"])
-        self.assertTrue(all(item["preview"] and item["override_core"] for item in targets[1:]))
+        self.assertTrue(all(item["preview"] for item in targets[1:]))
+        self.assertTrue(all(item["override_core"] for item in targets[1:-1]))
+        self.assertEqual(targets[-1]["fixture_commit"], "a" * 40)
+
+    def test_next_month_preview_outlook_across_new_year(self):
+        text = ha_discovery.preview_summary([ha_discovery.Version("2027.1.0b2")], datetime.date(2026, 12, 1))
+        self.assertIn("2027.1", text)
+        self.assertIn("Beta: 2027.1.0b2", text)
+        self.assertIn("Release candidate: no published", text)
 
     def test_network_failure_is_not_a_successful_static_fallback(self):
         with mock.patch.object(ha_discovery, "fetch", side_effect=TimeoutError):

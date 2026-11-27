@@ -1,6 +1,9 @@
 name: Discover supported Home Assistant versions
 description: Discover supported Home Assistant versions
 outputs:
+  engine:
+    description: Engine commit used for discovery
+    value: ${{ steps.releases.outputs.engine }}
   releases:
     description: Frozen Home Assistant targets
     value: ${{ steps.releases.outputs.releases }}
@@ -17,6 +20,7 @@ runs:
     - id: releases
       shell: bash
       run: |
+        echo "engine=$(git -C .engine rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         targets=$(python .engine/.scripts/ha_matrix.py list --live --matrix)
         echo "releases=$targets" >> "$GITHUB_OUTPUT"
         printf '### Home Assistant targets\n\n```json\n%s\n```\n' "$targets" >> "$GITHUB_STEP_SUMMARY"

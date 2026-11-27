@@ -4,23 +4,19 @@ The managed `compat.yml` runs daily at 05:41 UTC, on relevant code/test/workflow
 changes, and manually. GitHub schedules may be delayed; discovery happens each run,
 not through a release webhook in the upstream repository.
 
-The matrix always spans five years back from today (`SUPPORT_YEARS` in `ha_matrix.py`); the
-curated release at or below that window's oldest series is the first target. A project that
-declares an even older minimum in `hacs.json` keeps it. A newer declaration does not shorten
-the range: the tests find the real boundary and `ha_minimum.py` writes it back (see below).
-The declared minimum is also tested as a target of its own, so it is never taken on trust.
-The CLI `--minimum` option remains an explicit override.
+Live discovery uses today's UTC date to find the newest testable stable patch already public
+five calendar years ago. It retains the curated Python and API checkpoints in that window and
+resolves an older declared minimum when matching fixtures exist. For each half-year without a
+stable checkpoint, it looks for the newest published stable patch with matching fixtures.
 
-`ha_matrix.py list --live --matrix` retains the historical Python/API boundaries
-in `ha_releases.json` and adds the newest non-yanked stable Home Assistant package
-on PyPI. It also adds the newest published alpha/dev, beta and release candidate
-newer than stable, when available. Unpublished channels are not invented. Discovery
-or metadata errors fail the workflow instead of silently falling back to stale targets.
+Each run also selects the latest stable Core and the newest available alpha/dev, beta and RC
+for each upcoming monthly series. The daily job summary shows the next calendar month's beta
+and RC separately, including across December and January. An unpublished preview is reported
+as pending. Once PyPI publishes it, the next discovery can test it.
 
-The discovery job freezes the exact Core, test plugin and Python minor in the matrix
-and records them in its job summary. Workers use those objects without rediscovery.
-PyPI `requires_python` metadata selects Python; uv installs that minor's current patch.
-Historical targets retain their tested plugin and dependency pins.
+Discovery resolves the engine's `main` branch once. All workers in the run use that commit
+and the selected Core, fixture and Python minor from the matrix. The compatibility actions
+pin the uv version. Python patch releases and transitive wheels are still resolved at installation.
 
 When PyPI has a matching `pytest-homeassistant` release, the runner uses Core's
 official fixtures at that exact version, including previews and Bluetooth extras.
@@ -45,30 +41,24 @@ target does not hide the rest. This workflow does not publish integration releas
 
 ## Minimum version in hacs.json
 
-The whole window is tested, but `hacs.json` should only promise what passed. Each matrix target
-leaves a small result artifact. On the default branch the `minimum` job reads them all with
-[`ha_minimum.py`](../.scripts/ha_minimum.py) and writes the oldest release from which every
-stable target up to the newest one passed (as `Y.M.0`) into `homeassistant`, then commits it as
-`github-actions[bot]`. The value moves in both directions, so a fixed incompatibility lowers it
-again on the next run. Nothing changes when the newest stable release fails (that is a
-regression, not a boundary), when a result is missing, or for previews. Between two curated
-release table entries the boundary is rounded up to the passing one. A target below the minimum that `hacs.json` already declares may fail without turning the
-workflow red (it is shown as a notice); only releases the project claims to support do.
-HACS reads the minimum from
-`hacs.json`; a custom integration's `manifest.json` has no such key.
+Each target records a result artifact. On the default branch a complete, successful matrix can
+update the minimum in `hacs.json`. A clean test failure below the existing minimum provides a
+lower boundary. A supported-target failure, missing artifact or inconclusive environment prevents
+the managed workflow from changing the minimum. Preview results never determine the stable floor.
+A newer project commit supersedes results for the older checkout.
 
-### Boundary search
+### Exact patch boundary
 
-The curated targets are far apart, so the coarse result is rounded up. On pushes and manual
-runs (not on the daily schedule) the `minimum` job narrows it down with
-[`ha_refine.py`](../.scripts/ha_refine.py): it takes the failed and the passed target around the
-boundary, lists the `.0` release of every series in between, builds a target for each (the test
-plugin that pins exactly that Core, the lowest Python it allows, the dependency pins of the
-curated release below it) and bisects, so three or four environments suffice for a gap of a year.
-A series is tested at its first release, or at the next one a plugin exists for (the boundary is then reported as `Y.M.0`); a series with no matching plugin at all is skipped. If even the first release of the passed series fails,
-the passed target's own version is written. On runs without a search (the daily schedule) a declared minimum that lies inside the unresolved gap is kept, so an earlier search is never undone by rounding up. The search assumes that everything above the boundary
-passes, which the coarse run has already confirmed for the curated targets.
+Starting from the highest failing stable checkpoint and the next passing one, the minimum job
+bisects the published, non-yanked stable patches strictly between them. It resolves fixtures and
+builds an environment only when probing a candidate. PyPI metadata is reused within the process.
+A probe without an installable matching environment is skipped. When every checkpoint passes,
+the earliest observed passing patch supplies the minimum directly.
 
-Integration callers follow the engine branch `main`, so a new engine state needs no commit
-in the integration; `managed.py sync integration PATH` refreshes the callers after template
-changes. Core versions are discovered live in any case: the package metadata is fetched live on every daily run.
+For example, a pass on `2022.8.7` can establish `2022.8.7`. Establishing `2022.8.0` requires
+a pass on that version. With 31 testable candidates, bisection needs at most five additional
+test runs. This search assumes a single failing-to-passing transition inside the gap. Isolated
+regressions in untested patches can escape sampling.
+
+The daily schedule, pushes and manual runs all use patch refinement. To inspect a plan locally,
+run `python .engine/.scripts/ha_matrix.py list --live --matrix` from the integration checkout.

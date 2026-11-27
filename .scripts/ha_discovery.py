@@ -1,8 +1,12 @@
 """Discover installable stable and upcoming Home Assistant releases from PyPI."""
+import datetime
 import json
+import os
 import re
 import subprocess
 import time
+from functools import lru_cache
+from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -27,6 +31,7 @@ def fixture_commit(version):
     return commit
 
 
+@lru_cache(maxsize=None)
 def fetch(package, version=None):
     suffix = f"/{version}" if version else ""
     url = f"https://pypi.org/pypi/{package}{suffix}/json"
@@ -52,6 +57,17 @@ def published_versions(payload):
     return result
 
 
+def preview_summary(chosen, today):
+    """Show availability for the full next calendar month, including across New Year."""
+    month = today.replace(day=28) + datetime.timedelta(days=4)
+    series = (month.year, month.month)
+    lines = [f"### Core preview outlook for {month.year}.{month.month}"]
+    for channel, name in (("b", "Beta"), ("rc", "Release candidate")):
+        versions = [v for v in chosen if v.release[:2] == series and v.pre and v.pre[0] == channel]
+        lines.append(f"- {name}: " + (str(max(versions)) if versions else "no published upcoming target"))
+    return "\n".join(lines)
+
+
 def discover():
     """Latest stable plus latest alpha/dev, beta and RC newer than stable.
 
@@ -62,13 +78,15 @@ def discover():
     core = fetch("homeassistant")
     versions = published_versions(core)
     stable = max(version for version in versions if not version.is_prerelease)
-    chosen = [stable]
-    for channel in ("a", "b", "rc"):
-        candidates = [version for version in versions if version > stable and version.is_prerelease
-                      and ((version.pre and version.pre[0] == channel)
-                           or (channel == "a" and version.is_devrelease))]
-        if candidates:
-            chosen.append(max(candidates))
+    previews = {}
+    for version in sorted(versions):
+        if version > stable and version.is_prerelease:
+            channel = version.pre[0] if version.pre else "a"
+            previews[(version.release[:2], channel)] = version
+    chosen = [stable, *previews.values()]
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with Path(summary).open("a") as output:
+            print(preview_summary(chosen, datetime.datetime.now(datetime.timezone.utc).date()), file=output)
     # Core now publishes its own fixtures at the exact Core version, including betas.
     official = set(published_versions(fetch("pytest-homeassistant")))
     if all(version in official or version >= FIRST_OFFICIAL_STABLE for version in chosen):
@@ -90,15 +108,16 @@ def discover():
             for version in sorted(set(chosen))]
 
 
-def official_target(version, published=True):
+def official_target(version, published=True, read=None):
+    read = read or fetch
     if not published:
-        info = fetch("homeassistant", str(version))["info"]
+        info = read("homeassistant", str(version))["info"]
         return {"homeassistant": str(version), "python": python_minor(info["requires_python"]),
                 "plugin": str(version), "plugin_package": "pytest-homeassistant",
                 "fixture_commit": fixture_commit(version), "preview": version.is_prerelease,
                 "live": True, "override_core": False}
-    info = fetch("pytest-homeassistant", str(version))["info"]
-    result = target(version, info)
+    info = read("pytest-homeassistant", str(version))["info"]
+    result = target(version, info, read)
     if result["override_core"]:
         raise ValueError(f"pytest-homeassistant {version} requires a different Core")
     return {**result, "plugin_package": "pytest-homeassistant"}
@@ -112,8 +131,8 @@ def core_requirement(plugin):
     return requirement
 
 
-def target(version, plugin):
-    info = fetch("homeassistant", str(version))["info"]
+def target(version, plugin, read=None):
+    info = (read or fetch)("homeassistant", str(version))["info"]
     python = python_minor(info["requires_python"], plugin["requires_python"])
     core_pin = core_requirement(plugin)
     return {"homeassistant": str(version), "python": python, "plugin": plugin["version"],

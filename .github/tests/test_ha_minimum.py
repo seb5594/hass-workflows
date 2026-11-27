@@ -14,19 +14,19 @@ def result(version, passed, preview=False):
 
 
 class ChooseMinimum(unittest.TestCase):
-    def test_everything_passing_keeps_the_oldest_tested_series(self):
+    def test_everything_passing_keeps_the_exact_oldest_tested_patch(self):
         results = [result("2021.11.5", True), result("2022.4.7", True), result("2026.11.0", True)]
-        self.assertEqual(ha_minimum.choose_minimum(results), "2021.11.0")
+        self.assertEqual(ha_minimum.choose_minimum(results), "2021.11.5")
 
     def test_the_minimum_is_the_next_release_that_passed_above_a_failure(self):
         results = [result("2021.11.5", False), result("2022.4.7", False), result("2022.8.7", True),
                    result("2023.1.7", True), result("2026.11.0", True)]
-        self.assertEqual(ha_minimum.choose_minimum(results), "2022.8.0")
+        self.assertEqual(ha_minimum.choose_minimum(results), "2022.8.7")
 
     def test_a_gap_in_the_middle_raises_the_minimum_above_it(self):
         results = [result("2021.11.5", True), result("2022.8.7", False), result("2022.12.8", True),
                    result("2026.11.0", True)]
-        self.assertEqual(ha_minimum.choose_minimum(results), "2022.12.0")
+        self.assertEqual(ha_minimum.choose_minimum(results), "2022.12.8")
 
     def test_a_failing_newest_stable_release_is_a_regression_and_changes_nothing(self):
         results = [result("2021.11.5", True), result("2026.9.4", True), result("2026.11.0", False)]
@@ -34,12 +34,15 @@ class ChooseMinimum(unittest.TestCase):
 
     def test_previews_never_decide(self):
         results = [result("2021.11.5", True), result("2026.11.0", True), result("2026.12.0b1", False, True)]
-        self.assertEqual(ha_minimum.choose_minimum(results), "2021.11.0")
+        self.assertEqual(ha_minimum.choose_minimum(results), "2021.11.5")
 
     def test_missing_results_change_nothing(self):
         results = [result("2022.4.7", True), result("2026.11.0", True)]
         self.assertIsNone(ha_minimum.choose_minimum(results, ["2021.11.5", "2022.4.7", "2026.11.0"]))
-        self.assertEqual(ha_minimum.choose_minimum(results, ["2022.4.7", "2026.11.0"]), "2022.4.0")
+        self.assertEqual(ha_minimum.choose_minimum(results, ["2022.4.7", "2026.11.0"]), "2022.4.7")
+
+    def test_unknown_environment_outcome_never_moves_the_floor(self):
+        self.assertIsNone(ha_minimum.choose_minimum([result("2022.4.0", None), result("2026.11.3", True)]))
 
     def test_no_stable_result_changes_nothing(self):
         self.assertIsNone(ha_minimum.choose_minimum([]))

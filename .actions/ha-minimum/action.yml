@@ -8,14 +8,14 @@ inputs:
     description: JSON list of the matrix targets that were started
     required: true
   refine:
-    description: Also test the series between the failed and the passed release
+    description: Bisect exact stable patches between the failed and the passed release
     default: 'false'
 runs:
   using: composite
   steps:
     - uses: ./.engine/.actions/setup-python
       with:
-        packages: packaging==26.0 uv
+        packages: packaging==26.0 uv==0.13.9
     - id: minimum
       env:
         RESULTS: ${{ inputs.results }}
@@ -34,5 +34,9 @@ runs:
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add hacs.json
         git commit -m "chore: set the minimum Home Assistant version to $MINIMUM"
-        git pull --rebase --autostash
-        git push
+        # Publish evidence only for the revision that ran the tests. A newer push starts its own run.
+        if [[ "$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)" == "$GITHUB_SHA" ]]; then
+          git push origin "HEAD:refs/heads/$GITHUB_REF_NAME"
+        else
+          echo "::notice::A newer revision superseded these compatibility results."
+        fi

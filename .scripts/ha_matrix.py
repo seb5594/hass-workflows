@@ -259,6 +259,8 @@ def test_release(release, domains, requirements):
             if not results[name]:
                 print(outcome.stdout[-12000:], file=sys.stderr)
                 print(outcome.stderr[-6000:], file=sys.stderr)
+                if outcome.returncode not in (0, 1):
+                    raise RuntimeError(f"{name} pytest did not complete (exit {outcome.returncode})")
             elif outcome.stdout:
                 print(outcome.stdout[-2000:], file=sys.stderr)
     return results
@@ -278,18 +280,29 @@ def main(arguments):
     if options.stable_only and (not options.live or options.selection or options.target_json):
         parser.error("--stable-only requires --live without an explicit target")
     # The hub runs its historical baseline in ci.yml, including on fork pull requests.
-    available = releases(minimum) if REAL_TESTS.is_dir() else []
+    available = releases(minimum) if REAL_TESTS.is_dir() and not options.live else []
     if options.live and real_tests().is_dir():
         from ha_discovery import discover
-        targets = {item["homeassistant"]: item for item in available}
         declared = minimum_from_hacs()
-        if declared and not options.minimum and declared not in targets:
+        targets = {}
+        if not options.stable_only:
+            from ha_refine import history_anchors, window_anchor
+            if not options.minimum:
+                anchor = window_anchor()
+                floor = anchor["homeassistant"]
+                minimum = min((declared or floor, floor), key=version_key)
+                targets[floor] = anchor
+            targets.update((item["homeassistant"], item) for item in releases(minimum))
+        for item in discover():
+            if not minimum or version_key(item["homeassistant"]) >= version_key(minimum):
+                targets[item["homeassistant"]] = item
+        if not options.stable_only and declared and not options.minimum and declared not in targets:
             from ha_refine import exact_target
             exact = exact_target(declared)  # the declared minimum itself is always tested exactly
             if exact:
                 targets[declared] = exact
-        for item in discover():
-            if not minimum or version_key(item["homeassistant"]) >= version_key(minimum):
+        if not options.stable_only:
+            for item in history_anchors(targets.values(), minimum):
                 targets[item["homeassistant"]] = item
         available = sorted(targets.values(), key=lambda item: version_key(item["homeassistant"]))
     if options.stable_only:
@@ -312,7 +325,13 @@ def main(arguments):
     domains, requirements, failed = manifest_dependencies(), manifest_requirements(), 0
     for release in chosen:
         results = test_release(release, domains, requirements)
-        failed += not all(results.values())
+        if not results:
+            sys.exit(f"No test suites ran for {release['homeassistant']}")
+        passed = all(results.values())
+        if options.target_json and (output := os.environ.get("GITHUB_OUTPUT")):
+            with open(output, "a") as stream:
+                print("compatibility=" + ("success" if passed else "failure"), file=stream)
+        failed += not passed
         summary = "  ".join(f"{name}: {'ok' if passed else 'FAILED'}" for name, passed in results.items())
         print(f"Home Assistant {release['homeassistant']:<10} Python {release['python']:<5} {summary}")
     return 1 if failed else 0

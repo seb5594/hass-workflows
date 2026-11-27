@@ -1,5 +1,7 @@
 """Narrowing the minimum Home Assistant version between a failed and a passed release."""
 import unittest
+from datetime import date
+from unittest.mock import patch
 
 import support  # noqa: F401
 
@@ -49,10 +51,10 @@ class Boundary(unittest.TestCase):
 
 
 class Candidates(unittest.TestCase):
-    def test_every_series_in_the_gap_is_tested_at_its_first_release(self):
+    def test_all_stable_patches_strictly_between_observed_endpoints_are_candidates(self):
         published = ha_refine.stable_versions(CORE)
         self.assertEqual(ha_refine.gap_candidates("2022.4.7", "2022.8.7", published),
-                         ["2022.5.0", "2022.6.0", "2022.7.0", "2022.8.0"])
+                         ["2022.5.0", "2022.5.5", "2022.6.0", "2022.7.0", "2022.8.0"])
 
     def test_yanked_and_preview_releases_are_ignored(self):
         self.assertNotIn("2022.9.0b1", ha_refine.stable_versions(CORE))
@@ -64,18 +66,21 @@ class Candidates(unittest.TestCase):
 
     def test_a_series_without_matching_plugin_is_skipped(self):
         self.assertIsNone(ha_refine.build_target("2022.7.0", CORE, PLUGINS, fetch))
-        self.assertIsNone(ha_refine.series_target("2022.7.0", CORE, PLUGINS, fetch))
 
-    def test_a_series_falls_back_to_a_later_release_a_plugin_exists_for(self):
-        key = ("pytest-homeassistant-custom-component", "0.9.0")
-        original = INFOS[key]
-        INFOS[key] = "2022.5.5"  # the plugin of that series pins the second release, not the first
-        plugins = {"releases": {**PLUGINS["releases"], "0.9.0": files("05-22")}}
-        try:
-            target = ha_refine.series_target("2022.5.0", CORE, plugins, fetch)
-        finally:
-            INFOS[key] = original
-        self.assertEqual(target["homeassistant"], "2022.5.5")
+
+    def test_a_later_patch_with_matching_fixtures_reports_the_exact_pass(self):
+        pins = {("pytest-homeassistant-custom-component", "0.9.0"): "2022.5.5"}
+        with patch.dict(INFOS, pins), patch.dict(PLUGINS["releases"], {"0.9.0": files("05-22")}):
+            result = ha_refine.refine("2022.5.0", "2022.6.0", lambda _: True, fetch)
+        self.assertEqual(result, "2022.5.5")
+
+    def test_rolling_anchor_uses_upload_date_and_falls_back_to_testable_patch(self):
+        self.assertEqual(ha_refine.window_anchor(date(2027, 5, 30), fetch)["homeassistant"], "2022.5.0")
+
+    def test_fill_only_uncovered_half_years_and_ignore_previews_as_anchors(self):
+        checkpoints = [{"homeassistant": "2022.5.0"}, {"homeassistant": "2022.9.0b1", "preview": True}]
+        targets = ha_refine.history_anchors(checkpoints, "2022.4.7", fetch)
+        self.assertEqual([t["homeassistant"] for t in targets], ["2022.8.0"])
 
 
 class Exact(unittest.TestCase):
@@ -130,6 +135,15 @@ class Bisect(unittest.TestCase):
         found, asked = self.run_search("2022.6.0")
         self.assertEqual(found, "2022.6.0")
         self.assertLessEqual(len(asked), 2)  # 2022.7.0 has no plugin, three candidates remain
+
+    def test_patch_search_with_31_candidates_builds_only_five_targets(self):
+        core = {"releases": {f"2022.5.{n}": files("05-12") for n in range(33)}}
+        with patch.object(ha_refine, "build_target", side_effect=lambda v, *a, **kw: v) as build:
+            result = ha_refine.refine("2022.5.0", "2022.5.32",
+                                      lambda v: ha_refine.version_key(v)[2] >= 13,
+                                      lambda package: core)
+        self.assertEqual(result, "2022.5.13")
+        self.assertEqual(build.call_count, 5)
 
     def test_when_even_the_passed_series_fails_at_its_first_release_the_passed_release_stays(self):
         found, _ = self.run_search("2022.8.7")

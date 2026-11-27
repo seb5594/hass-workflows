@@ -1,35 +1,24 @@
-"""Narrow the minimum Home Assistant version down between a failed and a passed release.
-
-The compatibility matrix only knows the curated releases of ha_releases.json. When one of them
-fails and the next one passes, the true boundary lies somewhere in between. This module lists the
-`.0` release of every series in that gap, builds a test target for each (the plugin that pins that
-exact Core, the lowest Python it allows) and bisects over them, so the boundary is found with a
-handful of environments instead of one per series.
-"""
+"""Find the earliest tested stable Core patch between a known failure and a known pass."""
 import json
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from functools import lru_cache
 
 from packaging.requirements import Requirement
 from packaging.version import Version
 
 import ha_discovery
-from ha_matrix import RELEASES, version_key
+from ha_matrix import RELEASES, SUPPORT_YEARS, version_key
 
 PLUGIN = "pytest-homeassistant-custom-component"
 # The matching plugin release follows its Core release within weeks.
 PLUGIN_WINDOW = timedelta(days=75)
 
 
-def series(version):
-    return version_key(version)[:2]
-
-
 def gap_candidates(failed, passed, published):
-    """`Y.M.0` of every stable series above `failed` up to and including that of `passed`."""
-    wanted = {f"{major}.{minor}.0" for major, minor, *_ in map(version_key, published)
-              if series(failed) < (major, minor) <= series(passed)}
-    return sorted(wanted, key=version_key)
+    """Every installable stable patch strictly between the two observed endpoints."""
+    low, high = version_key(failed), version_key(passed)
+    return sorted((v for v in published if low < version_key(v) < high), key=version_key)
 
 
 def stable_versions(core):
@@ -42,28 +31,21 @@ def upload_time(files):
 
 
 def matching_plugin(version, core, plugin_releases, fetch=ha_discovery.fetch):
-    """The newest plugin release whose Core requirement is exactly `version`, or None."""
+    """The nearest published test plugin that pins exactly this Core version."""
     released = upload_time(core["releases"][version])
-    window = sorted((text for text, files in plugin_releases["releases"].items() if files
-                     and released - timedelta(days=2) <= upload_time(files) <= released + PLUGIN_WINDOW),
-                    key=lambda text: upload_time(plugin_releases["releases"][text]))
-    for text in window:
+    window = []
+    for text, files in plugin_releases["releases"].items():
+        available = [f for f in files if not f.get("yanked")]
+        if available:
+            uploaded = upload_time(available)
+            if released - timedelta(days=2) <= uploaded <= released + PLUGIN_WINDOW:
+                window.append((abs(uploaded - released), Version(text), text))
+    for _, _, text in sorted(window):
         info = fetch(PLUGIN, text)["info"]
         pins = [Requirement(item) for item in info.get("requires_dist") or []
                 if Requirement(item).name == "homeassistant"]
         if pins and str(pins[0].specifier) == f"=={version}":
             return info
-    return None
-
-
-def series_target(label, core, plugin_releases, fetch=ha_discovery.fetch):
-    """A target for the series named `Y.M.0`: its first release, else the next one a plugin matches."""
-    wanted = series(label)
-    patches = sorted((text for text in stable_versions(core) if series(text) == wanted), key=version_key)
-    for version in patches:
-        target = build_target(version, core, plugin_releases, fetch)
-        if target:
-            return target
     return None
 
 
@@ -78,9 +60,13 @@ def table_pins(version):
     return list((below[-1] if below else table[0]).get("pins", []))
 
 
-def build_target(version, core, plugin_releases, fetch=ha_discovery.fetch):
+def build_target(version, core, plugin_releases=None, fetch=ha_discovery.fetch):
     """A matrix target for one exact release, or None when no test plugin matches it."""
-    plugin = matching_plugin(version, core, plugin_releases, fetch)
+    parsed = Version(version)
+    if parsed >= ha_discovery.FIRST_OFFICIAL_STABLE:
+        official = fetch("pytest-homeassistant")["releases"].get(version, [])
+        return ha_discovery.official_target(parsed, any(not f.get("yanked") for f in official), fetch)
+    plugin = matching_plugin(version, core, plugin_releases if plugin_releases is not None else fetch(PLUGIN), fetch)
     if plugin is None:
         return None
     info = fetch("homeassistant", version)["info"]
@@ -97,10 +83,46 @@ def build_target(version, core, plugin_releases, fetch=ha_discovery.fetch):
 def exact_target(version, fetch=ha_discovery.fetch):
     """A target for exactly `version` (for example a project's declared minimum), or None."""
     core = fetch("homeassistant")
-    if version not in core["releases"]:
+    if version not in stable_versions(core):
         return None
-    target = build_target(version, core, fetch(PLUGIN), fetch)
+    target = build_target(version, core, fetch=fetch)
     return target and {**target, "note": "declared minimum"}
+
+
+def window_anchor(today=None, fetch=ha_discovery.fetch):
+    """Select a testable release that was already public five calendar years ago."""
+    today = today or datetime.now(timezone.utc).date()
+    year = today.year - SUPPORT_YEARS
+    cutoff = date(year, 2, 28) if (today.month, today.day) == (2, 29) else today.replace(year=year)
+    core = fetch("homeassistant")
+    curated = {item["homeassistant"]: item for item in json.loads(RELEASES.read_text())}
+    for version in sorted(stable_versions(core), key=version_key, reverse=True):
+        files = [f for f in core["releases"][version] if not f.get("yanked")]
+        if upload_time(files).date() <= cutoff:
+            target = curated.get(version) or build_target(version, core, fetch=fetch)
+            if target:
+                return target
+    raise ValueError(f"No testable Home Assistant Core release at or before {cutoff}")
+
+
+def history_anchors(targets, minimum, fetch=ha_discovery.fetch):
+    """Cover half-years that have no curated or declared stable checkpoint."""
+    def half(version):
+        year, month = version_key(version)[:2]
+        return year, (month - 1) // 6
+
+    covered = {half(item["homeassistant"]) for item in targets if not item.get("preview")}
+    core = fetch("homeassistant")
+    extra = []
+    for version in sorted(stable_versions(core), key=version_key, reverse=True):
+        period = half(version)
+        if period in covered or version_key(version) < version_key(minimum):
+            continue
+        target = build_target(version, core, fetch=fetch)
+        if target:
+            extra.append({**target, "note": "historical checkpoint"})
+            covered.add(period)
+    return extra
 
 
 def bisect(candidates, passes):
@@ -125,16 +147,15 @@ def bisect(candidates, passes):
 
 
 def refine(failed, passed, passes, fetch=ha_discovery.fetch):
-    """The lowest series (`Y.M.0`) between `failed` and `passed` that passes, or `passed` itself.
+    """Bisect published patches lazily. Return only an observed passing patch."""
+    read = lru_cache(maxsize=None)(fetch)
+    core = read("homeassistant")
+    candidates = gap_candidates(failed, passed, stable_versions(core))
+    if not candidates:
+        return passed
 
-    `passes(target)` runs one target. A series is tested at its first release, or at the next one
-    a test plugin exists for; a series with no matching plugin at all is skipped.
-    """
-    core, plugins = fetch("homeassistant"), fetch(PLUGIN)
-    targets = {}
-    for version in gap_candidates(failed, passed, stable_versions(core)):
-        target = series_target(version, core, plugins, fetch)
-        if target:
-            targets[version] = target
-    found = bisect(list(targets), lambda version: passes(targets[version]))
-    return found or passed
+    def probe(version):
+        target = build_target(version, core, fetch=read)
+        return passes(target) if target else None
+
+    return bisect(candidates, probe) or passed

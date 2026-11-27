@@ -147,7 +147,7 @@ def expected(kind, sha, root=Path(".")):
             dockerfile = folder / "Dockerfile"
             if dockerfile.is_file() and FOLLOWED_PIN.search(dockerfile.read_text()):
                 files[UPSTREAM.target] = render_workflow(UPSTREAM, sha)
-    elif kind == "integration" and (root / ".github/ha_tests").is_dir():
+    elif kind == "integration" and any((root / folder).is_dir() for folder in (".github/ha_tests", "tests_ha")):
         files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
     elif kind == "catalog-integrations":
         files[COMPATIBILITY.target] = render_workflow(COMPATIBILITY, sha)
