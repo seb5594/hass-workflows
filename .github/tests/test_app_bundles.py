@@ -85,8 +85,10 @@ class AppBundleTests(unittest.TestCase):
         with checkout(), mock.patch.dict(os.environ, {
             "GITHUB_REPOSITORY": "owner/project", "GITHUB_REF": "refs/heads/dev", "GITHUB_SHA": "b" * 40
         }), mock.patch.object(release_app, "release_exists", return_value=False), \
+                mock.patch.object(release_app, "generated_notes", return_value="bundle notes") as notes, \
                 mock.patch.object(release_app, "run") as run, mock.patch.object(release_app.gitops, "notify"):
             release_app.main("main-app", "wifi-helper")
+            notes.assert_called_once_with("owner/project", "v0.1.1-beta.1", "b" * 40, Path("main-app/CHANGELOG.md"))
             calls = [c.args for c in run.call_args_list]
             manifests = [c for c in calls if c[:4] == ("docker", "buildx", "imagetools", "create")]
             releases = [c for c in calls if c[:3] == ("gh", "release", "create")]

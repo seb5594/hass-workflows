@@ -78,6 +78,35 @@ The Compatibility workflow lists the releases at or above the minimum in `hacs.j
 
 ## Release flow
 
+### What appears in a release
+
+Apps, integrations, dashboards and the integration catalog share a [release notes generator](.scripts/release_notes.py).
+It groups changes under 💥 Breaking changes, 🔒 Security, ✨ New features, 🎨 Improvements, 🐛 Bug fixes,
+📦 Dependency updates, 📝 Documentation, 🔧 Maintenance and 🔄 Other changes. Only populated sections appear.
+The full comparison follows the entries. Packaged integrations, cards and the integration catalog also include the asset checksum.
+
+- **Apps** use the matching version in the primary app's `CHANGELOG.md`. Start bullets with an emoji or a verb
+  such as `Fix` or `Add` to group them. Nested instructions stay with their bullet. A section with prose,
+  subheadings or a migration guide keeps its Markdown layout.
+- **Git history** supplies the notes for other project types and for apps with an empty or missing version entry.
+  The generator reads up to 100 first-parent commits since the nearest earlier version tag on that line of history.
+  A first release links to its commit history. GitHub merge and squash subjects link to their PR, direct commits
+  link to their diff, and routine README badge refreshes are omitted when other changes are present.
+- **Titles** such as `feat(card): Add a timer`, `perf: Reduce polling`, `fix: Restore pairing` and
+  `fix(api)!: Require a new token` select a section automatically. A `BREAKING CHANGE:` footer also marks
+  a breaking change. Unrecognized titles remain visible under Other changes.
+- **Renovate and Dependabot** share the dependency section. The generator recognizes their Git authors,
+  standard bot merge branches, dependency scopes such as `chore(deps):`, and common update titles.
+  A title such as `Bump actions/checkout from v5 to v6` becomes **actions/checkout · v5 → v6**.
+  Grouped updates keep their summary and, when the merge or squash subject includes it, the PR link.
+
+To preview a release from the project checkout with the engine in `.engine`, run
+`python .engine/.scripts/release_notes.py OWNER/REPO v1.2.0 "$(git rev-parse HEAD)"`.
+For an app, append `--changelog APP_FOLDER/CHANGELOG.md`. Existing callers that track the engine's
+`main` pick this up on their next release after merge. Pinned callers pick it up when their engine ref advances.
+
+### Packaging and publishing
+
 Apps use static versions throughout: a tagged base image and exact `apk` package versions, enforced during validation. A build toolchain that never reaches the image is exempt: packages installed into an `apk add --virtual` group which the same `RUN` deletes again with `apk del` need no pin. They build each declared platform, run shell/YAML/Docker lint and the available runtime tests, then publish into one stable GHCR package per app, `ghcr.io/seb5594/hass-APP-app` (the `-app` suffix keeps it recognisable among the other images of a Docker host). The tag follows `ARCH-hass-APP-vVERSION`, for example `amd64-hass-git-exporter-v1.18.1`. The multi-platform manifest drops the architecture: `hass-git-exporter-v1.18.1`, also tagged `latest`. Each version gets a GitHub release with per-architecture image references. Users can still build locally until prebuilt images are selected in the app configuration.
 
 Apps can opt into calendar versions: `YYYY-MM-DD` for the first build of a Europe/Berlin day,
