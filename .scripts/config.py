@@ -6,6 +6,8 @@ ENGINE_ROOT = Path(__file__).resolve().parents[1]
 
 OWNER = "seb5594"
 USER_AGENT = f"{OWNER}-hass-workflows"
+APP_BASE_IMAGES = {f"ghcr.io/{OWNER}/home-assistant-base{suffix}"
+                   for suffix in ("", "-python", "-debian", "-ubuntu")}
 
 # The default branch of the repository the workflow runs for (the action passes it in); badges and
 # picture links in the README point to it. Local runs fall back to "main".

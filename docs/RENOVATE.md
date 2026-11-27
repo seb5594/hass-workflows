@@ -9,18 +9,16 @@ each one. A self-hosted server is prepared as an alternative; it is not running.
 | `.github/renovate.json` | Generated from `default.json` by [`managed.py`](../.scripts/managed.py), in full, and kept in step by CI |
 | [`.templates/renovate/self-hosted.js`](../.templates/renovate/self-hosted.js) | Server configuration with the repository list, for a self-hosted run |
 
-## Why every repository carries the whole preset
+## Updating the shared preset
 
-A repository can extend a preset (`"extends": ["github>seb5594/hass-workflows"]`), but Renovate does not
-load a preset from a private repository for a public one. The result is an issue titled "Action
-Required: Fix Renovate Configuration" with *Cannot find preset's package*, and no pull requests.
-This engine is private, so the preset is copied into each repository instead. To change a rule,
-edit `default.json` and run `managed.py sync` in each repository.
+`managed.py` writes the full preset to each project's `.github/renovate.json`. This also lets
+apps add their upstream major-version approval rule. Change the shared rules in `default.json`,
+then run `managed.py sync` for each affected project.
 
 ## Branches
 
-Renovate names its branches `feat/<topic>`, for example `feat/github-actions` or
-`feat/alpine-base-and-packages`, one stable name per group of updates.
+Renovate names its branches `feature/<topic>`, for example `feature/github-actions` or
+`feature/alpine-base-and-packages`, one stable name per group of updates.
 
 Only the default branch is a base branch (`baseBranchPatterns: ["$default"]`). The GitHub app can carry
 base branches of its own from its portal settings; a branch a repository does not have shows up as
@@ -29,13 +27,15 @@ base branches of its own from its portal settings; a branch a repository does no
 ## What the preset updates
 
 - GitHub Actions in workflows, grouped into one pull request.
-- The pinned `ghcr.io/home-assistant/base` tag in app Dockerfiles, grouped with the Alpine packages.
+- Release tags for `ghcr.io/seb5594/home-assistant-base` and `ghcr.io/seb5594/home-assistant-base-python`
+  in app Dockerfiles and `project.json`. The shared rules set `pinDigests` to `false` for both packages.
+  For example, use `ghcr.io/seb5594/home-assistant-base:3.24-2026.11.0`.
 - Alpine packages pinned as `name=version`, via the Repology data source. Mark each one with
   `# renovate: datasource=repology depName=alpine_3_24/<package>` on the line above it.
 - Other pinned tools marked the same way, such as `git-secrets` (`datasource=github-tags`).
 - The engine's own Python (`python-version` of the setup action) and the `runs-on` Ubuntu version are not updated: both are raised on purpose.
 - `requirements` in a `manifest.json` are not updated: changing what users install is a release decision.
-- The base image tag `3.24-2026.08.0` moves within its Alpine release only (`3.24-2026.10.0`); the floating tag `3.24` is never proposed.
+- The versioning rules recognize dated base releases, including newer Alpine versions. A Python base update keeps the same Python series.
 
 Renovate never changes `version` in `config.yaml`, the changelog, or `manifest.json`. Raise the
 app version yourself when you merge a dependency update that should reach users.

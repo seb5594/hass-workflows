@@ -11,6 +11,7 @@ from pathlib import Path
 import badgekit
 import brand
 import licenses
+import legacy
 import live as live_facts
 import metrics
 import projectmeta
@@ -54,9 +55,9 @@ def header(root=Path("."), live=None):
     if project.kind == projectmeta.APP:
         dockerfile = project.folder / "Dockerfile"
         source = dockerfile.read_text(encoding="utf-8") if dockerfile.is_file() else ""
-        base = re.search(r"^ARG BUILD_FROM=(ghcr\.io/seb5594/home-assistant-base(?:-python)?):([^@\s]+)",
-                         source, re.M)
-        rows = badgekit.app_rows(project.metadata, project.repository, base_image=base[2] if base else None,
+        base = legacy.defaults(source).get("BUILD_FROM", "").strip("\"'")
+        tag = base.partition("@")[0].partition(":")[2] if legacy.is_personal_base(base) else None
+        rows = badgekit.app_rows(project.metadata, project.repository, base_image=tag,
                                  **common)
     elif project.kind == projectmeta.DASHBOARD:
         rows = badgekit.dashboard_rows(project.metadata, project.hacs, project.repository, **common)

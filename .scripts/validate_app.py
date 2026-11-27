@@ -140,10 +140,26 @@ def check_startup_style(app, config):
         assert (root / "user/contents.d" / name).is_file(), f"Register service {name} in user/contents.d"
 
 
+def check_base_reference(reference):
+    if legacy.is_personal_base(reference):
+        assert "@" not in reference, f"Use the release tag without a digest for {reference}"
+        assert reference.partition(":")[2] not in ("", "latest"), f"Set an explicit base image tag for {reference}"
+
+
 def check_static_versions(dockerfile, arches=(), apk_version_policy="exact"):
     base = re.search(r"^ARG BUILD_FROM=(\S+)", dockerfile, re.M)
     assert base, "Dockerfile must declare a default base image: ARG BUILD_FROM=<image>:<tag>"
-    assert ":" in base.group(1) and not base.group(1).endswith(":latest"), "Pin the base image to a tag"
+    reference = base.group(1).strip("\"'")
+    check_base_reference(reference)
+    assert ":" in reference and not reference.endswith(":latest"), "Pin the base image to a tag"
+    # Only ARG defaults before the first FROM are in scope when Docker resolves stage images.
+    global_args = legacy.defaults(re.split(r"^\s*FROM\s+", dockerfile, maxsplit=1, flags=re.I | re.M)[0])
+    for line in instructions(dockerfile):
+        stage = re.match(r"FROM\s+(?:--platform=\S+\s+)?(\S+)", line, re.I)
+        if stage:
+            image = re.sub(r"\$\{(\w+)\}|\$(\w+)", lambda m: global_args.get(m[1] or m[2], m[0]).strip("\"'"),
+                           stage[1])
+            check_base_reference(image.strip("\"'"))
     assert apk_version_policy in ("exact", "repository"), "Unknown APK version policy"
     if apk_version_policy == "exact":
         missing = unpinned_packages(dockerfile)
@@ -152,9 +168,7 @@ def check_static_versions(dockerfile, arches=(), apk_version_policy="exact"):
     variables = version_variables(dockerfile)
     undefined = [name for name in variables if not defaults.get(name)]
     assert not undefined, f"Give each version argument a default: {', '.join(undefined)}"
-    if any(legacy.is_legacy(arch) for arch in arches) and not defaults.get("BUILD_FROM", "").startswith(
-        "ghcr.io/seb5594/home-assistant-base"
-    ):
+    if any(legacy.is_legacy(arch) for arch in arches) and not legacy.is_personal_base(reference):
         literal = [p for p in apk_packages(dockerfile) if not re.search(r"=\$", p)]
         assert not literal, f"Pin through ARG so legacy architectures can override: {', '.join(literal)}"
         resolvable = set(legacy.pinned_packages(dockerfile))
@@ -238,6 +252,8 @@ def main(folder):
     dockerfile = (app / "Dockerfile").read_text()
     project_file = app.parent / "project.json"
     project = json.loads(project_file.read_text()) if project_file.is_file() else {}
+    if base_image := project.get("base_image"):
+        check_base_reference(base_image)
     check_static_versions(dockerfile, config["arch"], project.get("apk_version_policy", "exact"))
     check_release_files(app, config, dockerfile)
     check_translations(app, config)

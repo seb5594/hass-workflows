@@ -95,12 +95,7 @@ def render_workflow(workflow, sha):
 
 
 def renovate_config():
-    """The shared Renovate preset, written out in full.
-
-    A repository cannot extend the preset of this private engine: Renovate does not load private
-    presets for public repositories and reports "Cannot find preset's package". Each repository
-    therefore carries the complete preset, generated from default.json.
-    """
+    """Render the shared preset in full so apps can extend their local copy with upstream rules."""
     preset = json.loads((config.ENGINE_ROOT / "default.json").read_text())
     return json.dumps(preset, indent=2) + "\n"
 

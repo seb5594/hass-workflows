@@ -72,7 +72,7 @@ Changing a template and re-running `sync` in every repository is the whole updat
 
 ## Home Assistant compatibility
 
-An explicit `homeassistant` minimum in `hacs.json` is the lower bound of the integration's test matrix. With no declared minimum, a rolling five-year window is used, so its oldest tested series advances with the calendar (see [`supported_minimum`](.scripts/ha_matrix.py)). [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular `.github/tests` and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
+An explicit `homeassistant` minimum in `hacs.json` is the lower bound of the integration's test matrix. With no declared minimum, a rolling five-year window is used, so its oldest tested series advances with the calendar (see [`supported_minimum`](.scripts/ha_matrix.py)). [`ha_matrix.py`](.scripts/ha_matrix.py) builds one environment per release in [`ha_releases.json`](.scripts/ha_releases.json) (the release, its matching [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) and Python) and runs two suites in it: the regular suite in `.github/tests/` (or `tests/`) and the real-core `.github/ha_tests`. The shared pytest plugin [`hass_real_tests.py`](.scripts/hass_real_tests.py) boots the core, makes `custom_components` discoverable and treats the manifest dependencies as loaded, so a project only adds its own doubles.
 
 The Compatibility workflow lists the releases at or above the minimum in `hacs.json` and tests each in its own job, daily and for relevant project changes. Each live run also resolves the current stable and preview versions from PyPI. See [compatibility testing](docs/COMPATIBILITY.md) for fixture selection and the frozen CI targets. Locally: `python .engine/.scripts/ha_matrix.py run 2026.9.4`; `list` prints the releases as JSON. A release is added to the table together with the first test run that proves it works.
 
@@ -102,8 +102,7 @@ The full comparison follows the entries. Packaged integrations, cards and the in
 
 To preview a release from the project checkout with the engine in `.engine`, run
 `python .engine/.scripts/release_notes.py OWNER/REPO v1.2.0 "$(git rev-parse HEAD)"`.
-For an app, append `--changelog APP_FOLDER/CHANGELOG.md`. Existing callers that track the engine's
-`main` pick this up on their next release after merge. Pinned callers pick it up when their engine ref advances.
+For an app, append `--changelog APP_FOLDER/CHANGELOG.md`.
 
 ### Packaging and publishing
 
@@ -120,7 +119,14 @@ Integrations and dashboards use the same spelling (in `manifest.json` and `packa
 numeric and pre-release version formats keep their behavior; `stage: experimental` remains
 an app metadata choice.
 
-The current Home Assistant base image ships amd64 and aarch64 only. An app that lists armv7, armhf or i386 as well builds those on the previous generation of base images (`ghcr.io/home-assistant/ARCH-base:3.22-2025.11.1`, see [`legacy.py`](.scripts/legacy.py)), whose Alpine is older. Each apk pin is therefore a build argument with a legacy twin (`ARG GIT_VERSION=2.54.0-r0` next to `ARG GIT_VERSION_LEGACY=2.49.1-r0`); the build hands the legacy value to the Dockerfile on those architectures, and validation insists on a twin for every pinned package. Only these prebuilt images exist for them: a local build by the Supervisor does not know the twins.
+Apps using the [personal Home Assistant base images](https://github.com/seb5594/home-assistant-base-multi-arch)
+set `ARG BUILD_FROM` to an explicit tag, for example `ghcr.io/seb5594/home-assistant-base:3.24-2026.11.0`.
+The tag selects a multi-architecture manifest. To update, change the tag wherever the project declares the base,
+including `project.json` in apps that generate their Dockerfiles. CI checks personal base references for digest
+suffixes. The publisher of the base lists the architectures available for each image and tag.
+
+Apps using the official Home Assistant base can still build armv7, armhf and i386 with the configured
+[legacy base and APK versions](.scripts/legacy.py).
 
 Dashboards run their own checks, build the card with Node and publish it as the single release asset; see [Dashboards](docs/DASHBOARDS.md).
 
@@ -189,9 +195,13 @@ Projects without this opt-in retain the existing version-counter behavior.
 
 ### Engine access
 
-The public workflow checks out this private repository at a reviewed commit through `ORCHESTRATION_PAT`. GitHub's Actions sharing switch does not grant `actions/checkout` access to a private secondary repository from a public caller. The token must select `hass-workflows` with **Contents: Read**. App catalog notifications also need **Contents: Read and write** for `Home-Assistant-Apps`, and the catalog repository itself needs the same secret to fetch this engine. The source repository's `GITHUB_TOKEN` publishes its own release and images and commits the README refresh.
+Project callers check out `seb5594/hass-workflows@main` in `.engine`. The shared checkout uses
+`ORCHESTRATION_PAT` when configured and falls back to the caller's GitHub token. Cross-repository catalog
+notifications require a token with write access to the target catalog. The source project's own GitHub token
+publishes its release and updates its README.
 
-Fork pull requests cannot access the private engine and are skipped. The central [engine validation](.github/workflows/engine-validation.yml) runs the unit tests and then every repository listed in `PROJECTS` in [`config.py`](.scripts/config.py) (apps, integrations and the template) without publishing. It runs the callers' `main` branches, so it passes once their README and workflow changes are merged.
+The caller skips pull requests from forks. The central [engine validation](.github/workflows/engine-validation.yml)
+runs unit tests and validates registered projects on their respective default branches with publishing disabled.
 
 ## Honest project metrics
 

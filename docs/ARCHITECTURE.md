@@ -30,6 +30,22 @@ call it. Each module has one job.
 | `metrics.py` | Measurements of a run (tests, sizes, pulls) kept in the project's `.github/metrics.json` |
 | `catalog.py`, `hub.py` | Catalog and hub generation |
 
+## What apps and custom integrations share
+
+Both enter CI through the project action. The engine discovers each project from its metadata and uses
+the same rules for managed files, project-specific checks, release eligibility, changelog sections,
+README refreshes and catalog notifications.
+
+| Pipeline step | App / add-on | Custom integration |
+| --- | --- | --- |
+| Project metadata | `<app>/config.yaml` | `custom_components/<domain>/manifest.json` and `hacs.json` |
+| Regular tests | ShellCheck scans shell tests. The amd64 build runs `runtime.sh` when present. | CI runs pytest or unittest and any `*.test.cjs` files. The compatibility matrix also runs the regular Python suite. |
+| Distribution | GHCR images for the declared architectures | HACS ZIP with its SHA-256 in the release notes |
+
+Both project types prefer `.github/tests/` and fall back to `tests/` when the first directory is absent.
+Keep project-specific validation in `.github/checks/*.py`. Integration tests that boot Home Assistant
+belong in `.github/ha_tests/`.
+
 ## Flow
 
 ```

@@ -32,6 +32,11 @@ def is_legacy(arch):
     return arch in config.LEGACY_ARCHES
 
 
+def is_personal_base(reference):
+    repository = reference.strip("\"'").partition("@")[0].partition(":")[0]
+    return repository in config.APP_BASE_IMAGES
+
+
 def defaults(dockerfile):
     """Every `ARG NAME=value` default of the Dockerfile."""
     return dict(ARGUMENT.findall(dockerfile))
@@ -92,9 +97,7 @@ def resolve(arch, dockerfile, fetch=fetch_index):
 
 def build_args(arch, dockerfile, fetch=fetch_index):
     """`--build-arg` options that turn the build for `arch` into a legacy build; none for others."""
-    if not is_legacy(arch) or defaults(dockerfile).get("BUILD_FROM", "").startswith(
-        "ghcr.io/seb5594/home-assistant-base"
-    ):
+    if not is_legacy(arch) or is_personal_base(defaults(dockerfile).get("BUILD_FROM", "")):
         return []
     values = {"BUILD_FROM": config.LEGACY_BASE.format(arch=arch), **resolve(arch, dockerfile, fetch)}
     return [option for name, value in values.items() for option in ("--build-arg", f"{name}={value}")]

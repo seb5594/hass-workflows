@@ -23,6 +23,28 @@ class StaticVersions(unittest.TestCase):
     def test_pinned_dockerfile_passes(self):
         validate_app.check_static_versions(GOOD)
 
+    def test_personal_base_uses_the_version_tag_across_build_stages(self):
+        tag = "ghcr.io/seb5594/home-assistant-base-python:3.14-alpine3.24-2026.11.0"
+        suffix = "@sha256:" + "a" * 64
+        dockerfile = f"ARG BUILD_FROM={tag}\nFROM ${{BUILD_FROM}}"
+        validate_app.check_static_versions(dockerfile)
+        for source in (dockerfile.replace(tag, tag + suffix), dockerfile + suffix,
+                       dockerfile + f"\nFROM --platform=$TARGETPLATFORM {tag}{suffix} AS builder"):
+            with self.subTest(source=source), self.assertRaisesRegex(AssertionError, "without a digest"):
+                validate_app.check_static_versions(source)
+        third_party = "ghcr.io/example/upstream:1.2" + suffix
+        validate_app.check_static_versions(dockerfile + f"\nFROM {third_party} AS tool")
+
+    def test_exact_personal_base_names_and_tags(self):
+        for name in ("home-assistant-base", "home-assistant-base-debian", "home-assistant-base-ubuntu"):
+            image = f"ghcr.io/seb5594/{name}"
+            validate_app.check_base_reference(image + ":stable-release")
+            for suffix in ("", ":latest", "@sha256:" + "b" * 64):
+                with self.subTest(image=image, suffix=suffix), self.assertRaises(AssertionError):
+                    validate_app.check_base_reference(image + suffix)
+        self.assertFalse(legacy.is_personal_base("ghcr.io/seb5594/home-assistant-base-tools:1"))
+        validate_app.check_base_reference("ghcr.io/another-owner/home-assistant-base:3.24@sha256:" + "b" * 64)
+
     def test_unpinned_package_after_a_comment_is_found(self):
         broken = GOOD.replace("rsync=3.5.0-r0", "rsync")
         with self.assertRaisesRegex(AssertionError, "rsync"):
