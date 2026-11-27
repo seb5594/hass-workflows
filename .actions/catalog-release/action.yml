@@ -47,8 +47,7 @@ runs:
       shell: bash
       run: |
         package=dist/seb5594_integration_catalog.zip
-        notes="$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-          -f tag_name="$RELEASE_TAG" -f target_commitish="$RELEASE_COMMIT" --jq .body)"
+        notes="$(python .engine/.scripts/release_notes.py "$GITHUB_REPOSITORY" "$RELEASE_TAG" "$RELEASE_COMMIT")"
         checksum="SHA256 \`$(basename "$package")\`: \`$(sha256sum "$package" | cut -d' ' -f1)\`"
         gh release create "$RELEASE_TAG" "$package" --target "$RELEASE_COMMIT" \
           --title "$RELEASE_TAG" --notes "$notes"$'\n\n'"$checksum"

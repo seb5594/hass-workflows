@@ -229,9 +229,12 @@ class AppRelease(unittest.TestCase):
             assets = folder / "dist"
             assets.mkdir()
             with mock.patch.dict(os.environ, {"GITHUB_SHA": "b" * 40}), \
+                    mock.patch.object(release_app, "generated_notes", return_value="app highlights") as notes, \
                     mock.patch.object(release_app, "run") as run:
                 release_app.create_release({"name": "Demo App", "version": version}, folder, "o/r",
                                            f"v{version}", assets)
+            notes.assert_called_once_with("o/r", f"v{version}", "b" * 40, folder / "CHANGELOG.md")
+            self.assertEqual(run.call_args.kwargs["input"], "app highlights")
             return list(run.call_args.args)
 
     def test_app_releases_are_titled_like_integration_releases(self):

@@ -12,7 +12,7 @@ import yaml
 import config
 import gitops
 import legacy
-from common import image_repository, image_tag, is_prerelease, release_flags, release_title, run
+from common import generated_notes, image_repository, image_tag, is_prerelease, release_flags, release_title, run
 
 
 def release_exists(tag, repo):
@@ -77,11 +77,11 @@ def push_platform_digests(app_config, folder, repository, assets):
 
 
 def create_release(app_config, folder, repo, tag, assets):
-    notes = folder / "CHANGELOG.md"
-    args = ["gh", "release", "create", tag, "--repo", repo, "--target", os.environ["GITHUB_SHA"],
+    target = os.environ["GITHUB_SHA"]
+    notes = generated_notes(repo, tag, target, folder / "CHANGELOG.md")
+    args = ["gh", "release", "create", tag, "--repo", repo, "--target", target,
             "--title", release_title(app_config["version"]), *release_flags(app_config["version"])]
-    args += ["--notes-file", str(notes)] if notes.exists() else ["--generate-notes"]
-    run(*args, *map(str, sorted(assets.glob("*.json"))))
+    run(*args, "--notes-file", "-", *map(str, sorted(assets.glob("*.json"))), input=notes, text=True)
 
 
 def main(app, *companions):

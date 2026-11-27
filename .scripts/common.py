@@ -7,6 +7,8 @@ import shlex
 import subprocess
 import sys
 
+from release_notes import generated_notes as generated_notes
+
 
 def is_calendar_version(version):
     """Recognize date versions, including legacy dashed dates and build suffixes."""
@@ -69,14 +71,6 @@ def release_title(version):
         name = "RC" if found[1].lower() == "rc" else found[1].capitalize()
         return f"{name} {found[2]}" if found[2] else name
     return release_tag(version)
-
-
-def generated_notes(repo, tag, target):
-    """GitHub's automatic release notes for a tag that is about to be created."""
-    return subprocess.run(
-        ["gh", "api", f"repos/{repo}/releases/generate-notes", "-f", f"tag_name={tag}",
-         "-f", f"target_commitish={target}", "--jq", ".body"],
-        check=True, capture_output=True, text=True).stdout.strip()
 
 
 def release_flags(version="", prerelease=None):
