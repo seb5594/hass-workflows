@@ -10,6 +10,11 @@ import sys
 from release_notes import generated_notes as generated_notes
 
 
+def test_directory():
+    """Locate the regular test suite in the caller checkout."""
+    return next((path for path in (Path(".github/tests"), Path("tests")) if path.is_dir()), None)
+
+
 def is_calendar_version(version):
     """Recognize date versions, including legacy dashed dates and build suffixes."""
     return bool(re.fullmatch(r"20\d{2}[.-]\d{1,2}[.-]\d{1,2}(?:\.\d+)?", str(version)))

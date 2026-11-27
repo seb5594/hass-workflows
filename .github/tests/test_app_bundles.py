@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 import support  # noqa: F401
+import build_app
 import managed
 import project
 import projectmeta
@@ -70,6 +71,26 @@ class AppBundleTests(unittest.TestCase):
             self.assertIn("main-app/entrypoint.sh", files)
             self.assertIn("wifi-helper/entrypoint.sh", files)
             self.assertIn(".github/workflows/ci.yml", files)
+
+    def test_root_level_runtime_suite_is_linted_and_mounted_with_its_helpers(self):
+        with checkout() as root:
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "runtime.sh").touch()
+            (tests / "helper.sh").touch()
+            with mock.patch.object(project.readme, "verify"), mock.patch.object(managed, "check"), \
+                    mock.patch.object(project, "run") as run:
+                project.main("validate")
+                shellcheck = next(call.args for call in run.call_args_list if call.args[0] == "shellcheck")
+                self.assertIn("tests/runtime.sh", shellcheck)
+                self.assertIn("tests/helper.sh", shellcheck)
+            (root / "main-app/Dockerfile").write_text("FROM alpine:3.24\n")
+            with mock.patch.object(build_app, "run"), mock.patch.object(build_app, "image_size", return_value=1), \
+                    mock.patch.object(build_app.metrics, "record"), \
+                    mock.patch.object(build_app, "run_captured", return_value="PASS: check") as runtime:
+                build_app.main("main-app", "amd64", "linux/amd64")
+            self.assertIn(f"{tests / 'runtime.sh'}:/runtime.sh:ro", runtime.call_args.args)
+            self.assertIn(f"{tests}:/tests:ro", runtime.call_args.args)
 
     def test_build_visits_every_app_architecture_and_keeps_primary_metrics(self):
         with checkout(), mock.patch.object(project, "run") as run:

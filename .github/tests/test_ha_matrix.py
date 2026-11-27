@@ -124,6 +124,18 @@ class Listing(InProject):
 
 
 class Commands(InProject):
+    def test_regular_suite_falls_back_to_tests_and_prefers_the_managed_directory(self):
+        success = mock.Mock(returncode=0, stdout="")
+        with mock.patch.object(ha_matrix, "prepare", return_value="python"), \
+                mock.patch.object(ha_matrix, "run", return_value=success) as run:
+            self.assertEqual(ha_matrix.test_release({}, [], []), {})
+            run.assert_not_called()
+            for folder in ("tests", ".github/tests"):
+                self.write(f"{folder}/test_demo.py")
+                self.assertEqual(ha_matrix.test_release({}, [], []), {"regular": True})
+                self.assertEqual(run.call_args.args[0][-1], folder)
+                run.reset_mock()
+
     def test_the_regular_suite_keeps_the_home_assistant_plugin_out_and_honours_the_project_config(self):
         self.write(".github/dev/pyproject.toml")
         command = ha_matrix.pytest_command("python", Path(".github/tests"), real=False)

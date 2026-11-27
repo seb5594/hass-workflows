@@ -5,7 +5,7 @@ Each release gets its own virtual environment (made with uv) holding that Home
 Assistant and the matching pytest-homeassistant-custom-component. Two suites run
 in it, when the project has them:
 
-* .github/tests     the regular suite, with the Home Assistant pytest plugin switched off
+* .github/tests or tests/  the regular suite, with the Home Assistant pytest plugin switched off
 * .github/ha_tests  tests against a real Home Assistant core
 
 Historical releases come from ha_releases.json. --live adds the latest stable
@@ -29,8 +29,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from common import test_directory
+
 RELEASES = Path(__file__).with_name("ha_releases.json")
-REGULAR_TESTS = Path(".github/tests")
 REAL_TESTS = Path(".github/ha_tests")
 
 
@@ -250,8 +251,8 @@ def test_release(release, domains, requirements):
     """Run the available suites; returns {suite name: passed}."""
     interpreter = prepare(release, domains, requirements)
     results = {}
-    for name, directory, real in (("regular", REGULAR_TESTS, False), ("real", real_tests(), True)):
-        if directory.is_dir():
+    for name, directory, real in (("regular", test_directory(), False), ("real", real_tests(), True)):
+        if directory and directory.is_dir():
             environment = {**os.environ, "PYTHONPATH": str(Path(__file__).parent)} if real else None
             outcome = run(pytest_command(interpreter, directory, real), capture_output=True, env=environment)
             results[name] = outcome.returncode == 0

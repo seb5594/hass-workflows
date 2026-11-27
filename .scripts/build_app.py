@@ -11,10 +11,10 @@ import yaml
 import legacy
 import metrics
 import validate_app
-from common import run, run_captured
+from common import run, run_captured, test_directory
 
 # What proves a built image is startable, by startup style. Apps started from a run.sh service
-# have no generic check; their .github/tests/runtime.sh verifies the image instead. Native apps are
+# have no generic check; their runtime.sh verifies the image instead. Native apps are
 # only checked for their binary, the runtime script does the rest.
 SMOKE_TESTS = {
     validate_app.ENTRYPOINT: "bash -n /entrypoint.sh /run.sh && test -x /run.sh",
@@ -61,12 +61,12 @@ def main(app, arch, platform):
     metrics.record(f"{prefix}image_size.{arch}", image_size(image))
     if arch != "amd64":
         return
-    runtime = Path(".github/tests/runtime.sh")
-    if runtime.exists():
+    directory = test_directory()
+    if directory and (runtime := directory / "runtime.sh").is_file():
         # The whole test folder is mounted too, so that a runtime script can run test files that sit next to it.
         output = run_captured("docker", "run", "--rm", "--entrypoint", "/bin/bash",
                               "-v", f"{runtime.resolve()}:/runtime.sh:ro",
-                              "-v", f"{runtime.resolve().parent}:/tests:ro", image, "/runtime.sh")
+                              "-v", f"{directory.resolve()}:/tests:ro", image, "/runtime.sh")
         # Runtime scripts report every scenario as a "PASS: <name>" line.
         metrics.record(f"{prefix}runtime_tests", len(re.findall(r"^PASS:", output, re.M)))
     if (folder / "root/utils/jsonToYaml.py").exists():

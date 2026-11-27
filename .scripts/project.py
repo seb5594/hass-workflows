@@ -15,7 +15,7 @@ import managed
 import metrics
 import projectmeta
 import readme
-from common import run, run_captured, is_calendar_version
+from common import run, run_captured, is_calendar_version, test_directory
 from config import PLATFORMS
 
 ENGINE = config.ENGINE_ROOT
@@ -127,10 +127,6 @@ def pycodestyle_options():
             for key, value in table.items()]
 
 
-def test_directory():
-    return next((d for d in (Path(".github/tests"), Path("tests")) if d.is_dir()), None)
-
-
 def run_integration_tests(directory):
     requirements, config = dev_file("requirements-dev.txt"), dev_file("pyproject.toml")
     if requirements:
@@ -216,7 +212,9 @@ def validate(project):
             run(sys.executable, str(ENGINE / ".scripts/validate_app.py"), str(folder))
         run("yamllint", "-d", YAMLLINT_RULES, ".github/workflows",
             *(str(folder / "config.yaml") for folder in folders))
-        if scripts := shell_scripts([*folders, Path(".github/tests")]):
+        if directory := test_directory():
+            folders.append(directory)
+        if scripts := shell_scripts(folders):
             run("shellcheck", "-x", *scripts)
         run_project_checks()
         return
